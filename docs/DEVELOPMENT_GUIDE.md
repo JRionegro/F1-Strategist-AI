@@ -250,6 +250,7 @@ pip install -r requirements.txt
 ## Resources
 
 - [FastF1 Documentation](https://docs.fastf1.dev/)
+- [OpenF1 APIs Doc] (https://openf1.org/#api-endpoints)
 - [LangChain Docs](https://python.langchain.com/)
 - [MCP Specification](https://modelcontextprotocol.io/)
 - [Plotly Documentation](https://plotly.com/python/)

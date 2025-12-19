@@ -10,29 +10,29 @@ The F1 Strategist AI is an advanced artificial intelligence system designed to p
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     User Interface Layer                     │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │   Chatbot    │  │ Visualization│  │  Dashboard   │     │
-│  │  Interface   │  │    Engine    │  │    Panel     │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
+│                     User Interface Layer                    │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │   Chatbot    │  │ Visualization│  │  Dashboard   │       │
+│  │  Interface   │  │    Engine    │  │    Panel     │       │
+│  └──────────────┘  └──────────────┘  └──────────────┘       │
 └─────────────────────────────────────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    Orchestration Layer                       │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │   Strategy   │  │   Weather    │  │ Performance  │     │
-│  │    Agent     │  │    Agent     │  │    Agent     │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
+│                    Orchestration Layer                      │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │   Strategy   │  │   Weather    │  │ Performance  │       │
+│  │    Agent     │  │    Agent     │  │    Agent     │       │
+│  └──────────────┘  └──────────────┘  └──────────────┘       │
 └─────────────────────────────────────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                      Data Layer                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │  MCP Server  │  │  RAG System  │  │   Database   │     │
-│  │              │  │  (Vector DB) │  │              │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
+│                      Data Layer                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │  MCP Server  │  │  RAG System  │  │   Database   │       │
+│  │              │  │  (Vector DB) │  │              │       │
+│  └──────────────┘  └──────────────┘  └──────────────┘       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -47,9 +47,10 @@ The F1 Strategist AI is an advanced artificial intelligence system designed to p
 ### AI Agents
 1. **Strategy Agent**
    - Tire strategy optimization
-   - Pit stop timing
+   - Pit stop strategy (timing, window, Position after pit stop, etc)
    - Fuel management
    - Race pace calculations
+   - Team strategy
 
 2. **Weather Agent**
    - Weather prediction integration
@@ -64,19 +65,20 @@ The F1 Strategist AI is an advanced artificial intelligence system designed to p
 4. **Race Control Agent**
    - Safety car predictions
    - Flag monitoring
-   - Race incident analysis
+   - Race and Radio incident analysis
+   - Pilots of interest observer
 
 ### RAG System
-- **Vector Database**: ChromaDB for historical data storage
+- **Vector Database**: ChromaDB for historical data and F1 manuals storage
 - **Embeddings**: Sentence transformers for semantic search
 - **Context Retrieval**: Historical race strategies and outcomes
-- **Knowledge Base**: Race regulations, track characteristics, team data
+- **Knowledge Base**: Race regulations, track characteristics, team data, teams radios
 
 ### Data Sources
 - **FastF1 API**: Official F1 timing and telemetry data
 - **Weather APIs**: OpenWeatherMap, Weather.com
 - **Historical Database**: Past race results and strategies
-- **Live Timing**: Real-time session data
+- **OpenF1 API (Live Timing)**: Real-time session data
 
 ## Development Phases
 
@@ -85,7 +87,7 @@ The F1 Strategist AI is an advanced artificial intelligence system designed to p
 
 **Deliverables**:
 - Virtual environment configured
-- Data ingestion from FastF1
+- Data ingestion from FastF1/OpenF1
 - Basic MCP server operational
 - Initial data storage structure
 
@@ -174,6 +176,7 @@ The F1 Strategist AI is an advanced artificial intelligence system designed to p
 
 ### Must-Have (MVP)
 - [ ] Historical race data access via FastF1
+- [ ] Live time data access via OpenF1
 - [ ] Basic strategy recommendations (pit stops, tires)
 - [ ] Simple chatbot interface
 - [ ] Live race visualization
@@ -256,4 +259,4 @@ The F1 Strategist AI is an advanced artificial intelligence system designed to p
 
 **Version**: 1.0  
 **Last Updated**: December 19, 2025  
-**Maintained by**: Jorge G.
+**Maintained by**: Jorge Rionegro

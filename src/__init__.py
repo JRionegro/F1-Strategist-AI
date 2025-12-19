@@ -1,4 +1,4 @@
-"""F1 Strategist AI Package."""
+"""F1 Strategist AI - Core package."""
 
 __version__ = "0.1.0"
 __author__ = "Jorge G."
