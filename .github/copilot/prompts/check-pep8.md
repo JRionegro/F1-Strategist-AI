@@ -1,21 +1,21 @@
-# Prompt: Verificar cumplimiento de PEP 8 en código Python
+# Prompt: Verify PEP 8 Compliance in Python Code
 
-## Objetivo
-Revisar el código Python proporcionado para asegurar que cumple con las recomendaciones del estilo PEP 8.
+## Objective
+Review the provided Python code to ensure it complies with PEP 8 style recommendations.
 
-## Instrucciones para Copilot
-- Analiza el código fuente y señala cualquier violación de PEP 8.
-- Sugiere correcciones específicas para:
-  - Nombres de variables y funciones
-  - Espaciado y sangría
-  - Longitud de líneas
-  - Uso de comillas
-  - Importaciones ordenadas
-  - Comentarios y docstrings
-- Si el código ya cumple con PEP 8, confirma que no hay problemas.
-- No modifiques la lógica del código, solo el estilo.
+## Instructions for Copilot
+- Analyze the source code and identify any PEP 8 violations.
+- Suggest specific corrections for:
+  - Variable and function names
+  - Spacing and indentation
+  - Line length
+  - Quote usage
+  - Import ordering
+  - Comments and docstrings
+- If the code already complies with PEP 8, confirm there are no issues.
+- Do not modify the code logic, only the style.
 
-## Ejemplo de uso
-> Revisa este archivo y dime si cumple con PEP 8 usando el prompt `check-pep8`.
+## Usage Example
+> Review this file and tell me if it complies with PEP 8 using the `check-pep8` prompt.
 
 ``

@@ -1,207 +1,216 @@
-# F1 Strategist AI - Índice de Documentación
+# F1 Strategist AI - Documentation Index
 
-**Última Actualización**: 20 de Diciembre de 2025  
-**Estado del Proyecto**: Phase 2 Completada ✅ | Phase 3A Iniciando 🔄
-
----
-
-## 📖 Guías de Inicio Rápido
-
-| Documento | Descripción | Audiencia |
-|-----------|-------------|-----------|
-| [README.md](../README.md) | Resumen del proyecto y quick start | Todos |
-| [QUICK_START.md](./QUICK_START.md) | Instalación y configuración inicial | Desarrolladores nuevos |
-| [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md) | Workflow y convenciones de código | Desarrolladores activos |
+**Last Updated**: December 20, 2025  
+**Project Status**: Phase 2 Complete ✅ | Phase 3A Starting 🔄
 
 ---
 
-## 🏗️ Arquitectura y Diseño
+## 📖 Quick Start Guides
 
-| Documento | Descripción | Última Actualización |
-|-----------|-------------|----------------------|
-| [ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md) | Decisiones arquitectónicas principales (ADR) | 20/12/2025 ✅ |
-| [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) | **Stack tecnológico definitivo** | 20/12/2025 ✅ |
-| [PROJECT_SPECIFICATIONS.md](./PROJECT_SPECIFICATIONS.md) | Especificaciones técnicas completas | 20/12/2025 ✅ |
-
----
-
-## 🤖 Agentes y LLM
-
-| Documento | Descripción | Estado |
-|-----------|-------------|--------|
-| [RACE_POSITION_AGENT_SPEC.md](./RACE_POSITION_AGENT_SPEC.md) | Especificación del 5º agente (Race Position) | Aprobado ✅ |
-| [GEMINI_FLASH_THINKING_GUIDE.md](./GEMINI_FLASH_THINKING_GUIDE.md) | Guía completa de Gemini 2.0 Flash Thinking | Completo ✅ |
-| **[LLM_PROVIDERS_SPEC.md]** | Implementación de providers (pendiente) | Planificado 📋 |
+| Document | Description | Audience |
+|----------|-------------|----------|
+| [README.md](../README.md) | Project summary and quick start | Everyone |
+| [QUICK_START.md](./QUICK_START.md) | Installation and initial setup | New developers |
+| [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md) | Workflow and code conventions | Active developers |
 
 ---
 
-## 💾 Sistemas de Datos
+## 🏗️ Architecture and Design
 
-| Documento | Descripción | Estado |
-|-----------|-------------|--------|
-| [CACHE_SYSTEM_IMPLEMENTATION.md](./CACHE_SYSTEM_IMPLEMENTATION.md) | Sistema de caché híbrido (Parquet) | Implementado ✅ |
-| [MCP_API_REFERENCE.md](./MCP_API_REFERENCE.md) | Referencia completa de las 13 herramientas MCP | Completo ✅ |
-| **[VECTOR_STORE_GUIDE.md]** | ChromaDB + Pinecone setup (pendiente) | Planificado 📋 |
-
----
-
-## 📊 Monitoreo y Observabilidad
-
-| Documento | Descripción | Estado |
-|-----------|-------------|--------|
-| [MONITORING_SETUP.md](./MONITORING_SETUP.md) | LangSmith + LocalTokenTracker | Implementado ✅ |
-| **[COST_OPTIMIZATION.md]** | Estrategias de optimización de costos | Planificado 📋 |
+| Document | Description | Last Updated |
+|----------|-------------|-------------|
+| [ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md) | Main architectural decisions (ADR) | 12/20/2025 ✅ |
+| [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) | **Final technology stack** | 12/20/2025 ✅ |
+| [PROJECT_SPECIFICATIONS.md](./PROJECT_SPECIFICATIONS.md) | Complete technical specifications | 12/20/2025 ✅ |
 
 ---
 
-## 📝 Resúmenes de Implementación
+## 🤖 Agents and LLM
 
-| Documento | Descripción | Estado |
-|-----------|-------------|--------|
-| [IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md) | Resumen de trabajo completado | Actualizado ✅ |
+| Document | Description | Status |
+|----------|-------------|--------|
+| [MULTI_SESSION_AGENTS.md](./MULTI_SESSION_AGENTS.md) | **Adaptive agents (Race & Qualifying)** | Complete ✅ |
+| [RACE_POSITION_AGENT_SPEC.md](./RACE_POSITION_AGENT_SPEC.md) | 5th agent specification (Race Position) | Approved ✅ |
+| [GEMINI_FLASH_THINKING_GUIDE.md](./GEMINI_FLASH_THINKING_GUIDE.md) | Complete Gemini 2.0 Flash Thinking guide | Complete ✅ |
+| **[LLM_PROVIDERS_SPEC.md]** | Providers implementation (pending) | Planned 📋 |
 
 ---
 
-## 🎯 Documentos por Fase del Proyecto
+## 💾 Data Systems
 
-### ✅ Phase 1-2: Foundation & Data Layer (COMPLETADO)
+| Document | Description | Status |
+|----------|-------------|--------|
+| [CACHE_SYSTEM_IMPLEMENTATION.md](./CACHE_SYSTEM_IMPLEMENTATION.md) | Hybrid cache system (Parquet) | Implemented ✅ |
+| [MCP_API_REFERENCE.md](./MCP_API_REFERENCE.md) | Complete reference for 13 MCP tools | Complete ✅ |
+| **[VECTOR_STORE_GUIDE.md]** | ChromaDB + Pinecone setup (pending) | Planned 📋 |
 
-**Documentos Clave**:
-1. [MCP_API_REFERENCE.md](./MCP_API_REFERENCE.md) - 13 herramientas implementadas
-2. [CACHE_SYSTEM_IMPLEMENTATION.md](./CACHE_SYSTEM_IMPLEMENTATION.md) - Sistema híbrido
+---
+
+## 🎨 User Interface
+
+| Document | Description | Status |
+|----------|-------------|--------|
+| [UI_UX_SPECIFICATION.md](./UI_UX_SPECIFICATION.md) | **Complete dashboard and interface specification** | Complete ✅ |
+
+---
+
+## 📊 Monitoring and Observability
+
+| Document | Description | Status |
+|----------|-------------|--------|
+| [MONITORING_SETUP.md](./MONITORING_SETUP.md) | LangSmith + LocalTokenTracker | Implemented ✅ |
+| **[COST_OPTIMIZATION.md]** | Cost optimization strategies | Planned 📋 |
+
+---
+
+## 📝 Implementation Summaries
+
+| Document | Description | Status |
+|----------|-------------|--------|
+| [IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md) | Summary of completed work | Updated ✅ |
+
+---
+
+## 🎯 Documents by Project Phase
+
+### ✅ Phase 1-2: Foundation & Data Layer (COMPLETED)
+
+**Key Documents**:
+1. [MCP_API_REFERENCE.md](./MCP_API_REFERENCE.md) - 13 implemented tools
+2. [CACHE_SYSTEM_IMPLEMENTATION.md](./CACHE_SYSTEM_IMPLEMENTATION.md) - Hybrid system
 3. [MONITORING_SETUP.md](./MONITORING_SETUP.md) - LangSmith + fallback
 
-**Tests**: 81 pasando (43 MCP + 14 caché + 12 monitoring + 12 data provider)
+**Tests**: 81 passing (43 MCP + 14 cache + 12 monitoring + 12 data provider)
 
 ---
 
-### ✅ Phase 2D: Architecture Planning (COMPLETADO)
+### ✅ Phase 2D: Architecture Planning (COMPLETED)
 
-**Documentos Clave**:
-1. [ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md) - Framework LangChain
-2. [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) - **Stack completo aprobado**
-3. [GEMINI_FLASH_THINKING_GUIDE.md](./GEMINI_FLASH_THINKING_GUIDE.md) - Guía Gemini
-4. [RACE_POSITION_AGENT_SPEC.md](./RACE_POSITION_AGENT_SPEC.md) - 5º agente
+**Key Documents**:
+1. [ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md) - LangChain framework
+2. [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) - **Complete approved stack**
+3. [GEMINI_FLASH_THINKING_GUIDE.md](./GEMINI_FLASH_THINKING_GUIDE.md) - Gemini guide
+4. [RACE_POSITION_AGENT_SPEC.md](./RACE_POSITION_AGENT_SPEC.md) - 5th agent
 
-**Decisiones Finales**:
-- LLM: Híbrido Claude + Gemini 2.0 Flash Thinking
+**Final Decisions**:
+- LLM: Hybrid Claude + Gemini 2.0 Flash Thinking
 - Vector Store: ChromaDB (MVP) + Pinecone (prod)
 - Embeddings: all-MiniLM-L6-v2
-- Cache: Parquet only (sin Redis en MVP)
-- Monitoring: LangSmith desde Phase 3A
+- Cache: Parquet only (no Redis in MVP)
+- Monitoring: LangSmith from Phase 3A
 
 ---
 
-### 🔄 Phase 3A: LangChain Foundation (ACTUAL)
+### 🔄 Phase 3A: LangChain Foundation (CURRENT)
 
-**Documentos Necesarios** (pendientes de crear):
-1. **LLM_PROVIDERS_SPEC.md** - Implementación de Claude y Gemini providers
-2. **VECTOR_STORE_GUIDE.md** - Setup ChromaDB y Pinecone
-3. **AGENT_BASE_FRAMEWORK.md** - Arquitectura base de agentes
+**Required Documents** (pending creation):
+1. **LLM_PROVIDERS_SPEC.md** - Claude and Gemini providers implementation
+2. **VECTOR_STORE_GUIDE.md** - ChromaDB and Pinecone setup
+3. **AGENT_BASE_FRAMEWORK.md** - Base agent architecture
 
-**Tareas**:
-- [ ] Implementar `src/llm/claude_provider.py`
-- [ ] Implementar `src/llm/gemini_provider.py`
-- [ ] Implementar `src/llm/hybrid_router.py`
-- [ ] Implementar `src/rag/chromadb_store.py`
-- [ ] Implementar `src/rag/factory.py`
-- [ ] Tests de integración (15+)
-
----
-
-### 📋 Phase 3B: Agent Implementation (PRÓXIMO)
-
-**Documentos Planificados**:
-1. **MULTI_AGENT_ORCHESTRATION.md** - Coordinación entre agentes
-2. **RAG_IMPLEMENTATION.md** - Sistema RAG completo
-3. **TOOL_INTEGRATION.md** - Conversión MCP → LangChain
+**Tasks**:
+- [ ] Implement `src/llm/claude_provider.py`
+- [ ] Implement `src/llm/gemini_provider.py`
+- [ ] Implement `src/llm/hybrid_router.py`
+- [ ] Implement `src/rag/chromadb_store.py`
+- [ ] Implement `src/rag/factory.py`
+- [ ] Integration tests (15+)
 
 ---
 
-### 📋 Phase 4: User Interface (FUTURO)
+### 📋 Phase 3B: Agent Implementation (NEXT)
 
-**Documentos Planificados**:
-1. **CHATBOT_DESIGN.md** - Interface de usuario
-2. **API_DOCUMENTATION.md** - API pública
-3. **DEPLOYMENT_GUIDE.md** - Guía de despliegue
+**Planned Documents**:
+1. **MULTI_AGENT_ORCHESTRATION.md** - Agent coordination
+2. **RAG_IMPLEMENTATION.md** - Complete RAG system
+3. **TOOL_INTEGRATION.md** - MCP → LangChain conversion
 
 ---
 
-## 🔍 Guía de Búsqueda Rápida
+### 📋 Phase 4: User Interface (FUTURE)
 
-### ¿Necesitas información sobre...?
+**Planned Documents**:
+1. **CHATBOT_DESIGN.md** - User interface
+2. **API_DOCUMENTATION.md** - Public API
+3. **DEPLOYMENT_GUIDE.md** - Deployment guide
 
-**Configuración Inicial**:
+---
+
+## 🔍 Quick Search Guide
+
+### Need information about...?
+
+**Initial Setup**:
 - → [QUICK_START.md](./QUICK_START.md)
 - → [config/.env.example](../config/.env.example)
 
-**Arquitectura del Sistema**:
+**System Architecture**:
 - → [ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md)
 - → [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md)
 
-**Stack Tecnológico**:
-- → [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) ⭐ **REFERENCIA PRINCIPAL**
+**Technology Stack**:
+- → [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) ⭐ **MAIN REFERENCE**
 
-**LLM y Modelos**:
+**LLM and Models**:
 - → [GEMINI_FLASH_THINKING_GUIDE.md](./GEMINI_FLASH_THINKING_GUIDE.md)
-- → [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) (Sección "Estrategia LLM Híbrida")
+- → [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) ("Hybrid LLM Strategy" section)
 
-**Agentes de IA**:
+**AI Agents**:
 - → [RACE_POSITION_AGENT_SPEC.md](./RACE_POSITION_AGENT_SPEC.md)
 - → [ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md) (Phase 3B)
 
-**Sistema de Datos**:
+**Data System**:
 - → [MCP_API_REFERENCE.md](./MCP_API_REFERENCE.md)
 - → [CACHE_SYSTEM_IMPLEMENTATION.md](./CACHE_SYSTEM_IMPLEMENTATION.md)
 
-**Monitoreo y Costos**:
+**Monitoring and Costs**:
 - → [MONITORING_SETUP.md](./MONITORING_SETUP.md)
-- → [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) (Sección "Proyecciones de Costo")
+- → [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) ("Cost Projections" section)
 
 **Testing**:
-- → [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md) (Sección "Testing")
-- → `tests/` directorio con 81 tests
+- → [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md) ("Testing" section)
+- → `tests/` directory with 81 tests
 
 ---
 
-## 📌 Documentos Esenciales
+## 📌 Essential Documents
 
-### ⭐ Top 3 Documentos para Nuevos Desarrolladores
+### ⭐ Top 3 Documents for New Developers
 
-1. **[TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md)** - Decisiones completas del stack
-2. **[QUICK_START.md](./QUICK_START.md)** - Guía de inicio rápido
-3. **[MCP_API_REFERENCE.md](./MCP_API_REFERENCE.md)** - API de herramientas
+1. **[TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md)** - Complete stack decisions
+2. **[QUICK_START.md](./QUICK_START.md)** - Quick start guide
+3. **[MCP_API_REFERENCE.md](./MCP_API_REFERENCE.md)** - Tools API
 
-### ⭐ Top 3 Documentos para Arquitectura
+### ⭐ Top 3 Documents for Architecture
 
-1. **[ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md)** - ADR principal
-2. **[TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md)** - Stack completo
+1. **[ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md)** - Main ADR
+2. **[TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md)** - Complete stack
 3. **[GEMINI_FLASH_THINKING_GUIDE.md](./GEMINI_FLASH_THINKING_GUIDE.md)** - LLM strategy
 
 ---
 
-## 🔄 Estado de Actualización
+## 🔄 Update Status
 
-| Categoría | Actualizado | Fecha |
-|-----------|-------------|-------|
-| **Architecture** | ✅ | 20/12/2025 |
-| **Tech Stack** | ✅ | 20/12/2025 |
-| **LLM Strategy** | ✅ | 20/12/2025 |
-| **Data Layer** | ✅ | 15/12/2025 |
-| **Monitoring** | ✅ | 15/12/2025 |
-| **Agent Specs** | ✅ | 20/12/2025 |
-| **API Reference** | ✅ | 10/12/2025 |
-| **Testing Guide** | 🟡 Parcial | - |
-| **Deployment** | ❌ Pendiente | - |
-
----
-
-## 📞 Contacto y Mantenimiento
-
-**Responsable**: Jorge Rionegro  
-**Última Revisión General**: 20 de Diciembre de 2025  
-**Próxima Revisión**: 3 de Enero de 2026 (Fin Phase 3A)
+| Category | Updated | Date |
+|----------|---------|------|
+| **Architecture** | ✅ | 12/20/2025 |
+| **Tech Stack** | ✅ | 12/20/2025 |
+| **LLM Strategy** | ✅ | 12/20/2025 |
+| **Data Layer** | ✅ | 12/15/2025 |
+| **Monitoring** | ✅ | 12/15/2025 |
+| **Agent Specs** | ✅ | 12/20/2025 |
+| **API Reference** | ✅ | 12/10/2025 |
+| **Testing Guide** | 🟡 Partial | - |
+| **Deployment** | ❌ Pending | - |
 
 ---
 
-**Nota**: Este índice se actualiza con cada cambio significativo en la arquitectura o el stack tecnológico. Si encuentras información desactualizada, verifica primero [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) que siempre contiene las decisiones más recientes.
+## 📞 Contact and Maintenance
+
+**Responsible**: Jorge Rionegro  
+**Last General Review**: December 20, 2025  
+**Next Review**: January 3, 2026 (End of Phase 3A)
+
+---
+
+**Note**: This index is updated with each significant change in architecture or technology stack. If you find outdated information, check [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) first, which always contains the most recent decisions.

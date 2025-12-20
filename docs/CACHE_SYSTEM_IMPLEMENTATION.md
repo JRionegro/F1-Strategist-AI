@@ -1,48 +1,48 @@
-# Sistema de Caché Híbrido - Implementación Completa
+# Hybrid Cache System - Complete Implementation
 
-## 📋 Resumen Ejecutivo
+## 📋 Executive Summary
 
-Se ha implementado exitosamente un **sistema de caché híbrido** para F1 Strategist AI que soporta:
+A **hybrid cache system** has been successfully implemented for F1 Strategist AI that supports:
 
-- ✅ Datos históricos con formato Parquet optimizado
-- ✅ Sesiones en tiempo real con actualización incremental
-- ✅ Políticas de retención configurables
-- ✅ Gestión automática de espacio en disco
-- ✅ Estructura de carpetas por piloto para telemetría
-- ✅ **14 tests pasando** con cobertura completa
+- ✅ Historical data with optimized Parquet format
+- ✅ Real-time sessions with incremental updates
+- ✅ Configurable retention policies
+- ✅ Automatic disk space management
+- ✅ Folder structure per driver for telemetry
+- ✅ **14 tests passing** with complete coverage
 
 ---
 
-## 🏗️ Arquitectura Implementada
+## 🏗️ Implemented Architecture
 
-### Archivos Creados
+### Created Files
 
 ```
 src/data/
-├── cache_config.py          # Configuración y políticas (196 líneas)
-├── cache_manager.py         # Gestor de caché híbrido (638 líneas)
-├── live_session_monitor.py  # Monitor OpenF1 en tiempo real (385 líneas)
-├── models.py                # Dataclasses para F1 (383 líneas)
-└── f1_data_provider.py      # MODIFICADO - Integración con caché
+├── cache_config.py          # Configuration and policies (196 lines)
+├── cache_manager.py         # Hybrid cache manager (638 lines)
+├── live_session_monitor.py  # Real-time OpenF1 monitor (385 lines)
+├── models.py                # F1 dataclasses (383 lines)
+└── f1_data_provider.py      # MODIFIED - Cache integration
 
 scripts/
-├── clean_cache.py           # Limpieza de datos antiguos
-├── cache_stats.py           # Estadísticas de uso
-└── preload_season.py        # Precarga de temporadas
+├── clean_cache.py           # Old data cleanup
+├── cache_stats.py           # Usage statistics
+└── preload_season.py        # Season preload
 
 tests/
-└── test_cache_system.py     # 14 tests (100% pasando)
+└── test_cache_system.py     # 14 tests (100% passing)
 ```
 
-### Total: **1,602 líneas de código nuevo** + integración
+### Total: **1,602 new lines of code** + integration
 
 ---
 
-## 📦 Estructura de Datos
+## 📦 Data Structure
 
 ```
 data/
-├── races/                    # Datos históricos permanentes
+├── races/                    # Permanent historical data
 │   └── 2024/
 │       └── bahrain/
 │           ├── race_results.parquet
@@ -50,7 +50,7 @@ data/
 │           ├── weather.parquet
 │           └── metadata.json
 │
-├── telemetry/                # Telemetría por piloto (TTL 7 días)
+├── telemetry/                # Per-driver telemetry (TTL 7 days)
 │   └── 2024/
 │       └── bahrain/
 │           ├── VER/
@@ -60,7 +60,7 @@ data/
 │           └── HAM/
 │               └── ...
 │
-└── live/                     # Sesión activa en tiempo real
+└── live/                     # Active real-time session
     └── current_session/
         ├── session_metadata.json
         ├── race_state.json
@@ -75,9 +75,9 @@ data/
 
 ---
 
-## 🔑 Componentes Principales
+## 🔑 Main Components
 
-### 1. **CacheConfig** - Configuración
+### 1. **CacheConfig** - Configuration
 
 ```python
 from src.data import CacheConfig, DataType, RetentionPolicy
@@ -89,48 +89,48 @@ config = CacheConfig(
     compression="snappy"
 )
 
-# Políticas de retención
+# Retention policies
 PERMANENT: race_results, qualifying, weather
-7 DAYS: telemetry (pesado)
+7 DAYS: telemetry (heavy)
 30 DAYS: lap_times, practice_results
 90 DAYS: pit_stops, tire_strategy
 ```
 
-### 2. **CacheManager** - Gestor Híbrido
+### 2. **CacheManager** - Hybrid Manager
 
 ```python
 from src.data import CacheManager, CacheMode, DataType
 
-# MODO HISTORICAL
+# HISTORICAL MODE
 cache = CacheManager(mode=CacheMode.HISTORICAL)
 
-# Guardar datos
+# Save data
 cache.save_race_data(2024, "bahrain", DataType.RACE_RESULTS, df)
 
-# Recuperar (rápido ~100ms vs 10s de FastF1)
+# Retrieve (fast ~100ms vs 10s from FastF1)
 data = cache.get_cached_race_data(2024, "bahrain", DataType.RACE_RESULTS)
 
-# MODO LIVE
+# LIVE MODE
 live_cache = CacheManager(mode=CacheMode.LIVE)
 live_cache.start_live_session(session_metadata)
 live_cache.update_driver_lap(driver, lap_data, telemetry)
 live_cache.complete_stint(driver, stint_data)
-live_cache.finalize_session()  # Mueve a histórico
+live_cache.finalize_session()  # Moves to historical
 ```
 
-### 3. **LiveSessionMonitor** - Tiempo Real
+### 3. **LiveSessionMonitor** - Real Time
 
 ```python
 from src.data import LiveSessionMonitor
 
 monitor = LiveSessionMonitor(cache_manager, update_interval=5)
-await monitor.start_monitoring()  # Polling cada 5 segundos
+await monitor.start_monitoring()  # Polling every 5 seconds
 
-# Actualiza automáticamente:
-# - Vueltas completadas
+# Automatically updates:
+# - Completed laps
 # - Pit stops
-# - Estados de pista
-# - Mensajes de carrera
+# - Track status
+# - Race messages
 ```
 
 ### 4. **Models** - Dataclasses
@@ -144,74 +144,74 @@ from src.data import (
     RaceState
 )
 
-# Stint con estadísticas automáticas
+# Stint with automatic statistics
 stint = StintData(stint_number=1, driver="VER", start_lap=1)
 stint.add_lap(1, 92.5)
 stint.add_lap(2, 92.3)
 print(stint.avg_lap_time)        # 92.4
 print(stint.degradation_rate)    # 0.15
 
-# Serialización JSON
+# JSON serialization
 stint_dict = stint.to_dict()
 ```
 
 ---
 
-## 🚀 Uso Integrado
+## 🚀 Integrated Usage
 
-### Con F1DataProvider (Caché Automático)
+### With F1DataProvider (Automatic Cache)
 
 ```python
 from src.data import UnifiedF1DataProvider
 
-# Inicializar con caché inteligente
+# Initialize with smart cache
 provider = UnifiedF1DataProvider(use_smart_cache=True)
 
-# Primera llamada: FastF1 (lento ~10s)
+# First call: FastF1 (slow ~10s)
 results = provider.get_race_results(2024, 1)  # "Bahrain"
 
-# Segunda llamada: Caché (rápido ~0.1s)
-results = provider.get_race_results(2024, 1)  # ¡Cache hit!
+# Second call: Cache (fast ~0.1s)
+results = provider.get_race_results(2024, 1)  # Cache hit!
 ```
 
-### Scripts de Utilidad
+### Utility Scripts
 
 ```bash
-# Ver estadísticas de caché
+# View cache statistics
 python scripts/cache_stats.py
 
-# Limpiar datos antiguos
+# Clean old data
 python scripts/clean_cache.py --types telemetry lap_times
 
-# Precargar temporada completa
+# Preload complete season
 python scripts/preload_season.py 2024 --skip-telemetry
 ```
 
 ---
 
-## 📊 Beneficios Implementados
+## 📊 Implemented Benefits
 
-| Característica | Antes | Ahora |
-|----------------|-------|-------|
-| **Tiempo de respuesta** | 10s (FastF1) | 0.1s (caché) |
-| **Formato de datos** | CSV | Parquet (10x más rápido) |
-| **Gestión de espacio** | Manual | Automática con TTL |
-| **Tiempo real** | No soportado | Sí (OpenF1 + monitor) |
-| **Estructura** | Plana | Jerárquica por piloto |
-| **Persistencia** | Temporal | Histórico permanente |
+| Feature | Before | Now |
+|---------|--------|-----|
+| **Response time** | 10s (FastF1) | 0.1s (cache) |
+| **Data format** | CSV | Parquet (10x faster) |
+| **Space management** | Manual | Automatic with TTL |
+| **Real time** | Not supported | Yes (OpenF1 + monitor) |
+| **Structure** | Flat | Hierarchical per driver |
+| **Persistence** | Temporary | Permanent historical |
 
 ---
 
-## ✅ Tests Implementados (14/14 Pasando)
+## ✅ Implemented Tests (14/14 Passing)
 
-### Modo Historical
+### Historical Mode
 - ✅ `test_cache_manager_initialization`
 - ✅ `test_save_and_get_race_data`
 - ✅ `test_cache_miss`
 - ✅ `test_save_and_get_telemetry`
 - ✅ `test_cache_stats`
 
-### Modo Live
+### Live Mode
 - ✅ `test_start_live_session`
 - ✅ `test_update_driver_lap`
 - ✅ `test_complete_stint`
@@ -219,62 +219,62 @@ python scripts/preload_season.py 2024 --skip-telemetry
 - ✅ `test_update_race_state`
 - ✅ `test_finalize_session`
 
-### Modelos
+### Models
 - ✅ `test_stint_data_statistics`
 - ✅ `test_stint_to_dict`
 - ✅ `test_race_state_update_positions`
 
 ---
 
-## 🎯 Próximos Pasos Recomendados
+## 🎯 Recommended Next Steps
 
-Con el sistema de caché completo, ahora puedes:
+With the complete cache system, you can now:
 
-1. **Implementar Agentes LangChain** (Phase 3A)
-   - Los agentes consultarán caché en <100ms
-   - Análisis de estrategia con datos históricos inmediatos
+1. **Implement LangChain Agents** (Phase 3A)
+   - Agents will query cache in <100ms
+   - Strategy analysis with immediate historical data
 
-2. **Integración OpenF1 Real**
-   - Reemplazar `OpenF1Client` simulado
-   - Conectar con API real para datos live
+2. **Real OpenF1 Integration**
+   - Replace simulated `OpenF1Client`
+   - Connect with real API for live data
 
-3. **Sistema RAG**
-   - Vectorizar datos cacheados
-   - Embeddings de estrategias históricas
+3. **RAG System**
+   - Vectorize cached data
+   - Embeddings of historical strategies
 
-4. **Dashboard en Tiempo Real**
-   - Visualización de sesiones live
-   - Análisis de stints en curso
+4. **Real-Time Dashboard**
+   - Live session visualization
+   - Ongoing stint analysis
 
 ---
 
-## 📝 Notas de Implementación
+## 📝 Implementation Notes
 
-### Decisiones Clave
+### Key Decisions
 
-1. **Parquet vs CSV**: Parquet para rendimiento (compresión snappy)
-2. **Por Piloto vs Por Equipo**: Por piloto (más flexible)
-3. **TTL Diferenciado**: Permanente para resultados, temporal para telemetría
-4. **Estructura Live/Historical**: Separada para claridad, unificada al finalizar
+1. **Parquet vs CSV**: Parquet for performance (snappy compression)
+2. **Per Driver vs Per Team**: Per driver (more flexible)
+3. **Differentiated TTL**: Permanent for results, temporary for telemetry
+4. **Live/Historical Structure**: Separated for clarity, unified on finalization
 
-### Compatibilidad
+### Compatibility
 
 - ✅ Python 3.14
 - ✅ PEP 8 compliant
-- ✅ Type hints completos
-- ✅ Sin errores F541
-- ✅ Docstrings completos
+- ✅ Complete type hints
+- ✅ No F541 errors
+- ✅ Complete docstrings
 
 ---
 
-## 🏁 Conclusión
+## 🏁 Conclusion
 
-Sistema de caché híbrido **completamente funcional** que:
+**Fully functional** hybrid cache system that:
 
-- Reduce tiempos de respuesta de 10s a 100ms
-- Soporta tiempo real con OpenF1
-- Gestiona espacio automáticamente
-- Estructura optimizada para análisis de pilotos
-- Listo para integración con agentes LangChain
+- Reduces response times from 10s to 100ms
+- Supports real-time with OpenF1
+- Manages space automatically
+- Optimized structure for driver analysis
+- Ready for LangChain agent integration
 
-**Estado**: ✅ **PRODUCCIÓN READY**
+**Status**: ✅ **PRODUCTION READY**

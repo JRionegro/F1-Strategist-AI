@@ -1,119 +1,119 @@
-# 📚 Documentación F1 Strategist AI
+# 📚 F1 Strategist AI Documentation
 
-**Última Actualización**: 20 de Diciembre de 2025  
-**Estado**: ✅ Completa y Validada
-
----
-
-## 🎯 Inicio Rápido
-
-¿Primera vez en el proyecto? Comienza aquí:
-
-1. **[UPDATE_SUMMARY.md](./UPDATE_SUMMARY.md)** - Resumen de últimas actualizaciones
-2. **[INDEX.md](./INDEX.md)** - Mapa completo de documentación
-3. **[QUICK_START.md](./QUICK_START.md)** - Guía de instalación
+**Last Update**: December 20, 2025  
+**Status**: ✅ Complete and Validated
 
 ---
 
-## 📖 Documentos por Categoría
+## 🎯 Quick Start
 
-### 🎯 Esenciales (Lectura Obligatoria)
+First time on the project? Start here:
 
-| Documento | Descripción | Para Quién |
-|-----------|-------------|------------|
-| **[TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md)** ⭐ | Stack tecnológico completo | Todos |
-| **[ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md)** | Decisiones arquitectónicas (ADR) | Arquitectos/Devs |
-| **[INDEX.md](./INDEX.md)** | Índice de toda la documentación | Nuevos usuarios |
+1. **[UPDATE_SUMMARY.md](./UPDATE_SUMMARY.md)** - Latest updates summary
+2. **[INDEX.md](./INDEX.md)** - Complete documentation map
+3. **[QUICK_START.md](./QUICK_START.md)** - Installation guide
+
+---
+
+## 📖 Documents by Category
+
+### 🎯 Essentials (Required Reading)
+
+| Document | Description | For Whom |
+|-----------|-------------|----------|
+| **[TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md)** ⭐ | Complete technology stack | Everyone |
+| **[ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md)** | Architectural decisions (ADR) | Architects/Devs |
+| **[INDEX.md](./INDEX.md)** | Index of all documentation | New users |
 
 ### 🚀 Getting Started
 
-| Documento | Descripción |
+| Document | Description |
 |-----------|-------------|
-| [QUICK_START.md](./QUICK_START.md) | Instalación y configuración inicial |
-| [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md) | Workflow y convenciones |
-| [PROJECT_SPECIFICATIONS.md](./PROJECT_SPECIFICATIONS.md) | Especificaciones técnicas |
+| [QUICK_START.md](./QUICK_START.md) | Installation and initial setup |
+| [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md) | Workflow and conventions |
+| [PROJECT_SPECIFICATIONS.md](./PROJECT_SPECIFICATIONS.md) | Technical specifications |
 
-### 🏗️ Arquitectura y Diseño
+### 🏗️ Architecture and Design
 
-| Documento | Descripción |
+| Document | Description |
 |-----------|-------------|
-| [ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md) | ADR principal |
-| [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) | Stack completo aprobado |
-| [PROJECT_STATUS.md](./PROJECT_STATUS.md) | Estado actual del proyecto |
+| [ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md) | Main ADR |
+| [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) | Complete approved stack |
+| [PROJECT_STATUS.md](./PROJECT_STATUS.md) | Current project status |
 
-### 🤖 AI y Agentes
+### 🤖 AI and Agents
 
-| Documento | Descripción |
+| Document | Description |
 |-----------|-------------|
-| [GEMINI_FLASH_THINKING_GUIDE.md](./GEMINI_FLASH_THINKING_GUIDE.md) | Guía completa Gemini 2.0 |
-| [RACE_POSITION_AGENT_SPEC.md](./RACE_POSITION_AGENT_SPEC.md) | Especificación 5º agente |
+| [GEMINI_FLASH_THINKING_GUIDE.md](./GEMINI_FLASH_THINKING_GUIDE.md) | Complete Gemini 2.0 guide |
+| [RACE_POSITION_AGENT_SPEC.md](./RACE_POSITION_AGENT_SPEC.md) | 5th agent specification |
 
-### 💾 Sistemas de Datos
+### 💾 Data Systems
 
-| Documento | Descripción |
+| Document | Description |
 |-----------|-------------|
-| [CACHE_SYSTEM_IMPLEMENTATION.md](./CACHE_SYSTEM_IMPLEMENTATION.md) | Sistema caché híbrido |
-| [MCP_API_REFERENCE.md](./MCP_API_REFERENCE.md) | 13 herramientas MCP |
+| [CACHE_SYSTEM_IMPLEMENTATION.md](./CACHE_SYSTEM_IMPLEMENTATION.md) | Hybrid cache system |
+| [MCP_API_REFERENCE.md](./MCP_API_REFERENCE.md) | 13 MCP tools |
 
-### 📊 Monitoreo
+### 📊 Monitoring
 
-| Documento | Descripción |
+| Document | Description |
 |-----------|-------------|
 | [MONITORING_SETUP.md](./MONITORING_SETUP.md) | LangSmith + local fallback |
 
-### ✅ Validación
+### ✅ Validation
 
-| Documento | Descripción |
+| Document | Description |
 |-----------|-------------|
-| [DOCUMENTATION_VALIDATION.md](./DOCUMENTATION_VALIDATION.md) | Validación de consistencia |
-| [UPDATE_SUMMARY.md](./UPDATE_SUMMARY.md) | Resumen de actualizaciones |
-| [IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md) | Resumen de implementación |
+| [DOCUMENTATION_VALIDATION.md](./DOCUMENTATION_VALIDATION.md) | Consistency validation |
+| [UPDATE_SUMMARY.md](./UPDATE_SUMMARY.md) | Updates summary |
+| [IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md) | Implementation summary |
 
 ---
 
-## 🔍 Búsqueda Rápida
+## 🔍 Quick Search
 
-### "¿Cómo empiezo?"
+### "How do I start?"
 → [QUICK_START.md](./QUICK_START.md)
 
-### "¿Qué tecnologías usamos?"
+### "What technologies do we use?"
 → [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md)
 
-### "¿Cómo funciona el sistema?"
+### "How does the system work?"
 → [ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md)
 
-### "¿Cuánto cuesta?"
-→ [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) - Sección "Proyecciones de Costo"
+### "How much does it cost?"
+→ [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) - "Cost Projections" section
 
-### "¿Qué agentes hay?"
+### "What agents are there?"
 → [RACE_POSITION_AGENT_SPEC.md](./RACE_POSITION_AGENT_SPEC.md)
 
-### "¿Cómo uso el caché?"
+### "How do I use the cache?"
 → [CACHE_SYSTEM_IMPLEMENTATION.md](./CACHE_SYSTEM_IMPLEMENTATION.md)
 
-### "¿Qué herramientas MCP hay?"
+### "What MCP tools are there?"
 → [MCP_API_REFERENCE.md](./MCP_API_REFERENCE.md)
 
-### "¿Cómo configuro Gemini?"
+### "How do I configure Gemini?"
 → [GEMINI_FLASH_THINKING_GUIDE.md](./GEMINI_FLASH_THINKING_GUIDE.md)
 
 ---
 
-## 📊 Estado de Documentación
+## 📊 Documentation Status
 
-| Fase | Documentación | Estado |
+| Phase | Documentation | Status |
 |------|---------------|--------|
 | **Phase 1-2** | Data Layer | ✅ 100% |
 | **Phase 2D** | Architecture | ✅ 100% |
-| **Phase 3A** | LangChain | ✅ Planificado |
-| **Phase 3B** | Agents | 📋 Pendiente |
-| **Phase 4** | UI/API | 📋 Pendiente |
+| **Phase 3A** | LangChain | ✅ Planned |
+| **Phase 3B** | Agents | 📋 Pending |
+| **Phase 4** | UI/API | 📋 Pending |
 
-**Total**: 12 documentos completos (~25,000 palabras)
+**Total**: 12 complete documents (~25,000 words)
 
 ---
 
-## 🎯 Decisiones Clave
+## 🎯 Key Decisions
 
 ### LLM Strategy
 - **Primary**: Claude 3.5 Sonnet (~30%)
@@ -137,63 +137,63 @@
 - **Fallback**: LocalTokenTracker
 
 ### Architecture
-- **Agents**: 5 especializados
+- **Agents**: 5 specialized
 - **Framework**: LangChain
 
 ### Costs
-- **MVP**: $8.50/mes
-- **Production**: $294/mes
+- **MVP**: $8.50/month
+- **Production**: $294/month
 
 ---
 
-## 📝 Convenciones
+## 📝 Conventions
 
-### Símbolos Usados
-- ✅ Completado
-- 🔄 En progreso
-- 📋 Planificado
-- ⭐ Nuevo/Importante
-- ❌ Descartado/Deprecated
+### Symbols Used
+- ✅ Completed
+- 🔄 In progress
+- 📋 Planned
+- ⭐ New/Important
+- ❌ Discarded/Deprecated
 
-### Estructura de Docs
-- **README.md** en raíz: Overview general
-- **docs/**: Documentación técnica
-- **[nombre]_SPEC.md**: Especificaciones
-- **[nombre]_GUIDE.md**: Guías prácticas
-- **[nombre]_IMPLEMENTATION.md**: Detalles de implementación
-
----
-
-## 🔄 Actualizaciones Recientes
-
-### 20/12/2025 - Major Update
-- ✅ Stack tecnológico finalizado
-- ✅ 11 documentos actualizados
-- ✅ 4 documentos nuevos
-- ✅ Validación completa
-
-Ver [UPDATE_SUMMARY.md](./UPDATE_SUMMARY.md) para detalles.
+### Docs Structure
+- **README.md** at root: General overview
+- **docs/**: Technical documentation
+- **[name]_SPEC.md**: Specifications
+- **[name]_GUIDE.md**: Practical guides
+- **[name]_IMPLEMENTATION.md**: Implementation details
 
 ---
 
-## 📞 Soporte
+## 🔄 Recent Updates
 
-**Responsable**: Jorge Rionegro  
-**Mantenimiento**: Actualizado con cada cambio significativo  
-**Próxima Revisión**: 3 de Enero de 2026
+### 12/20/2025 - Major Update
+- ✅ Technology stack finalized
+- ✅ 11 documents updated
+- ✅ 4 new documents
+- ✅ Complete validation
 
----
-
-## 📌 Nota Importante
-
-**Este directorio contiene la documentación oficial del proyecto.**  
-Todos los documentos están sincronizados y validados.
-
-Si encuentras inconsistencias:
-1. Verifica primero [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) (siempre actualizado)
-2. Consulta [DOCUMENTATION_VALIDATION.md](./DOCUMENTATION_VALIDATION.md)
-3. Revisa [UPDATE_SUMMARY.md](./UPDATE_SUMMARY.md) para cambios recientes
+See [UPDATE_SUMMARY.md](./UPDATE_SUMMARY.md) for details.
 
 ---
 
-**¡Bienvenido al proyecto F1 Strategist AI! 🏎️💨**
+## 📞 Support
+
+**Responsible**: Jorge Rionegro  
+**Maintenance**: Updated with each significant change  
+**Next Review**: January 3, 2026
+
+---
+
+## 📌 Important Note
+
+**This directory contains the official project documentation.**  
+All documents are synchronized and validated.
+
+If you find inconsistencies:
+1. Check first [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) (always updated)
+2. Consult [DOCUMENTATION_VALIDATION.md](./DOCUMENTATION_VALIDATION.md)
+3. Review [UPDATE_SUMMARY.md](./UPDATE_SUMMARY.md) for recent changes
+
+---
+
+**Welcome to the F1 Strategist AI project! 🏎️💨**

@@ -128,12 +128,21 @@ Start with Strategy Agent as proof of concept:
 ```python
 class StrategyAgent(BaseF1Agent):
     """
-    Specialized agent for race strategy optimization.
+    Specialized agent for strategy optimization (Race & Qualifying).
     
-    Capabilities:
+    Race Mode Capabilities:
     - Tire strategy recommendations
     - Pit stop timing optimization
     - Fuel management calculations
+    - Undercut/overcut decisions
+    
+    Qualifying Mode Capabilities:
+    - Optimal track exit timing
+    - Number of attempts strategy (1, 2, or 3 runs)
+    - Fuel load optimization (minimal weight)
+    - Traffic gap detection
+    - Tow (slipstream) opportunities
+    - Q1/Q2/Q3 progression strategy
     """
 ```
 
@@ -141,8 +150,10 @@ class StrategyAgent(BaseF1Agent):
 - ✅ LangChain installed and configured
 - ✅ Base agent framework operational
 - ✅ All 13 F1 tools converted to LangChain format
-- ✅ Strategy Agent prototype functional
-- ✅ Basic orchestrator with single agent
+- ✅ SessionContext class for session type detection
+- ✅ Qualifying-specific tools (gaps, tow, track evolution)
+- ✅ Strategy Agent prototype functional (dual-mode: race & qualifying)
+- ✅ Basic orchestrator with session-aware routing
 
 ---
 

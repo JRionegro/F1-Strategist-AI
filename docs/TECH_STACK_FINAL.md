@@ -1,57 +1,57 @@
-# Tech Stack - Decisiones Finales
+# Tech Stack - Final Decisions
 
-**Fecha de Decisión**: 20 de Diciembre de 2025  
-**Estado**: APROBADO ✅
-
----
-
-## Resumen Ejecutivo
-
-Stack tecnológico optimizado para **F1 Strategist AI** con enfoque en:
-- **Costo**: Reducción del 68% mediante LLM híbrido
-- **Rendimiento**: ChromaDB local para MVP, Pinecone opcional para producción
-- **Mantenibilidad**: Sin Redis en MVP, arquitectura simple
-- **Escalabilidad**: Migración progresiva a producción
+**Decision Date**: December 20, 2025  
+**Status**: APPROVED ✅
 
 ---
 
-## 🎯 Decisiones Clave
+## Executive Summary
 
-### 1. Estrategia LLM Híbrida
+Optimized technology stack for **F1 Strategist AI** focusing on:
+- **Cost**: 68% reduction through hybrid LLM
+- **Performance**: Local ChromaDB for MVP, optional Pinecone for production
+- **Maintainability**: No Redis in MVP, simple architecture
+- **Scalability**: Progressive migration to production
 
-| Componente | Tecnología | Uso | Costo |
+---
+
+## 🎯 Key Decisions
+
+### 1. Hybrid LLM Strategy
+
+| Component | Technology | Usage | Cost |
 |------------|-----------|-----|-------|
-| **LLM Principal** | Claude 3.5 Sonnet | Queries complejas (~30%) | $3/1M in, $15/1M out |
-| **LLM Secundario** | Gemini 2.0 Flash Thinking | Queries simples/moderadas (~70%) | $0.01875/1M in, $0.075/1M out |
-| **Modelo Gemini** | `gemini-2.0-flash-thinking-exp-1219` | Con modo reasoning | +5% overhead |
+| **Primary LLM** | Claude 3.5 Sonnet | Complex queries (~30%) | $3/1M in, $15/1M out |
+| **Secondary LLM** | Gemini 2.0 Flash Thinking | Simple/moderate queries (~70%) | $0.01875/1M in, $0.075/1M out |
+| **Gemini Model** | `gemini-2.0-flash-thinking-exp-1219` | With reasoning mode | +5% overhead |
 
-**Routing por Complejidad**:
+**Routing by Complexity**:
 ```python
 if complexity_score < 0.4:
     # Gemini 2.0 Flash Thinking (simple)
     llm = gemini_provider
 elif complexity_score < 0.7:
-    # Gemini 2.0 Flash Thinking (moderado con thinking)
+    # Gemini 2.0 Flash Thinking (moderate with thinking)
     llm = gemini_provider.with_thinking_mode()
 else:
-    # Claude 3.5 Sonnet (complejo)
+    # Claude 3.5 Sonnet (complex)
     llm = claude_provider
 ```
 
-**Ahorro Estimado**: 68% vs solo Claude
+**Estimated Savings**: 68% vs Claude only
 
 ---
 
 ### 2. Vector Store
 
-| Entorno | Tecnología | Justificación |
+| Environment | Technology | Justification |
 |---------|-----------|---------------|
-| **MVP** | ChromaDB | Local, gratuito, sin infraestructura |
-| **Producción** | Pinecone (opcional) | Escalable, configurable vía settings |
+| **MVP** | ChromaDB | Local, free, no infrastructure |
+| **Production** | Pinecone (optional) | Scalable, configurable via settings |
 
-**Configuración**:
+**Configuration**:
 ```env
-VECTOR_STORE_PROVIDER=chromadb  # Cambiar a 'pinecone' en prod
+VECTOR_STORE_PROVIDER=chromadb  # Change to 'pinecone' in prod
 ```
 
 **Factory Pattern**:
@@ -67,41 +67,41 @@ def get_vector_store(provider: str):
 
 ### 3. Embeddings
 
-| Modelo | Dimensiones | Ubicación | Costo |
+| Model | Dimensions | Location | Cost |
 |--------|-------------|-----------|-------|
-| **all-MiniLM-L6-v2** | 384 | Local | Gratis |
+| **all-MiniLM-L6-v2** | 384 | Local | Free |
 
-**Ventajas**:
-- ✅ Compatible con ChromaDB y Pinecone
-- ✅ No requiere API calls
-- ✅ Suficiente para dominio F1
-- ✅ Rápido (~0.1s por documento)
+**Advantages**:
+- ✅ Compatible with ChromaDB and Pinecone
+- ✅ No API calls required
+- ✅ Sufficient for F1 domain
+- ✅ Fast (~0.1s per document)
 
 ---
 
-### 4. Caché
+### 4. Cache
 
-| Componente | Tecnología | Justificación |
+| Component | Technology | Justification |
 |------------|-----------|---------------|
-| **MVP** | Solo Parquet | Suficiente, 100ms read |
-| **Producción** | Redis opcional | Si se requiere <10ms |
+| **MVP** | Parquet only | Sufficient, 100ms read |
+| **Production** | Optional Redis | If <10ms required |
 
-**Política Actual**:
+**Current Policy**:
 ```python
 USE_REDIS=false  # MVP
-# Cambiar a true solo si métricas indican necesidad
+# Change to true only if metrics indicate need
 ```
 
 ---
 
-### 5. Monitoreo
+### 5. Monitoring
 
-| Componente | Tecnología | Modo |
+| Component | Technology | Mode |
 |------------|-----------|------|
-| **Primario** | LangSmith | Cloud-based |
+| **Primary** | LangSmith | Cloud-based |
 | **Fallback** | LocalTokenTracker | Offline |
 
-**Desde Phase 3A**:
+**Since Phase 3A**:
 ```python
 if langsmith_available():
     monitor = LangSmith()
@@ -137,23 +137,23 @@ else:
 
 ---
 
-## 🏗️ Arquitectura de 5 Agentes
+## 🏭️ 5-Agent Architecture
 
-| Agente | Responsabilidad | LLM Típico |
+| Agent | Responsibility | Typical LLM |
 |--------|-----------------|------------|
-| **Strategy Agent** | Pit stops, neumáticos | Claude |
-| **Weather Agent** | Pronósticos, adaptación | Gemini |
-| **Performance Agent** | Lap times, telemetría | Gemini |
-| **Race Control Agent** | Banderas, incidentes | Gemini |
-| **Race Position Agent** | Gaps, posiciones | Gemini |
+| **Strategy Agent** | Race: Pit stops, tires / Quali: Timing, attempts | Claude |
+| **Weather Agent** | Race: Forecasts / Quali: Optimal window, rain risk | Gemini |
+| **Performance Agent** | Race: Lap times / Quali: Sector analysis, gaps | Gemini |
+| **Race Control Agent** | Race: SC, flags / Quali: Red flags, track limits | Gemini |
+| **Race Position Agent** | Race: Gaps, DRS / Quali: Traffic gaps, slipstream | Gemini |
 
-**Orquestación**: LangChain con custom routing
+**Orchestration**: LangChain with custom routing
 
 ---
 
-## 🔧 Configuración de Entorno
+## 🔧 Environment Configuration
 
-### Variables Críticas
+### Critical Variables
 
 ```env
 # LLM
@@ -178,66 +178,66 @@ LOCAL_TOKEN_TRACKING=true
 
 ---
 
-## 📈 Métricas de Éxito
+## 📈 Success Metrics
 
 ### MVP Phase 3
-- [ ] Routing híbrido funcional (70% Gemini, 30% Claude)
-- [ ] ChromaDB con >1000 documentos indexados
-- [ ] Respuestas <3s (P95)
-- [ ] Precisión RAG >80%
-- [ ] 5 agentes operativos
+- [ ] Functional hybrid routing (70% Gemini, 30% Claude)
+- [ ] ChromaDB with >1000 indexed documents
+- [ ] Responses <3s (P95)
+- [ ] RAG accuracy >80%
+- [ ] 5 operational agents
 
-### Producción Phase 4
-- [ ] Costo real <$300/mes
-- [ ] Migración a Pinecone sin downtime
-- [ ] Monitoring LangSmith activo
-- [ ] API pública con rate limiting
+### Production Phase 4
+- [ ] Actual cost <$300/month
+- [ ] Migration to Pinecone without downtime
+- [ ] Active LangSmith monitoring
+- [ ] Public API with rate limiting
 
 ---
 
-## 🚀 Plan de Migración
+## 🚀 Migration Plan
 
-### De MVP a Producción
+### From MVP to Production
 
 1. **Vector Store**:
    ```bash
-   # Exportar de ChromaDB
+   # Export from ChromaDB
    python scripts/export_chromadb.py
    
-   # Importar a Pinecone
+   # Import to Pinecone
    python scripts/import_pinecone.py
    
-   # Cambiar config
+   # Change config
    VECTOR_STORE_PROVIDER=pinecone
    ```
 
-2. **Redis (si necesario)**:
+2. **Redis (if needed)**:
    ```bash
-   # Evaluar métricas
+   # Evaluate metrics
    python scripts/analyze_cache_latency.py
    
-   # Si P95 > 100ms, habilitar Redis
+   # If P95 > 100ms, enable Redis
    USE_REDIS=true
    ```
 
-3. **Monitoreo**:
+3. **Monitoring**:
    ```bash
-   # Ya configurado desde Phase 3A
-   # Solo verificar dashboard LangSmith
+   # Already configured since Phase 3A
+   # Only verify LangSmith dashboard
    ```
 
 ---
 
-## 📚 Referencias Técnicas
+## 📚 Technical References
 
-### Documentación Oficial
+### Official Documentation
 - [Claude API](https://docs.anthropic.com/claude/reference/)
 - [Gemini 2.0 Flash Thinking](https://ai.google.dev/gemini-api/docs/thinking-mode)
 - [ChromaDB](https://docs.trychroma.com/)
 - [Pinecone](https://docs.pinecone.io/)
 - [LangSmith](https://docs.smith.langchain.com/)
 
-### Documentación Interna
+### Internal Documentation
 - [ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md)
 - [GEMINI_FLASH_THINKING_GUIDE.md](./GEMINI_FLASH_THINKING_GUIDE.md)
 - [MONITORING_SETUP.md](./MONITORING_SETUP.md)
@@ -245,26 +245,26 @@ LOCAL_TOKEN_TRACKING=true
 
 ---
 
-## ✅ Checklist de Implementación
+## ✅ Implementation Checklist
 
-### Phase 3A (Semana 5-6)
-- [ ] `src/llm/claude_provider.py` - Provider de Claude
-- [ ] `src/llm/gemini_provider.py` - Provider de Gemini con thinking mode
-- [ ] `src/llm/hybrid_router.py` - Router por complejidad
-- [ ] `src/rag/chromadb_store.py` - Store local
-- [ ] `src/rag/pinecone_store.py` - Stub para migración
+### Phase 3A (Week 5-6)
+- [ ] `src/llm/claude_provider.py` - Claude provider
+- [ ] `src/llm/gemini_provider.py` - Gemini provider with thinking mode
+- [ ] `src/llm/hybrid_router.py` - Complexity-based router
+- [ ] `src/rag/chromadb_store.py` - Local store
+- [ ] `src/rag/pinecone_store.py` - Stub for migration
 - [ ] `src/rag/factory.py` - Factory pattern
-- [ ] Tests de integración (15+ tests)
+- [ ] Integration tests (15+ tests)
 
-### Phase 3B (Semana 7-8)
-- [ ] 5 agentes LangChain operativos
-- [ ] Sistema RAG con >80% precisión
-- [ ] Orquestador multi-agente
-- [ ] Tests end-to-end (20+ tests)
+### Phase 3B (Week 7-8)
+- [ ] 5 operational LangChain agents
+- [ ] RAG system with >80% accuracy
+- [ ] Multi-agent orchestrator
+- [ ] End-to-end tests (20+ tests)
 
 ---
 
-**Estado**: ✅ Documentación completa y aprobada  
-**Siguiente Paso**: Implementar Phase 3A (LLM providers + Vector store)  
-**Responsable**: Jorge Rionegro  
-**Fecha Límite Phase 3A**: 3 de Enero de 2026
+**Status**: ✅ Complete and approved documentation  
+**Next Step**: Implement Phase 3A (LLM providers + Vector store)  
+**Responsible**: Jorge Rionegro  
+**Phase 3A Deadline**: January 3, 2026

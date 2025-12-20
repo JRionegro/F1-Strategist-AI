@@ -20,10 +20,16 @@ The F1 Strategist AI is an advanced artificial intelligence system designed to p
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    Orchestration Layer                      │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
-│  │   Strategy   │  │   Weather    │  │ Performance  │       │
-│  │    Agent     │  │    Agent     │  │    Agent     │       │
-│  └──────────────┘  └──────────────┘  └──────────────┘       │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐        │
+│  │ Strategy │ │ Weather  │ │Performance│ │  Race    │        │
+│  │  Agent   │ │  Agent   │ │  Agent   │ │ Control  │        │
+│  └──────────┘ └──────────┘ └──────────┘ │  Agent   │        │
+│                                          └──────────┘        │
+│                      ┌──────────┐                            │
+│                      │   Race   │                            │
+│                      │ Position │                            │
+│                      │  Agent   │                            │
+│                      └──────────┘                            │
 └─────────────────────────────────────────────────────────────┘
                             │
                             ▼
@@ -44,29 +50,94 @@ The F1 Strategist AI is an advanced artificial intelligence system designed to p
 - **Strategy Server**: Strategy calculations and recommendations
 - **Weather Server**: Weather data integration
 
-### AI Agents
-1. **Strategy Agent**
-   - Tire strategy optimization
-   - Pit stop strategy (timing, window, Position after pit stop, etc)
-   - Fuel management
-   - Race pace calculations
-   - Team strategy
+### AI Agents (Session-Adaptive)
 
-2. **Weather Agent**
-   - Weather prediction integration
-   - Wet/dry strategy adaptation
-   - Track temperature impact
+All agents adapt their behavior based on session type (Race/Qualifying/Sprint/Practice).
 
-3. **Performance Agent**
-   - Lap time analysis
-   - Sector comparisons
-   - Driver performance metrics
+#### 1. **Strategy Agent**
 
-4. **Race Control Agent**
-   - Safety car predictions
-   - Flag monitoring
-   - Race and Radio incident analysis
-   - Pilots of interest observer
+**Race Mode**:
+- Tire strategy optimization (compounds, stints)
+- Pit stop strategy (timing, window, position after pit stop)
+- Fuel management
+- Race pace calculations
+- Undercut/overcut decisions
+- Team strategy and team orders
+
+**Qualifying Mode**:
+- Track exit strategy (when to go out, track evolution)
+- Number of attempts (1, 2, or 3 flying laps)
+- Fuel management (minimum necessary vs weight)
+- Out-lap strategy (tire preparation)
+- Timing between attempts (tire cooldown)
+- Q1/Q2/Q3 progression (save tires vs advance)
+
+#### 2. **Weather Agent**
+
+**Race Mode**:
+- Rain prediction during race
+- Impact on tire degradation
+- Window for intermediate/wet tire change
+- Track and air temperature monitoring
+
+**Qualifying Mode**:
+- Imminent rain risk (go out now or wait)
+- Track temperature evolution
+- Optimal window prediction
+- Wind impact on affected sectors
+- Track limits conditions
+
+#### 3. **Performance Agent**
+
+**Race Mode**:
+- Lap times and sector analysis
+- Driver vs driver comparison
+- Pace analysis (race pace vs qualifying)
+- Tire performance tracking
+
+**Qualifying Mode**:
+- Sector-by-sector analysis (where to gain time)
+- Gap analysis (time needed to advance positions)
+- **Cutoff time prediction (Q1/Q2/Q3 Monte Carlo simulation)**
+- Lap-to-lap evolution tracking
+- Teammate telemetry benchmark
+- Track limits violation risk analysis
+- Mini-sectors optimization
+- **Safety margin calculation vs elimination zone**
+
+#### 4. **Race Control Agent**
+
+**Race Mode**:
+- Safety Car predictions
+- Flag monitoring (yellow, red, VSC, SC)
+- Race and radio incident analysis
+- Ongoing investigations
+- Pilot-of-interest observer
+
+**Qualifying Mode**:
+- Yellow flags (impact on ongoing attempts)
+- Red flags (timing for session resume)
+- Track evolution monitoring
+- On-track incidents (affected traffic)
+- Track limits enforcement (invalidated laps)
+- Session interruption management
+
+#### 5. **Race Position Agent**
+
+**Race Mode**:
+- Real-time gaps between drivers
+- Relative positions after pit stops
+- Undercut/overcut viability analysis
+- DRS train analysis
+- Battle monitoring
+
+**Qualifying Mode**:
+- Traffic gap detection (when to go out clean)
+- Slipstream opportunities (which car to follow)
+- On-track positions tracking
+- Exit timing vs competitors (avoid pit lane queues)
+- Queue management (optimize pit lane exit)
+- Clean lap window analysis
 
 ### RAG System
 - **Vector Database (MVP)**: ChromaDB for local development

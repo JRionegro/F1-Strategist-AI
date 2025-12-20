@@ -6,11 +6,11 @@ An AI-powered Formula 1 race strategy assistant with hybrid caching system for h
 
 ### ✅ Phase 1-2: Foundation & Data Layer (COMPLETED)
 
-- **MCP Server**: 13 herramientas operativas (100% cobertura FastF1/OpenF1)
-- **Cache System**: Sistema híbrido (historical + live) con Parquet
+- **MCP Server**: 13 operational tools (100% FastF1/OpenF1 coverage)
+- **Cache System**: Hybrid system (historical + live) with Parquet
 - **Monitoring**: LangSmith + LocalTokenTracker fallback
-- **Data Provider**: Integración completa con FastF1 y OpenF1
-- **Tests**: 81 tests pasando (43 MCP + 14 caché + 12 monitoring + 12 data provider)
+- **Data Provider**: Complete integration with FastF1 and OpenF1
+- **Tests**: 81 tests passing (43 MCP + 14 cache + 12 monitoring + 12 data provider)
 
 ### ✅ Phase 2D: Architecture & Tech Stack (FINALIZED)
 
@@ -22,49 +22,49 @@ An AI-powered Formula 1 race strategy assistant with hybrid caching system for h
 
 ### 🔄 Next: Phase 3A - LangChain Foundation (Week 5-6)
 
-Ver [TECH_STACK_FINAL.md](docs/TECH_STACK_FINAL.md) para decisiones completas.
+See [TECH_STACK_FINAL.md](docs/TECH_STACK_FINAL.md) for complete decisions.
 
 ---
 
 ## 🚀 Quick Start
 
-### Instalación
+### Installation
 
 ```bash
-# Clonar repositorio
+# Clone repository
 git clone [repo-url]
 cd "F1 Strategist AI"
 
-# Activar entorno virtual
+# Activate virtual environment
 .\venv\Scripts\Activate.ps1
 
-# Instalar dependencias (si es necesario)
+# Install dependencies (if necessary)
 pip install -r requirements.txt
 ```
 
-### Uso Básico
+### Basic Usage
 
 ```python
 from src.data import UnifiedF1DataProvider
 
-# Inicializar con caché inteligente
+# Initialize with smart cache
 provider = UnifiedF1DataProvider(use_smart_cache=True)
 
-# Obtener resultados (rápido con caché)
+# Get results (fast with cache)
 results = provider.get_race_results(2024, 1)  # Bahrain
 telemetry = provider.get_telemetry(2024, 1, "VER")
 ```
 
-### Scripts de Utilidad
+### Utility Scripts
 
 ```bash
-# Ver estadísticas de caché
+# View cache statistics
 python scripts/cache_stats.py
 
-# Precargar temporada
+# Preload season
 python scripts/preload_season.py 2024
 
-# Limpiar datos antiguos
+# Clean old data
 python scripts/clean_cache.py --types telemetry
 ```
 
@@ -110,13 +110,13 @@ python scripts/clean_cache.py --types telemetry
 F1 Strategist AI/
 ├── src/
 │   ├── data/                    # Data layer (IMPLEMENTED ✅)
-│   │   ├── cache_config.py      # Configuración de caché
-│   │   ├── cache_manager.py     # Gestor híbrido
-│   │   ├── f1_data_provider.py  # Provider unificado
-│   │   ├── live_session_monitor.py  # Monitor tiempo real
-│   │   └── models.py            # Dataclasses F1
+│   │   ├── cache_config.py      # Cache configuration
+│   │   ├── cache_manager.py     # Hybrid manager
+│   │   ├── f1_data_provider.py  # Unified provider
+│   │   ├── live_session_monitor.py  # Real-time monitor
+│   │   └── models.py            # F1 dataclasses
 │   ├── mcp_server/              # MCP Server (IMPLEMENTED ✅)
-│   │   └── f1_data_server.py    # 13 herramientas MCP
+│   │   └── f1_data_server.py    # 13 MCP tools
 │   ├── agents/                  # AI Agents (PENDING)
 │   ├── rag/                     # RAG System (PENDING)
 │   ├── chatbot/                 # Chatbot (PENDING)
