@@ -151,6 +151,32 @@ else:
 
 ---
 
+## 💻 User Interface
+
+| Component | Technology | Justification |
+|-----------|-----------|---------------|
+| **UI Framework** | Streamlit | Python-native, rapid development, F1 community support |
+| **Visualization** | Plotly + Altair | Interactive charts, F1 telemetry standard |
+| **Layout** | Streamlit Multi-page | 12 dashboards with sidebar navigation |
+| **Deployment** | Streamlit Cloud / Docker | Free tier for MVP, scalable for production |
+
+**Key Features**:
+- ✅ Native chat interface with LLM streaming
+- ✅ Live data updates (5-second refresh)
+- ✅ Multi-dashboard navigation
+- ✅ Dark/Light mode with F1 official colors
+- ✅ `@st.cache_data` for FastF1 integration
+
+**Technology Stack**:
+```python
+streamlit==1.31.0
+plotly==5.18.0
+altair==5.2.0
+streamlit-option-menu==0.3.6
+```
+
+---
+
 ## 🔧 Environment Configuration
 
 ### Critical Variables
@@ -261,6 +287,17 @@ LOCAL_TOKEN_TRACKING=true
 - [ ] RAG system with >80% accuracy
 - [ ] Multi-agent orchestrator
 - [ ] End-to-end tests (20+ tests)
+
+### Phase 3C (Week 9-10) - UI Implementation
+- [ ] `app.py` - Streamlit main entry point
+- [ ] `pages/chat_assistant.py` - AI chatbot dashboard
+- [ ] `pages/circuit.py` - Circuit & positions visualization
+- [ ] `pages/telemetry.py` - Telemetry comparison
+- [ ] `pages/tire_strategy.py` - Tire strategy dashboard
+- [ ] `components/live_data.py` - Real-time data handling
+- [ ] `components/charts.py` - Reusable Plotly/Altair charts
+- [ ] Dark/Light theme implementation
+- [ ] UI integration tests (10+ tests)
 
 ---
 

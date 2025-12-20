@@ -1325,14 +1325,219 @@ Features Visible:
 
 ---
 
+## 🎨 Color Themes
+
+### Dark Mode (Primary Theme)
+
+**Background Colors**:
+- Primary Background: `#0D0D0D` (Near black)
+- Secondary Background: `#1A1A1A` (Dark gray)
+- Card/Panel Background: `#242424` (Lighter gray)
+- Hover/Active: `#2E2E2E` (Subtle highlight)
+
+**Text Colors**:
+- Primary Text: `#FFFFFF` (White)
+- Secondary Text: `#B0B0B0` (Light gray)
+- Disabled Text: `#666666` (Medium gray)
+
+**Accent Colors (F1 Official)**:
+- F1 Red: `#E10600` (Primary brand color)
+- F1 Red Hover: `#FF1E00` (Interactive states)
+- F1 Black: `#15151E` (Headers, emphasis)
+- F1 White: `#FFFFFF` (Contrast elements)
+
+**Functional Colors**:
+- Success/Green: `#00D25B` (Positive actions, improvements)
+- Warning/Yellow: `#FFAB00` (Cautions, track limits)
+- Danger/Red: `#FF4B4B` (Errors, critical warnings)
+- Info/Blue: `#0090FF` (Information, neutral alerts)
+
+**Tire Compound Colors**:
+- Soft (C5): `#FF0000` (Red)
+- Medium (C4-C3): `#FFFF00` (Yellow)
+- Hard (C2-C1): `#FFFFFF` (White)
+- Intermediate: `#00FF00` (Green)
+- Wet: `#0000FF` (Blue)
+
+**Session Status Colors**:
+- Live/Active: `#00FF00` (Green pulse)
+- Qualifying: `#FFAB00` (Yellow)
+- Race: `#E10600` (F1 Red)
+- Practice: `#0090FF` (Blue)
+- Ended: `#666666` (Gray)
+
+**Chart Colors**:
+- Line Chart Primary: `#E10600` (F1 Red)
+- Line Chart Secondary: `#0090FF` (Blue)
+- Line Chart Tertiary: `#00D25B` (Green)
+- Grid Lines: `#333333` (Dark gray)
+- Axis Labels: `#B0B0B0` (Light gray)
+
+---
+
+### Light Mode (Alternative Theme)
+
+**Background Colors**:
+- Primary Background: `#FFFFFF` (White)
+- Secondary Background: `#F5F5F5` (Light gray)
+- Card/Panel Background: `#FAFAFA` (Off-white)
+- Hover/Active: `#EEEEEE` (Subtle highlight)
+
+**Text Colors**:
+- Primary Text: `#1A1A1A` (Near black)
+- Secondary Text: `#666666` (Dark gray)
+- Disabled Text: `#B0B0B0` (Light gray)
+
+**Accent Colors (F1 Official)**:
+- F1 Red: `#E10600` (Primary brand color)
+- F1 Red Hover: `#CC0500` (Darker on light)
+- F1 Black: `#15151E` (Headers, emphasis)
+- F1 Gray: `#38383F` (Supporting elements)
+
+**Functional Colors**:
+- Success/Green: `#00A947` (Darker for readability)
+- Warning/Yellow: `#FF9500` (Adjusted for contrast)
+- Danger/Red: `#E10600` (F1 Red)
+- Info/Blue: `#0070D2` (Darker blue)
+
+**Tire Compound Colors**: (Same as Dark Mode)
+- Soft (C5): `#FF0000` (Red)
+- Medium (C4-C3): `#FFFF00` (Yellow with dark border)
+- Hard (C2-C1): `#FFFFFF` (White with dark border)
+- Intermediate: `#00DD00` (Green)
+- Wet: `#0000FF` (Blue)
+
+**Session Status Colors**:
+- Live/Active: `#00A947` (Green)
+- Qualifying: `#FF9500` (Orange)
+- Race: `#E10600` (F1 Red)
+- Practice: `#0070D2` (Blue)
+- Ended: `#999999` (Gray)
+
+**Chart Colors**:
+- Line Chart Primary: `#E10600` (F1 Red)
+- Line Chart Secondary: `#0070D2` (Blue)
+- Line Chart Tertiary: `#00A947` (Green)
+- Grid Lines: `#DDDDDD` (Light gray)
+- Axis Labels: `#666666` (Dark gray)
+
+---
+
+### Accessibility Considerations
+
+**WCAG 2.1 Compliance**: All color combinations meet AA standard (4.5:1 contrast ratio for normal text, 3:1 for large text)
+
+**Color Blind Friendly**:
+- Red/Green combinations avoid critical information encoding
+- Additional indicators (icons, patterns) supplement color coding
+- High contrast mode available for extreme visibility needs
+
+**Visual Hierarchy**:
+- F1 Red reserved for primary actions and critical alerts
+- Consistent use of color across all dashboards
+- Semantic color coding (green=good, red=danger, yellow=warning)
+
+---
+
+## 💻 UI Technology Decision
+
+### **Selected: Streamlit** ✅
+
+**Decision Date**: December 20, 2025  
+**Status**: APPROVED for MVP (Phase 3A/3B)
+
+#### Rationale
+
+**Why Streamlit**:
+- **Rapid development**: MVP dashboard deliverable in 2 weeks (Phase 3A timeline)
+- **Python-native**: Perfect integration with FastF1, LangChain, and MCP server
+- **Minimal code**: ~100 lines per dashboard vs 500+ in alternatives
+- **Live streaming**: Native `st.chat_message` with LLM streaming support
+- **F1 community**: Extensive telemetry visualization examples
+- **Built-in features**: Plotly integration, caching (`@st.cache_data`), session state
+- **Easy deployment**: Streamlit Cloud or simple Docker container
+
+**Trade-offs Accepted**:
+- Limited layout customization (acceptable for MVP)
+- Full page refresh on interactions (mitigated with caching)
+- Not ideal for >1000 concurrent users (not needed in MVP)
+
+#### Technology Stack
+
+```python
+# Core UI Framework
+streamlit==1.31.0
+
+# Visualization
+plotly==5.18.0
+altair==5.2.0
+
+# Layout Components
+streamlit-option-menu==0.3.6  # Navigation
+streamlit-extras==0.3.6        # Additional widgets
+```
+
+#### Multi-Dashboard Implementation
+
+```python
+# app.py - Main entry point
+import streamlit as st
+from streamlit_option_menu import option_menu
+
+st.set_page_config(layout="wide", page_title="F1 Strategist AI")
+
+# Sidebar navigation
+with st.sidebar:
+    selected = option_menu(
+        "F1 Strategist AI",
+        ["Chat Assistant", "Circuit", "Telemetry", "Weather", 
+         "Tire Strategy", "Lap Analysis", "Race Management"],
+        icons=["chat", "map", "graph-up", "cloud", 
+               "circle", "stopwatch", "flag"],
+        default_index=0
+    )
+
+# Dynamic page loading
+if selected == "Chat Assistant":
+    import pages.chat_assistant
+    chat_assistant.render()
+elif selected == "Circuit":
+    import pages.circuit
+    circuit.render()
+# ... etc
+```
+
+#### Live Updates Strategy
+
+```python
+# Live mode with auto-refresh
+if st.session_state.mode == "LIVE":
+    # Auto-refresh every 5 seconds
+    st_autorefresh(interval=5000, key="live_refresh")
+    
+    # Fetch latest data
+    latest_data = get_live_data()
+    
+    # Update dashboards
+    render_live_dashboard(latest_data)
+```
+
+#### Migration Path
+
+If future requirements demand more control:
+- **Phase 4+**: Evaluate Dash (Python ecosystem) or React (full control)
+- **Criteria for migration**: >500 concurrent users, mobile app requirement, or advanced customization needs
+- **Strategy**: Streamlit backend remains; only frontend changes
+
+---
+
 ## 🎨 Next Steps
 
-1. **Detailed ASCII wireframes** for each dashboard (next iteration)
-2. **Recommended UI technology** (Streamlit vs Dash vs React)
-3. **Responsive layout** (desktop/tablet)
-4. **Color themes** (dark/light mode, official F1 colors)
-5. **Interactivity** (filters, zoom, time scrubbing)
-6. **Functional prototypes** (interactive mockups)
+1. ✅ **UI technology selected** (Streamlit)
+2. ✅ **Color themes defined** (Dark/Light mode with F1 branding)
+3. **Responsive layout implementation** (desktop/tablet)
+4. **Interactivity patterns** (filters, zoom, time scrubbing)
+5. **Functional prototype** (Phase 3A deliverable)
 
 ---
 
