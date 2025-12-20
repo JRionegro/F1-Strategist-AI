@@ -7,13 +7,22 @@ An AI-powered Formula 1 race strategy assistant with hybrid caching system for h
 ### ✅ Phase 1-2: Foundation & Data Layer (COMPLETED)
 
 - **MCP Server**: 13 herramientas operativas (100% cobertura FastF1/OpenF1)
-- **Cache System**: Sistema híbrido con modos historical y live
+- **Cache System**: Sistema híbrido (historical + live) con Parquet
+- **Monitoring**: LangSmith + LocalTokenTracker fallback
 - **Data Provider**: Integración completa con FastF1 y OpenF1
-- **Tests**: 53 tests pasando (39 MCP + 14 caché)
+- **Tests**: 81 tests pasando (43 MCP + 14 caché + 12 monitoring + 12 data provider)
 
-### 📋 Next: Phase 3 - AI Agents & RAG
+### ✅ Phase 2D: Architecture & Tech Stack (FINALIZED)
 
-Ver [ARCHITECTURE_DECISIONS.md](docs/ARCHITECTURE_DECISIONS.md) para el plan de implementación.
+- **5-Agent Architecture**: Strategy, Weather, Performance, Race Control, Race Position
+- **LLM Hybrid**: Claude 3.5 Sonnet + Gemini 2.0 Flash Thinking (68% cost savings)
+- **Vector Store**: ChromaDB (MVP) + Pinecone option (production)
+- **Embeddings**: all-MiniLM-L6-v2 (384 dims, local, free)
+- **Cost Projection**: $8.50/mo MVP, $294/mo production
+
+### 🔄 Next: Phase 3A - LangChain Foundation (Week 5-6)
+
+Ver [TECH_STACK_FINAL.md](docs/TECH_STACK_FINAL.md) para decisiones completas.
 
 ---
 
@@ -140,101 +149,151 @@ F1 Strategist AI/
 
 ## Technology Stack
 
-- **Python 3.11+** (64-bit)
-- **MCP (Model Context Protocol)** for AI integration
-- **LangChain** for agent orchestration
-- **FastAPI** for API services
-- **Streamlit/Gradio** for web interface
-- **Plotly/Dash** for visualizations
-- **ChromaDB/Pinecone** for vector storage (RAG)
-- **FastF1** for F1 data access
+### Core Framework
+- **Python 3.14** (64-bit)
+- **LangChain** for multi-agent orchestration
+- **MCP (Model Context Protocol)** for tool integration
+
+### AI/LLM Layer
+- **Claude 3.5 Sonnet** - Primary LLM (complex queries, ~30%)
+- **Gemini 2.0 Flash Thinking** - Secondary LLM (simple/moderate, ~70%)
+  - Model: `gemini-2.0-flash-thinking-exp-1219`
+  - Reasoning mode for enhanced accuracy
+- **Hybrid Router** - Complexity-based query routing
+
+### Data & Storage
+- **FastF1** + **OpenF1** - F1 data providers
+- **Parquet** - Historical cache format
+- **ChromaDB** - Vector store (MVP, local)
+- **Pinecone** - Vector store (production option, configurable)
+- **all-MiniLM-L6-v2** - Embeddings model (384 dims)
+
+### Monitoring & Observability
+- **LangSmith** - Production monitoring with local fallback
+- **LocalTokenTracker** - Offline usage tracking
+
+### APIs & Interfaces
+- **FastAPI** - API services
+- **Streamlit/Gradio** - Web interface
+- **Plotly/Dash** - Visualizations
 - **Pandas/NumPy** for data processing
 
 ## Development Roadmap
 
-### Phase 1: Foundation (Weeks 1-2)
-1. **Environment Setup**
-   - Configure Python virtual environment
-   - Install core dependencies
-   - Set up development tools (linting, formatting)
+### ✅ Phase 1: Foundation (Weeks 1-2) - COMPLETED
+1. **Environment Setup** ✅
+   - Python virtual environment configured
+   - Dependencies installed
+   - Development tools (pytest, flake8, black)
    
-2. **Data Infrastructure**
-   - Integrate FastF1 API for historical data
-   - Create data ingestion pipelines
-   - Set up local data storage structure
+2. **Data Infrastructure** ✅
+   - FastF1 + OpenF1 integration complete
+   - Hybrid cache system (historical + live)
+   - Parquet-based storage with TTL policies
 
-3. **Basic MCP Server**
-   - Implement first MCP server for data access
-   - Create basic API endpoints
-   - Test data retrieval functionality
+3. **MCP Server** ✅
+   - 13 tools operational (100% coverage)
+   - 43 tests passing
+   - API reference documentation
 
-### Phase 2: Core Strategy Engine (Weeks 3-4)
-4. **Strategy Algorithms**
-   - Tire degradation models
-   - Pit stop optimization
-   - Fuel consumption calculations
-   - Weather impact analysis
+### ✅ Phase 2: Data Layer & Monitoring (Weeks 3-4) - COMPLETED
+4. **Cache System** ✅
+   - Historical mode: Permanent Parquet storage
+   - Live mode: Real-time OpenF1 monitoring
+   - 100ms read performance vs 10s API calls
+   - 14 tests passing
 
-5. **Data Processing**
-   - Telemetry data parsing
-   - Race simulation engine
-   - Performance metrics calculation
+5. **Monitoring Infrastructure** ✅
+   - LangSmith integration with local fallback
+   - LocalTokenTracker for offline usage
+   - Cost tracking and optimization
+   - 12 tests passing
 
-### Phase 3: AI Components (Weeks 5-7)
-6. **RAG System**
-   - Historical race data vectorization
-   - Semantic search implementation
-   - Context retrieval optimization
+6. **Architecture Planning** ✅
+   - 5-agent architecture finalized
+   - Tech stack decisions documented
+   - Cost projections: $8.50/mo MVP, $294/mo prod
 
-7. **Intelligent Agents**
-   - Strategy Agent (pit stops, tires)
-   - Weather Agent (conditions, predictions)
-   - Performance Agent (lap times, sectors)
-   - Race Control Agent (flags, safety cars)
+### 🔄 Phase 3A: LangChain Foundation (Weeks 5-6) - IN PROGRESS
+7. **LLM Providers**
+   - [ ] Claude 3.5 Sonnet provider
+   - [ ] Gemini 2.0 Flash Thinking provider
+   - [ ] Hybrid router (complexity-based)
+   - [ ] 15+ integration tests
 
-8. **Agent Orchestration**
-   - Multi-agent communication
-   - Decision coordination
-   - Conflict resolution
+8. **Vector Store Abstraction**
+   - [ ] ChromaDB implementation (MVP)
+   - [ ] Pinecone stub (production)
+   - [ ] Factory pattern
+   - [ ] all-MiniLM-L6-v2 embeddings
 
-### Phase 4: User Interface (Weeks 8-9)
-9. **Chatbot Interface**
-   - Natural language processing
-   - Query understanding
-   - Response generation
-   - Conversation history
+### 📋 Phase 3B: Agent Implementation (Weeks 7-8) - PLANNED
+9. **Multi-Agent System**
+   - [ ] Base agent framework
+   - [ ] Strategy Agent (pit stops, tires)
+   - [ ] Weather Agent (forecasts, adaptation)
+   - [ ] Performance Agent (lap analysis)
+   - [ ] Race Control Agent (flags, incidents)
+   - [ ] Race Position Agent (gaps, positions)
+   - [ ] Agent orchestrator
 
-10. **Visualization Dashboard**
-    - Real-time data displays
-    - Interactive charts and graphs
-    - Session-specific views
-    - Customizable layouts
+10. **RAG System**
+    - [ ] Document indexing
+    - [ ] Semantic retrieval
+    - [ ] Context augmentation
+    - [ ] >80% accuracy target
 
-### Phase 5: Advanced Features (Weeks 10-11)
-11. **Simulation System**
-    - Historical race replay
-    - Alternative strategy testing
-    - Driver/team comparison tools
-    - Custom scenario builder
+### 📋 Phase 3C: Tool Integration (Weeks 9-10) - PLANNED
+11. **LangChain Tool Wrapper**
+    - [ ] Convert 13 MCP tools to LangChain format
+    - [ ] Dynamic tool selection
+    - [ ] Parallel execution
 
-12. **Optimization & Performance**
-    - Response time optimization
-    - Caching strategies
-    - Parallel processing
-    - Resource management
+12. **Optimization**
+    - [ ] Response time <3s (P95)
+    - [ ] Token usage tracking
+    - [ ] Cache strategy refinement
 
-### Phase 6: Testing & Deployment (Week 12)
-13. **Comprehensive Testing**
-    - Unit tests for all modules
-    - Integration tests
-    - Performance benchmarks
-    - User acceptance testing
+### 📋 Phase 4: User Interface (Weeks 11-12) - PLANNED
+13. **Chatbot Interface**
+    - [ ] Natural language processing
+    - [ ] Multi-turn conversations
+    - [ ] Context management
 
-14. **Documentation & Deployment**
-    - API documentation
-    - User guides
-    - Deployment scripts
-    - CI/CD pipeline setup
+14. **Visualization Dashboard**
+    - [ ] Real-time displays
+    - [ ] Interactive charts
+    - [ ] Custom layouts
+
+15. **Deployment**
+    - [ ] API documentation
+    - [ ] Production configuration
+    - [ ] CI/CD pipeline
+
+---
+
+## 📚 Documentation
+
+### Essential Guides
+- **[📖 Documentation Index](docs/INDEX.md)** - Complete documentation map
+- **[🚀 Quick Start](docs/QUICK_START.md)** - Installation and setup
+- **[🔧 Development Guide](docs/DEVELOPMENT_GUIDE.md)** - Coding standards and workflow
+
+### Architecture & Design
+- **[🏗️ Architecture Decisions](docs/ARCHITECTURE_DECISIONS.md)** - ADR and framework selection
+- **[⭐ Tech Stack Final](docs/TECH_STACK_FINAL.md)** - Complete technology decisions
+- **[📋 Project Specifications](docs/PROJECT_SPECIFICATIONS.md)** - Technical specifications
+
+### AI & Agents
+- **[🤖 Gemini Flash Thinking Guide](docs/GEMINI_FLASH_THINKING_GUIDE.md)** - LLM implementation guide
+- **[🏁 Race Position Agent Spec](docs/RACE_POSITION_AGENT_SPEC.md)** - 5th agent specification
+
+### Data & Systems
+- **[💾 Cache System Implementation](docs/CACHE_SYSTEM_IMPLEMENTATION.md)** - Hybrid cache details
+- **[🔌 MCP API Reference](docs/MCP_API_REFERENCE.md)** - 13 tools documentation
+- **[📊 Monitoring Setup](docs/MONITORING_SETUP.md)** - LangSmith + local tracking
+
+---
 
 ## Getting Started
 

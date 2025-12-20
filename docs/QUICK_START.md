@@ -70,6 +70,29 @@ Copy-Item config\.env.example config\.env
 notepad config\.env
 ```
 
+**Required API Keys**:
+- `ANTHROPIC_API_KEY`: For Claude 3.5 Sonnet (complex queries)
+- `GOOGLE_API_KEY`: For Gemini 2.0 Flash Thinking (simple/moderate queries)
+- `LANGSMITH_API_KEY`: For monitoring (optional, has local fallback)
+
+**Key Configuration Variables**:
+```env
+# LLM Configuration
+LLM_PROVIDER=hybrid  # Routes queries between Claude and Gemini
+GEMINI_MODEL=gemini-2.0-flash-thinking-exp-1219
+
+# Vector Store
+VECTOR_STORE_PROVIDER=chromadb  # Use 'pinecone' for production
+EMBEDDINGS_MODEL=all-MiniLM-L6-v2
+
+# Caching
+USE_REDIS=false  # MVP uses Parquet only
+
+# Monitoring
+LANGCHAIN_TRACING_V2=true
+LANGSMITH_PROJECT=f1-strategist-ai
+```
+
 ### 4. Test Installation
 
 ```powershell

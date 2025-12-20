@@ -33,11 +33,26 @@ notepad config\.env
 ```
 
 Required environment variables:
-```
-OPENAI_API_KEY=your_openai_key
+```env
+# LLM Configuration
 ANTHROPIC_API_KEY=your_anthropic_key
+GOOGLE_API_KEY=your_google_key
+LLM_PROVIDER=hybrid
+GEMINI_MODEL=gemini-2.0-flash-thinking-exp-1219
+
+# Vector Store
+VECTOR_STORE_PROVIDER=chromadb
+EMBEDDINGS_MODEL=all-MiniLM-L6-v2
+
+# Monitoring
+LANGSMITH_API_KEY=your_langsmith_key
+LANGCHAIN_TRACING_V2=true
+LOCAL_TOKEN_TRACKING=true
+
+# Data & Cache
 F1_DATA_PATH=./data/races
 CACHE_DIR=./cache
+USE_REDIS=false
 LOG_LEVEL=INFO
 ```
 
@@ -45,99 +60,124 @@ LOG_LEVEL=INFO
 
 ### Step-by-Step Build Order
 
-#### Week 1-2: Foundation
+#### ✅ Phase 1-2: Foundation & Data Layer (COMPLETED)
 
-1. **Set up data pipeline**
+**Weeks 1-4: Data Pipeline & MCP Server**
+
+1. **Data Integration** ✅
+   - FastF1 + OpenF1 unified provider
+   - 13 MCP tools operational
+   - Hybrid cache system (historical + live)
+
+2. **Testing Infrastructure** ✅
+   - 81 tests passing (100% coverage)
+   - Monitoring system (LangSmith + local)
+
+#### ✅ Phase 2D: Architecture Planning (COMPLETED)
+
+**Week 5: Tech Stack Decisions**
+
+3. **Technology Selection** ✅
+   - LLM: Hybrid Claude + Gemini 2.0 Flash Thinking
+   - Vector Store: ChromaDB (MVP) + Pinecone (production)
+   - Embeddings: all-MiniLM-L6-v2
+   - 5-agent architecture finalized
+
+#### 🔄 Phase 3A: LangChain Foundation (CURRENT - Weeks 5-6)
+
+**LLM Providers Implementation**
+
+4. **Build LLM abstraction layer**
    ```python
-   # src/data/ingestion.py
-   # Implement FastF1 data fetching
+   # src/llm/provider.py - Abstract interface
+   # src/llm/claude_provider.py - Claude 3.5 Sonnet
+   # src/llm/gemini_provider.py - Gemini 2.0 Flash Thinking
+   # src/llm/hybrid_router.py - Complexity-based routing
    ```
 
-2. **Create basic MCP server**
+5. **Vector Store Factory**
    ```python
-   # src/mcp_servers/data_server.py
-   # Implement data access MCP server
+   # src/rag/chromadb_store.py - ChromaDB implementation
+   # src/rag/pinecone_store.py - Pinecone stub
+   # src/rag/factory.py - Factory pattern
    ```
 
-3. **Test data retrieval**
+6. **Testing LLM Integration**
    ```python
-   # tests/test_data_ingestion.py
-   # Verify data pipeline works
+   # tests/test_llm_providers.py
+   # tests/test_hybrid_router.py
+   # tests/test_vector_stores.py
    ```
 
-#### Week 3-4: Strategy Engine
+#### 📋 Phase 3B: Agent Implementation (Weeks 7-8)
 
-4. **Implement tire models**
+**Multi-Agent System**
+
+7. **Base Agent Framework**
    ```python
-   # src/strategy/tire_model.py
+   # src/agents/base_agent.py - Abstract base
+   # src/agents/orchestrator.py - Coordinator
    ```
 
-5. **Build pit stop optimizer**
+8. **Implement 5 Specialized Agents**
    ```python
-   # src/strategy/pit_optimizer.py
+   # src/agents/strategy_agent.py - Pit stops, tires
+   # src/agents/weather_agent.py - Weather impact
+   # src/agents/performance_agent.py - Lap analysis
+   # src/agents/race_control_agent.py - Flags, incidents
+   # src/agents/race_position_agent.py - Gaps, positions
    ```
 
-6. **Create race simulator**
+9. **RAG System**
    ```python
-   # src/strategy/race_simulator.py
+   # src/rag/indexer.py - Document indexing
+   # src/rag/retriever.py - Semantic search
    ```
 
-#### Week 5-7: AI Components
+#### 📋 Phase 3C: Advanced Features (Weeks 9-10)
 
-7. **Set up RAG system**
-   ```python
-   # src/rag/vector_store.py
-   # src/rag/embeddings.py
-   ```
+**Tool Integration & Optimization**
 
-8. **Create Strategy Agent**
-   ```python
-   # src/agents/strategy_agent.py
-   ```
-
-9. **Implement other agents**
-   ```python
-   # src/agents/weather_agent.py
-   # src/agents/performance_agent.py
-   # src/agents/race_control_agent.py
-   ```
-
-#### Week 8-9: User Interface
-
-10. **Build chatbot**
+10. **LangChain Tool Wrapper**
     ```python
-    # src/chatbot/bot.py
-    # src/chatbot/nlp.py
+    # src/agents/tools/f1_data_tools.py
+    # Convert 13 MCP tools to LangChain format
     ```
 
-11. **Create visualizations**
+11. **Agent Orchestration**
+    ```python
+    # src/agents/orchestrator.py
+    # Multi-agent coordination logic
+    ```
+
+12. **Performance Optimization**
+    ```python
+    # Parallel tool execution
+    # Response caching
+    # Token usage optimization
+    ```
+
+#### 📋 Phase 4: User Interface (Weeks 11-12)
+
+**Chatbot & Dashboards**
+
+13. **Build Chatbot Interface**
+    ```python
+    # src/chatbot/bot.py
+    # src/chatbot/message_handler.py
+    ```
+
+14. **Create Visualizations**
     ```python
     # src/visualizations/dashboard.py
     # src/visualizations/charts.py
     ```
 
-#### Week 10-11: Advanced Features
-
-12. **Add simulations**
-    ```python
-    # src/strategy/simulation.py
-    ```
-
-13. **Optimize performance**
-    ```python
-    # Implement caching, parallel processing
-    ```
-
-#### Week 12: Testing & Deployment
-
-14. **Write tests**
-    ```python
-    # Complete test coverage
-    ```
-
-15. **Deploy**
+15. **Deploy MVP**
     ```bash
-    # Set up production environment
+    # Production configuration
+    # API deployment
+    # Monitoring dashboard
     ```
 
 ## Code Style Guidelines

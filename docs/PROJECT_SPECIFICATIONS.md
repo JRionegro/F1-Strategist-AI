@@ -69,10 +69,18 @@ The F1 Strategist AI is an advanced artificial intelligence system designed to p
    - Pilots of interest observer
 
 ### RAG System
-- **Vector Database**: ChromaDB for historical data and F1 manuals storage
-- **Embeddings**: Sentence transformers for semantic search
+- **Vector Database (MVP)**: ChromaDB for local development
+- **Vector Database (Production)**: Pinecone option (configurable)
+- **Embeddings**: all-MiniLM-L6-v2 (384 dimensions, local)
 - **Context Retrieval**: Historical race strategies and outcomes
 - **Knowledge Base**: Race regulations, track characteristics, team data, teams radios
+
+### LLM Strategy
+- **Primary LLM**: Claude 3.5 Sonnet (complex queries ~30%)
+- **Secondary LLM**: Gemini 2.0 Flash Thinking (simple/moderate ~70%)
+- **Model**: `gemini-2.0-flash-thinking-exp-1219`
+- **Routing**: Complexity-based automatic selection
+- **Cost Optimization**: 68% savings vs single-LLM approach
 
 ### Data Sources
 - **FastF1 API**: Official F1 timing and telemetry data

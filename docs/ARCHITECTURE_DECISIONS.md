@@ -52,6 +52,33 @@ After evaluating the three options, **LangChain with custom F1 tools** has been 
 
 ---
 
+## Hybrid LLM Architecture
+
+### Query Routing Strategy
+
+**Complexity-Based Routing**:
+- **Simple Queries** (score < 0.4): Gemini 2.0 Flash Thinking
+  - Examples: "Who won Bahrain 2024?", "What's the weather forecast?"
+  - Cost: $0.00001875/1K tokens input, $0.000075/1K tokens output
+  
+- **Moderate Queries** (0.4 ≤ score < 0.7): Gemini 2.0 Flash Thinking
+  - Examples: "Analyze Hamilton's tire strategy", "Compare lap times"
+  - Thinking mode overhead: ~5% additional cost
+  
+- **Complex Queries** (score ≥ 0.7): Claude 3.5 Sonnet
+  - Examples: "Multi-agent orchestration", "Strategic trade-off analysis"
+  - Cost: $0.003/1K tokens input, $0.015/1K tokens output
+
+**Complexity Scoring Factors**:
+- Multi-agent coordination required
+- Number of tool calls needed (>5 = complex)
+- Context window size (>50K tokens = complex)
+- Strategic reasoning depth
+
+**Cost Savings**: ~68% reduction vs Claude-only approach
+
+---
+
 ## Implementation Plan
 
 ### Phase 3A: LangChain Foundation (Week 5-6)
@@ -388,8 +415,11 @@ class AgentResponse:
 | Component | Technology | Justification |
 |-----------|------------|---------------|
 | **Agent Framework** | LangChain | Multi-agent orchestration, RAG support |
-| **LLM** | Claude 3.5 Sonnet | Best reasoning, tool use, long context |
-| **Vector DB** | ChromaDB | Lightweight, Python-native, easy setup |
+| **LLM Primary** | Claude 3.5 Sonnet | Complex queries (~30%), best reasoning |
+| **LLM Secondary** | Gemini 2.0 Flash Thinking | Simple/moderate queries (~70%), cost-effective |
+| **Vector DB (MVP)** | ChromaDB | Lightweight, local, free |
+| **Vector DB (Prod)** | Pinecone (optional) | Scalable, configurable via settings |
+| **Embeddings** | all-MiniLM-L6-v2 | 384 dims, local, universal compatibility |
 | **Embeddings** | all-MiniLM-L6-v2 | Fast, efficient for semantic search |
 | **Data Provider** | FastF1/OpenF1 | Already implemented, 13 tools ready |
 | **Caching** | Redis (optional) | Performance optimization |
@@ -753,12 +783,14 @@ class F1RAGRetriever:
 4. Create agent framework scaffolding
 5. Design tool conversion strategy
 
-### Questions to Resolve
-- [ ] ChromaDB vs Pinecone vs Weaviate for vector store?
-- [ ] Local LLM option (Ollama) or Claude API only?
-- [ ] Embedding model: all-MiniLM-L6-v2 vs text-embedding-3?
-- [ ] Redis caching necessary for MVP?
-- [ ] LangSmith monitoring from day 1 or later?
+### ✅ Decisions Finalized (December 20, 2025)
+- [x] **Vector Store**: ChromaDB (MVP) + Pinecone option (production, config-based)
+- [x] **LLM Strategy**: Hybrid routing - Claude 3.5 Sonnet + Gemini 2.0 Flash Thinking
+- [x] **Gemini Model**: `gemini-2.0-flash-thinking-exp-1219` (with reasoning mode)
+- [x] **Embeddings**: all-MiniLM-L6-v2 (384 dims, local, free)
+- [x] **Caching**: Parquet only (no Redis in MVP)
+- [x] **Monitoring**: LangSmith from Phase 3A + LocalTokenTracker fallback
+- [x] **Cost Projection**: $8.50/mo MVP, $294/mo production
 
 ---
 
