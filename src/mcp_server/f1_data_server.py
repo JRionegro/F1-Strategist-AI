@@ -11,13 +11,7 @@ import json
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import (
-    Tool,
-    TextContent,
-    CallToolResult,
-    INVALID_PARAMS,
-    INTERNAL_ERROR
-)
+from mcp.types import Tool, TextContent
 import pandas as pd
 
 from src.data.f1_data_provider import UnifiedF1DataProvider
@@ -51,7 +45,7 @@ class F1DataMCPServer:
 
     def _setup_handlers(self) -> None:
         """Setup MCP protocol handlers."""
-        
+
         @self.server.list_tools()
         async def list_tools() -> list[Tool]:
             """List available tools."""
@@ -60,6 +54,15 @@ class F1DataMCPServer:
                 self._create_get_telemetry_tool(),
                 self._create_get_qualifying_results_tool(),
                 self._create_get_season_schedule_tool(),
+                self._create_get_lap_times_tool(),
+                self._create_get_pit_stops_tool(),
+                self._create_get_weather_tool(),
+                self._create_get_tire_strategy_tool(),
+                self._create_get_practice_results_tool(),
+                self._create_get_sprint_results_tool(),
+                self._create_get_driver_info_tool(),
+                self._create_get_track_status_tool(),
+                self._create_get_race_control_tool(),
             ]
 
         @self.server.call_tool()
@@ -69,28 +72,42 @@ class F1DataMCPServer:
         ) -> Sequence[TextContent]:
             """Handle tool calls."""
             try:
-                if name == "get_race_results":
-                    return await self.handle_get_race_results(
-                        arguments
-                    )
-                elif name == "get_telemetry":
-                    return await self.handle_get_telemetry(
-                        arguments
-                    )
-                elif name == "get_qualifying_results":
-                    result = await (
-                        self.handle_get_qualifying_results(
-                            arguments
-                        )
-                    )
-                    return result
-                elif name == "get_season_schedule":
-                    result = await (
-                        self.handle_get_season_schedule(
-                            arguments
-                        )
-                    )
-                    return result
+                handlers = {
+                    "get_race_results": (
+                        self.handle_get_race_results
+                    ),
+                    "get_telemetry": self.handle_get_telemetry,
+                    "get_qualifying_results": (
+                        self.handle_get_qualifying_results
+                    ),
+                    "get_season_schedule": (
+                        self.handle_get_season_schedule
+                    ),
+                    "get_lap_times": self.handle_get_lap_times,
+                    "get_pit_stops": self.handle_get_pit_stops,
+                    "get_weather": self.handle_get_weather,
+                    "get_tire_strategy": (
+                        self.handle_get_tire_strategy
+                    ),
+                    "get_practice_results": (
+                        self.handle_get_practice_results
+                    ),
+                    "get_sprint_results": (
+                        self.handle_get_sprint_results
+                    ),
+                    "get_driver_info": (
+                        self.handle_get_driver_info
+                    ),
+                    "get_track_status": (
+                        self.handle_get_track_status
+                    ),
+                    "get_race_control_messages": (
+                        self.handle_get_race_control
+                    ),
+                }
+
+                if name in handlers:
+                    return await handlers[name](arguments)
                 else:
                     raise ValueError(f"Unknown tool: {name}")
             except Exception as e:
@@ -122,7 +139,7 @@ class F1DataMCPServer:
                     },
                     "use_realtime": {
                         "type": "boolean",
-                        "description": "Use OpenF1 real-time data",
+                        "description": "Use OpenF1 real-time",
                         "default": False
                     }
                 },
@@ -135,9 +152,8 @@ class F1DataMCPServer:
         return Tool(
             name="get_telemetry",
             description=(
-                "Get detailed telemetry data for a driver "
-                "in a specific race. Returns speed, throttle, "
-                "brake, and gear data."
+                "Get detailed telemetry data for a driver. "
+                "Returns speed, throttle, brake, gear data."
             ),
             inputSchema={
                 "type": "object",
@@ -156,9 +172,7 @@ class F1DataMCPServer:
                     },
                     "driver": {
                         "type": "string",
-                        "description": (
-                            "Driver code (e.g., VER, HAM, LEC)"
-                        ),
+                        "description": "Driver code (VER, HAM)",
                         "pattern": "^[A-Z]{3}$"
                     },
                     "use_realtime": {
@@ -172,11 +186,11 @@ class F1DataMCPServer:
         )
 
     def _create_get_qualifying_results_tool(self) -> Tool:
-        """Create tool for getting qualifying results."""
+        """Create tool for qualifying results."""
         return Tool(
             name="get_qualifying_results",
             description=(
-                "Get qualifying session results. "
+                "Get qualifying results. "
                 "Returns Q1, Q2, Q3 times and grid positions."
             ),
             inputSchema={
@@ -205,12 +219,12 @@ class F1DataMCPServer:
         )
 
     def _create_get_season_schedule_tool(self) -> Tool:
-        """Create tool for getting season schedule."""
+        """Create tool for season schedule."""
         return Tool(
             name="get_season_schedule",
             description=(
                 "Get complete season calendar. "
-                "Returns race dates, locations, and circuit info."
+                "Returns race dates, locations, circuit info."
             ),
             inputSchema={
                 "type": "object",
@@ -226,24 +240,280 @@ class F1DataMCPServer:
             }
         )
 
+    def _create_get_lap_times_tool(self) -> Tool:
+        """Create tool for lap times."""
+        return Tool(
+            name="get_lap_times",
+            description=(
+                "Get lap times for all drivers. "
+                "Returns lap number, time, sectors, compound."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "year": {
+                        "type": "integer",
+                        "description": "Season year",
+                        "minimum": 2018,
+                        "maximum": 2024
+                    },
+                    "round_number": {
+                        "type": "integer",
+                        "description": "Race round",
+                        "minimum": 1,
+                        "maximum": 24
+                    },
+                    "session_type": {
+                        "type": "string",
+                        "description": "Session type",
+                        "enum": ["R", "Q", "FP1", "FP2", "FP3"],
+                        "default": "R"
+                    }
+                },
+                "required": ["year", "round_number"]
+            }
+        )
+
+    def _create_get_pit_stops_tool(self) -> Tool:
+        """Create tool for pit stops."""
+        return Tool(
+            name="get_pit_stops",
+            description=(
+                "Get pit stop data. "
+                "Returns pit in/out times, compounds."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "year": {
+                        "type": "integer",
+                        "description": "Season year",
+                        "minimum": 2018,
+                        "maximum": 2024
+                    },
+                    "round_number": {
+                        "type": "integer",
+                        "description": "Race round",
+                        "minimum": 1,
+                        "maximum": 24
+                    }
+                },
+                "required": ["year", "round_number"]
+            }
+        )
+
+    def _create_get_weather_tool(self) -> Tool:
+        """Create tool for weather data."""
+        return Tool(
+            name="get_weather",
+            description=(
+                "Get weather data. "
+                "Returns temperature, humidity, wind, rain."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "year": {
+                        "type": "integer",
+                        "description": "Season year",
+                        "minimum": 2018,
+                        "maximum": 2024
+                    },
+                    "round_number": {
+                        "type": "integer",
+                        "description": "Race round",
+                        "minimum": 1,
+                        "maximum": 24
+                    }
+                },
+                "required": ["year", "round_number"]
+            }
+        )
+
+    def _create_get_tire_strategy_tool(self) -> Tool:
+        """Create tool for tire strategy."""
+        return Tool(
+            name="get_tire_strategy",
+            description=(
+                "Get tire strategy data. "
+                "Returns compound usage, tire life, stints."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "year": {
+                        "type": "integer",
+                        "description": "Season year",
+                        "minimum": 2018,
+                        "maximum": 2024
+                    },
+                    "round_number": {
+                        "type": "integer",
+                        "description": "Race round",
+                        "minimum": 1,
+                        "maximum": 24
+                    }
+                },
+                "required": ["year", "round_number"]
+            }
+        )
+
+    def _create_get_practice_results_tool(self) -> Tool:
+        """Create tool for practice results."""
+        return Tool(
+            name="get_practice_results",
+            description=(
+                "Get practice session results. "
+                "Returns driver positions for FP1/FP2/FP3."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "year": {
+                        "type": "integer",
+                        "description": "Season year",
+                        "minimum": 2018,
+                        "maximum": 2024
+                    },
+                    "round_number": {
+                        "type": "integer",
+                        "description": "Race round",
+                        "minimum": 1,
+                        "maximum": 24
+                    },
+                    "session_type": {
+                        "type": "string",
+                        "description": "Practice session",
+                        "enum": ["FP1", "FP2", "FP3"]
+                    }
+                },
+                "required": ["year", "round_number", "session_type"]
+            }
+        )
+
+    def _create_get_sprint_results_tool(self) -> Tool:
+        """Create tool for sprint results."""
+        return Tool(
+            name="get_sprint_results",
+            description=(
+                "Get sprint race results. "
+                "Returns positions, points for sprint races."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "year": {
+                        "type": "integer",
+                        "description": "Season year",
+                        "minimum": 2018,
+                        "maximum": 2024
+                    },
+                    "round_number": {
+                        "type": "integer",
+                        "description": "Race round",
+                        "minimum": 1,
+                        "maximum": 24
+                    }
+                },
+                "required": ["year", "round_number"]
+            }
+        )
+
+    def _create_get_driver_info_tool(self) -> Tool:
+        """Create tool for driver information."""
+        return Tool(
+            name="get_driver_info",
+            description=(
+                "Get driver information. "
+                "Returns names, teams, numbers, countries."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "year": {
+                        "type": "integer",
+                        "description": "Season year",
+                        "minimum": 2018,
+                        "maximum": 2024
+                    },
+                    "round_number": {
+                        "type": "integer",
+                        "description": "Race round",
+                        "minimum": 1,
+                        "maximum": 24
+                    }
+                },
+                "required": ["year", "round_number"]
+            }
+        )
+
+    def _create_get_track_status_tool(self) -> Tool:
+        """Create tool for track status."""
+        return Tool(
+            name="get_track_status",
+            description=(
+                "Get track status. "
+                "Returns flags, safety car, red flags."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "year": {
+                        "type": "integer",
+                        "description": "Season year",
+                        "minimum": 2018,
+                        "maximum": 2024
+                    },
+                    "round_number": {
+                        "type": "integer",
+                        "description": "Race round",
+                        "minimum": 1,
+                        "maximum": 24
+                    }
+                },
+                "required": ["year", "round_number"]
+            }
+        )
+
+    def _create_get_race_control_tool(self) -> Tool:
+        """Create tool for race control messages."""
+        return Tool(
+            name="get_race_control_messages",
+            description=(
+                "Get race control messages. "
+                "Returns penalties, investigations, decisions."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "year": {
+                        "type": "integer",
+                        "description": "Season year",
+                        "minimum": 2018,
+                        "maximum": 2024
+                    },
+                    "round_number": {
+                        "type": "integer",
+                        "description": "Race round",
+                        "minimum": 1,
+                        "maximum": 24
+                    }
+                },
+                "required": ["year", "round_number"]
+            }
+        )
+
     async def handle_get_race_results(
-        self,
-        arguments: Dict[str, Any]
+        self, arguments: Dict[str, Any]
     ) -> Sequence[TextContent]:
         """Handle get_race_results tool call."""
         try:
-            year = arguments["year"]
-            round_number = arguments["round_number"]
-            use_realtime = arguments.get("use_realtime", False)
-
             results = self.provider.get_race_results(
-                year=year,
-                round_number=round_number,
-                use_realtime=use_realtime
+                year=arguments["year"],
+                round_number=arguments["round_number"],
+                use_realtime=arguments.get("use_realtime", False)
             )
-
             data = self._dataframe_to_dict(results)
-
             return [
                 TextContent(
                     type="text",
@@ -251,43 +521,33 @@ class F1DataMCPServer:
                 )
             ]
         except Exception as e:
-            error_msg = f"Error getting race results: {str(e)}"
-            logger.error(error_msg)
             return [
                 TextContent(
                     type="text",
-                    text=error_msg
+                    text=f"Error: {str(e)}"
                 )
             ]
 
     async def handle_get_telemetry(
-        self,
-        arguments: Dict[str, Any]
+        self, arguments: Dict[str, Any]
     ) -> Sequence[TextContent]:
         """Handle get_telemetry tool call."""
         try:
-            year = arguments["year"]
-            round_number = arguments["round_number"]
-            driver = arguments["driver"]
-            use_realtime = arguments.get("use_realtime", False)
-
             telemetry = self.provider.get_telemetry(
-                year=year,
-                round_number=round_number,
-                driver=driver,
-                use_realtime=use_realtime
+                year=arguments["year"],
+                round_number=arguments["round_number"],
+                driver=arguments["driver"],
+                use_realtime=arguments.get("use_realtime", False)
             )
-
             if telemetry.empty:
-                msg = (
-                    f"No telemetry data found for {driver} "
-                    f"in {year} R{round_number}"
-                )
-                return [TextContent(type="text", text=msg)]
-
+                return [
+                    TextContent(
+                        type="text",
+                        text="No telemetry data found"
+                    )
+                ]
             sample = telemetry.head(100)
             data = self._dataframe_to_dict(sample)
-
             return [
                 TextContent(
                     type="text",
@@ -295,28 +555,21 @@ class F1DataMCPServer:
                 )
             ]
         except Exception as e:
-            error_msg = f"Error getting telemetry: {str(e)}"
-            logger.error(error_msg)
-            return [TextContent(type="text", text=error_msg)]
+            return [
+                TextContent(type="text", text=f"Error: {str(e)}")
+            ]
 
     async def handle_get_qualifying_results(
-        self,
-        arguments: Dict[str, Any]
+        self, arguments: Dict[str, Any]
     ) -> Sequence[TextContent]:
         """Handle get_qualifying_results tool call."""
         try:
-            year = arguments["year"]
-            round_number = arguments["round_number"]
-            use_realtime = arguments.get("use_realtime", False)
-
             results = self.provider.get_qualifying_results(
-                year=year,
-                round_number=round_number,
-                use_realtime=use_realtime
+                year=arguments["year"],
+                round_number=arguments["round_number"],
+                use_realtime=arguments.get("use_realtime", False)
             )
-
             data = self._dataframe_to_dict(results)
-
             return [
                 TextContent(
                     type="text",
@@ -324,26 +577,19 @@ class F1DataMCPServer:
                 )
             ]
         except Exception as e:
-            error_msg = (
-                f"Error getting qualifying results: {str(e)}"
-            )
-            logger.error(error_msg)
-            return [TextContent(type="text", text=error_msg)]
+            return [
+                TextContent(type="text", text=f"Error: {str(e)}")
+            ]
 
     async def handle_get_season_schedule(
-        self,
-        arguments: Dict[str, Any]
+        self, arguments: Dict[str, Any]
     ) -> Sequence[TextContent]:
         """Handle get_season_schedule tool call."""
         try:
-            year = arguments["year"]
-
             schedule = self.provider.get_season_schedule(
-                year=year
+                year=arguments["year"]
             )
-
             data = self._dataframe_to_dict(schedule)
-
             return [
                 TextContent(
                     type="text",
@@ -351,15 +597,203 @@ class F1DataMCPServer:
                 )
             ]
         except Exception as e:
-            error_msg = (
-                f"Error getting season schedule: {str(e)}"
+            return [
+                TextContent(type="text", text=f"Error: {str(e)}")
+            ]
+
+    async def handle_get_lap_times(
+        self, arguments: Dict[str, Any]
+    ) -> Sequence[TextContent]:
+        """Handle get_lap_times tool call."""
+        try:
+            lap_times = self.provider.get_lap_times(
+                year=arguments["year"],
+                round_number=arguments["round_number"],
+                session_type=arguments.get("session_type", "R")
             )
-            logger.error(error_msg)
-            return [TextContent(type="text", text=error_msg)]
+            data = self._dataframe_to_dict(lap_times)
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(data, indent=2)
+                )
+            ]
+        except Exception as e:
+            return [
+                TextContent(type="text", text=f"Error: {str(e)}")
+            ]
+
+    async def handle_get_pit_stops(
+        self, arguments: Dict[str, Any]
+    ) -> Sequence[TextContent]:
+        """Handle get_pit_stops tool call."""
+        try:
+            pit_stops = self.provider.get_pit_stops(
+                year=arguments["year"],
+                round_number=arguments["round_number"]
+            )
+            data = self._dataframe_to_dict(pit_stops)
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(data, indent=2)
+                )
+            ]
+        except Exception as e:
+            return [
+                TextContent(type="text", text=f"Error: {str(e)}")
+            ]
+
+    async def handle_get_weather(
+        self, arguments: Dict[str, Any]
+    ) -> Sequence[TextContent]:
+        """Handle get_weather tool call."""
+        try:
+            weather = self.provider.get_weather(
+                year=arguments["year"],
+                round_number=arguments["round_number"]
+            )
+            data = self._dataframe_to_dict(weather)
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(data, indent=2)
+                )
+            ]
+        except Exception as e:
+            return [
+                TextContent(type="text", text=f"Error: {str(e)}")
+            ]
+
+    async def handle_get_tire_strategy(
+        self, arguments: Dict[str, Any]
+    ) -> Sequence[TextContent]:
+        """Handle get_tire_strategy tool call."""
+        try:
+            strategy = self.provider.get_tire_strategy(
+                year=arguments["year"],
+                round_number=arguments["round_number"]
+            )
+            data = self._dataframe_to_dict(strategy)
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(data, indent=2)
+                )
+            ]
+        except Exception as e:
+            return [
+                TextContent(type="text", text=f"Error: {str(e)}")
+            ]
+
+    async def handle_get_practice_results(
+        self, arguments: Dict[str, Any]
+    ) -> Sequence[TextContent]:
+        """Handle get_practice_results tool call."""
+        try:
+            results = self.provider.get_practice_results(
+                year=arguments["year"],
+                round_number=arguments["round_number"],
+                session_type=arguments["session_type"]
+            )
+            data = self._dataframe_to_dict(results)
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(data, indent=2)
+                )
+            ]
+        except Exception as e:
+            return [
+                TextContent(type="text", text=f"Error: {str(e)}")
+            ]
+
+    async def handle_get_sprint_results(
+        self, arguments: Dict[str, Any]
+    ) -> Sequence[TextContent]:
+        """Handle get_sprint_results tool call."""
+        try:
+            results = self.provider.get_sprint_results(
+                year=arguments["year"],
+                round_number=arguments["round_number"]
+            )
+            data = self._dataframe_to_dict(results)
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(data, indent=2)
+                )
+            ]
+        except Exception as e:
+            return [
+                TextContent(type="text", text=f"Error: {str(e)}")
+            ]
+
+    async def handle_get_driver_info(
+        self, arguments: Dict[str, Any]
+    ) -> Sequence[TextContent]:
+        """Handle get_driver_info tool call."""
+        try:
+            info = self.provider.get_driver_info(
+                year=arguments["year"],
+                round_number=arguments["round_number"]
+            )
+            data = self._dataframe_to_dict(info)
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(data, indent=2)
+                )
+            ]
+        except Exception as e:
+            return [
+                TextContent(type="text", text=f"Error: {str(e)}")
+            ]
+
+    async def handle_get_track_status(
+        self, arguments: Dict[str, Any]
+    ) -> Sequence[TextContent]:
+        """Handle get_track_status tool call."""
+        try:
+            status = self.provider.get_track_status(
+                year=arguments["year"],
+                round_number=arguments["round_number"]
+            )
+            data = self._dataframe_to_dict(status)
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(data, indent=2)
+                )
+            ]
+        except Exception as e:
+            return [
+                TextContent(type="text", text=f"Error: {str(e)}")
+            ]
+
+    async def handle_get_race_control(
+        self, arguments: Dict[str, Any]
+    ) -> Sequence[TextContent]:
+        """Handle get_race_control_messages tool call."""
+        try:
+            messages = self.provider.get_race_control_messages(
+                year=arguments["year"],
+                round_number=arguments["round_number"]
+            )
+            data = self._dataframe_to_dict(messages)
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(data, indent=2)
+                )
+            ]
+        except Exception as e:
+            return [
+                TextContent(type="text", text=f"Error: {str(e)}")
+            ]
 
     def _dataframe_to_dict(
-        self,
-        df: pd.DataFrame
+        self, df: pd.DataFrame
     ) -> Sequence[Dict[str, Any]]:
         """Convert DataFrame to dictionary."""
         return cast(
