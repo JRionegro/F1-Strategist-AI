@@ -1,53 +1,133 @@
 # F1 Strategist AI
 
-An AI-powered Formula 1 race strategy assistant that provides real-time insights, predictions, and recommendations for race strategy optimization.
+An AI-powered Formula 1 race strategy assistant with hybrid caching system for historical analysis and real-time monitoring.
 
-## Project Overview
+## 🎯 Project Status
 
-The F1 Strategist AI is a comprehensive system that combines multiple AI technologies to deliver strategic insights for Formula 1 racing:
+### ✅ Phase 1-2: Foundation & Data Layer (COMPLETED)
 
-- **MCP Servers**: Model Context Protocol servers for data management and AI integration
-- **Intelligent Agents**: Specialized agents for different aspects of race strategy
-- **RAG System**: Retrieval-Augmented Generation for historical race data analysis
-- **Interactive Chatbot**: Conversational interface for strategy queries
-- **Real-time Visualizations**: Dynamic visualizations for practice, qualifying, and race sessions
+- **MCP Server**: 13 herramientas operativas (100% cobertura FastF1/OpenF1)
+- **Cache System**: Sistema híbrido con modos historical y live
+- **Data Provider**: Integración completa con FastF1 y OpenF1
+- **Tests**: 53 tests pasando (39 MCP + 14 caché)
 
-## Features
+### 📋 Next: Phase 3 - AI Agents & RAG
 
-### Core Capabilities
-- Real-time race strategy recommendations
-- Historical race data analysis and simulation
-- Driver and team performance tracking
-- Weather impact analysis
-- Tire strategy optimization
-- Pit stop timing recommendations
-- Fuel management calculations
+Ver [ARCHITECTURE_DECISIONS.md](docs/ARCHITECTURE_DECISIONS.md) para el plan de implementación.
 
-### Visualization Modes
-- **Practice Session**: Track conditions, lap times, sector analysis
-- **Qualifying**: Timing comparisons, optimal lap predictions
-- **Race**: Live position tracking, gap analysis, strategy execution
+---
 
-### Simulation Features
-- Historical race replay and alternative strategy exploration
-- Driver/team selection and comparison
-- Custom objective setting (fastest lap, position gain, fuel efficiency)
-- "What-if" scenario analysis
+## 🚀 Quick Start
 
-## Project Structure
+### Instalación
+
+```bash
+# Clonar repositorio
+git clone [repo-url]
+cd "F1 Strategist AI"
+
+# Activar entorno virtual
+.\venv\Scripts\Activate.ps1
+
+# Instalar dependencias (si es necesario)
+pip install -r requirements.txt
+```
+
+### Uso Básico
+
+```python
+from src.data import UnifiedF1DataProvider
+
+# Inicializar con caché inteligente
+provider = UnifiedF1DataProvider(use_smart_cache=True)
+
+# Obtener resultados (rápido con caché)
+results = provider.get_race_results(2024, 1)  # Bahrain
+telemetry = provider.get_telemetry(2024, 1, "VER")
+```
+
+### Scripts de Utilidad
+
+```bash
+# Ver estadísticas de caché
+python scripts/cache_stats.py
+
+# Precargar temporada
+python scripts/preload_season.py 2024
+
+# Limpiar datos antiguos
+python scripts/clean_cache.py --types telemetry
+```
+
+---
+
+## 📊 Core Features
+
+### Hybrid Cache System
+
+- **Historical Mode**: Datos permanentes con Parquet optimizado
+- **Live Mode**: Sesiones en tiempo real con OpenF1
+- **Smart Retention**: Políticas automáticas por tipo de dato
+- **Performance**: 100ms vs 10s (FastF1 directo)
+
+### MCP Tools (13 Available)
+
+1. `get_race_results` - Resultados oficiales
+2. `get_qualifying_results` - Clasificación
+3. `get_telemetry` - Telemetría detallada
+4. `get_lap_times` - Tiempos por vuelta
+5. `get_pit_stops` - Análisis de boxes
+6. `get_weather` - Condiciones meteorológicas
+7. `get_tire_strategy` - Estrategia de neumáticos
+8. `get_practice_results` - Entrenamientos libres
+9. `get_sprint_results` - Carreras sprint
+10. `get_driver_info` - Información de pilotos
+11. `get_track_status` - Estados de pista
+12. `get_race_control_messages` - Mensajes de dirección
+13. `get_season_schedule` - Calendario de temporada
+
+### Real-Time Monitoring (Live Sessions)
+
+- Actualización incremental cada 5 segundos
+- Tracking de stints en curso
+- Eventos de carrera (pit stops, flags)
+- Estado de posiciones en tiempo real
+
+---
+
+## 📁 Project Structure
 
 ```
 F1 Strategist AI/
-├── .github/              # GitHub workflows and configurations
-├── src/                  # Source code
-│   ├── mcp_servers/      # MCP server implementations
-│   ├── agents/           # AI agent modules
-│   ├── chatbot/          # Chatbot interface
-│   ├── rag/              # RAG system components
-│   ├── visualizations/   # Visualization modules
-│   └── strategy/         # Core strategy algorithms
-├── data/                 # Data storage
-│   ├── races/            # Historical race data
+├── src/
+│   ├── data/                    # Data layer (IMPLEMENTED ✅)
+│   │   ├── cache_config.py      # Configuración de caché
+│   │   ├── cache_manager.py     # Gestor híbrido
+│   │   ├── f1_data_provider.py  # Provider unificado
+│   │   ├── live_session_monitor.py  # Monitor tiempo real
+│   │   └── models.py            # Dataclasses F1
+│   ├── mcp_server/              # MCP Server (IMPLEMENTED ✅)
+│   │   └── f1_data_server.py    # 13 herramientas MCP
+│   ├── agents/                  # AI Agents (PENDING)
+│   ├── rag/                     # RAG System (PENDING)
+│   ├── chatbot/                 # Chatbot (PENDING)
+│   └── visualizations/          # Dashboards (PENDING)
+├── data/                        # Data storage
+│   ├── races/                   # Historical race data
+│   ├── telemetry/               # Telemetry by driver
+│   └── live/                    # Active sessions
+├── scripts/                     # Utility scripts
+│   ├── cache_stats.py
+│   ├── clean_cache.py
+│   └── preload_season.py
+├── tests/                       # Test suite
+│   ├── test_mcp_server.py       # 39 tests ✅
+│   └── test_cache_system.py     # 14 tests ✅
+└── docs/                        # Documentation
+    ├── CACHE_SYSTEM_IMPLEMENTATION.md
+    ├── MCP_API_REFERENCE.md
+    └── ARCHITECTURE_DECISIONS.md
+```
 │   └── telemetry/        # Telemetry data
 ├── tests/                # Unit and integration tests
 ├── docs/                 # Documentation

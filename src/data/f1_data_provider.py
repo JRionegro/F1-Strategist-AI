@@ -13,6 +13,9 @@ from abc import ABC, abstractmethod
 import pandas as pd
 import fastf1
 
+from .cache_manager import CacheManager
+from .cache_config import CacheMode, DataType
+
 logger = logging.getLogger(__name__)
 
 
@@ -44,16 +47,47 @@ class F1DataProvider(ABC):
 class FastF1Provider(F1DataProvider):
     """Data provider using FastF1 (historical analysis)."""
 
-    def __init__(self, cache_dir: str = "./cache") -> None:
-        """Initialize FastF1 provider."""
+    def __init__(
+        self,
+        cache_dir: str = "./cache",
+        use_smart_cache: bool = True
+    ) -> None:
+        """
+        Initialize FastF1 provider.
+
+        Args:
+            cache_dir: Directorio de caché de FastF1
+            use_smart_cache: Usar CacheManager inteligente
+        """
         os.makedirs(cache_dir, exist_ok=True)
         fastf1.Cache.enable_cache(cache_dir=cache_dir)
-        logger.info("FastF1Provider initialized with cache")
+
+        self.use_smart_cache = use_smart_cache
+        self.cache_manager = (
+            CacheManager(mode=CacheMode.HISTORICAL)
+            if use_smart_cache
+            else None
+        )
+
+        logger.info(
+            f"FastF1Provider initialized "
+            f"(smart_cache={use_smart_cache})"
+        )
 
     def get_race_results(
         self, year: int, round_number: int
     ) -> pd.DataFrame:
         """Get race results from FastF1."""
+        # Intentar obtener desde caché inteligente
+        if self.cache_manager:
+            cached = self.cache_manager.get_cached_race_data(
+                year,
+                str(round_number),
+                DataType.RACE_RESULTS
+            )
+            if cached is not None:
+                return cached
+
         try:
             session = fastf1.get_session(year, round_number, "R")
             session.load()
@@ -76,6 +110,15 @@ class FastF1Provider(F1DataProvider):
                 },
                 inplace=True
             )
+
+            # Guardar en caché inteligente
+            if self.cache_manager:
+                self.cache_manager.save_race_data(
+                    year,
+                    str(round_number),
+                    DataType.RACE_RESULTS,
+                    results
+                )
 
             logger.info(f"Race results: {year} R{round_number}")
             return results
@@ -451,10 +494,22 @@ class UnifiedF1DataProvider:
         self,
         use_cache: bool = True,
         cache_dir: str = "./cache",
-        openf1_api_key: Optional[str] = None
+        openf1_api_key: Optional[str] = None,
+        use_smart_cache: bool = True
     ) -> None:
-        """Initialize unified provider."""
-        self.fastf1_provider = FastF1Provider(cache_dir=cache_dir)
+        """
+        Initialize unified provider.
+
+        Args:
+            use_cache: Usar caché de FastF1
+            cache_dir: Directorio de caché
+            openf1_api_key: API key para OpenF1
+            use_smart_cache: Usar CacheManager inteligente
+        """
+        self.fastf1_provider = FastF1Provider(
+            cache_dir=cache_dir,
+            use_smart_cache=use_smart_cache
+        )
         self.openf1_provider = OpenF1Provider(
             api_key=openf1_api_key
         )
