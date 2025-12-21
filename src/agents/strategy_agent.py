@@ -199,7 +199,8 @@ FORMAT: Provide clear timing recommendations with strategic reasoning.
             "stint", "undercut", "overcut", "two-stop", "one-stop",
             "qualifying", "q1", "q2", "q3", "pole", "grid",
             "fuel", "save", "manage", "pace", "window",
-            "optimal", "best", "recommend", "should"
+            "optimal", "best", "recommend", "should",
+            "previous", "historical", "past", "worked", "bahrain", "race"
         ]
         
         # Check if any strategy keyword is in the query

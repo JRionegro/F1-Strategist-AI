@@ -28,6 +28,8 @@ class AgentConfig:
     max_tokens: int = 2000
     enable_rag: bool = True
     enable_tools: bool = True
+    rag_system: Optional[Any] = None  # VectorStore instance
+    mcp_client: Optional[Any] = None  # MCP client for tool access
 
 
 @dataclass
@@ -89,8 +91,40 @@ class BaseAgent(ABC):
         self.context: Optional[AgentContext] = None
         self._tools: Dict[str, Callable] = {}
         self._conversation_history: List[Dict[str, str]] = []
+        self.rag_system = config.rag_system
+        self.mcp_client = config.mcp_client
+        
+        # Auto-register MCP tools if client is available
+        if self.mcp_client and self.config.enable_tools:
+            self._register_mcp_tools()
         
         logger.info(f"Initialized agent: {self.config.name}")
+    
+    def _register_mcp_tools(self) -> None:
+        """
+        Register MCP tools from the client.
+        
+        Automatically registers all tools specified in get_available_tools()
+        by creating wrapper functions that call the MCP client methods.
+        """
+        if not self.mcp_client:
+            return
+        
+        available_tools = self.get_available_tools()
+        
+        for tool_name in available_tools:
+            # Create a wrapper function that calls the MCP client
+            if hasattr(self.mcp_client, tool_name):
+                tool_method = getattr(self.mcp_client, tool_name)
+                self.register_tool(tool_name, tool_method)
+                logger.debug(
+                    f"Registered MCP tool '{tool_name}' for {self.config.name}"
+                )
+            else:
+                logger.warning(
+                    f"MCP tool '{tool_name}' not found in client "
+                    f"for {self.config.name}"
+                )
     
     @abstractmethod
     def get_system_prompt(self) -> str:
@@ -184,6 +218,71 @@ class BaseAgent(ABC):
             logger.error(f"Tool '{tool_name}' failed: {str(e)}")
             raise
     
+    async def _call_relevant_tools(self, query: str) -> Dict[str, Any]:
+        """
+        Identify and call relevant MCP tools based on query keywords.
+        
+        Args:
+            query: User query to analyze
+            
+        Returns:
+            Dictionary mapping tool names to their results
+        """
+        tool_results = {}
+        query_lower = query.lower()
+        
+        # Tool keyword mappings
+        tool_keywords = {
+            "get_pit_stops": ["pit stop", "pit", "stops", "pitstop"],
+            "get_lap_times": ["lap time", "pace", "degrading", "speed"],
+            "get_weather": ["weather", "rain", "temperature", "conditions"],
+            "get_telemetry": ["telemetry", "data", "sensor"],
+            "get_race_results": ["result", "finish", "position", "standing"],
+            "get_qualifying_results": ["qualifying", "quali", "q1", "q2", "q3"],
+            "get_session_info": ["session", "info"],
+            "get_track_status": ["track status", "flag", "safety car", "vsc"]
+        }
+        
+        # Check which tools match query keywords
+        for tool_name, keywords in tool_keywords.items():
+            if tool_name in self._tools:
+                # Check if any keyword matches
+                if any(keyword in query_lower for keyword in keywords):
+                    try:
+                        logger.debug(
+                            f"Calling tool '{tool_name}' based on query keywords"
+                        )
+                        # Call tool - most tools need year, race, session context
+                        tool_params = {}
+                        if self.context:
+                            if hasattr(self.context, 'year'):
+                                tool_params['year'] = self.context.year
+                            if hasattr(self.context, 'race_name'):
+                                tool_params['race_name'] = self.context.race_name
+                            if hasattr(self.context, 'session_type'):
+                                tool_params['session'] = self.context.session_type
+                        
+                        # Call the tool (might be async)
+                        result = self._tools[tool_name](**tool_params)
+                        
+                        # Handle async results
+                        import inspect
+                        if inspect.iscoroutine(result):
+                            result = await result
+                        
+                        tool_results[tool_name] = result
+                        logger.debug(
+                            f"Tool '{tool_name}' executed successfully"
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Tool '{tool_name}' call failed: {str(e)}"
+                        )
+                        # Continue with other tools even if one fails
+                        continue
+        
+        return tool_results
+    
     async def query(
         self,
         user_query: str,
@@ -222,9 +321,23 @@ class BaseAgent(ABC):
         
         logger.info(f"{self.config.name} processing query: {user_query}")
         
+        # Call relevant MCP tools if enabled
+        tool_results = {}
+        if self.config.enable_tools and self.mcp_client:
+            tool_results = await self._call_relevant_tools(user_query)
+        
+        # Retrieve relevant context from RAG if enabled
+        rag_sources = []
+        if self.config.enable_rag and self.rag_system:
+            rag_sources = await self._retrieve_rag_context(user_query)
+        
         # Build the prompt
         system_prompt = self.get_system_prompt()
-        full_prompt = self._build_full_prompt(user_query)
+        full_prompt = self._build_full_prompt(
+            user_query,
+            rag_sources,
+            tool_results
+        )
         
         # Call LLM
         try:
@@ -234,7 +347,7 @@ class BaseAgent(ABC):
             response = self._build_response(
                 user_query,
                 llm_response,
-                sources=[],  # TODO: Add RAG sources
+                sources=[s['metadata'].get('source', 'RAG') for s in rag_sources],
                 reasoning=""  # TODO: Extract from LLM response
             )
             
@@ -252,12 +365,19 @@ class BaseAgent(ABC):
             logger.error(f"{self.config.name} query failed: {str(e)}")
             raise
     
-    def _build_full_prompt(self, user_query: str) -> str:
+    def _build_full_prompt(
+        self,
+        user_query: str,
+        rag_sources: Optional[List[Dict[str, Any]]] = None,
+        tool_results: Optional[Dict[str, Any]] = None
+    ) -> str:
         """
-        Build the full prompt including context and history.
+        Build the full prompt including context, RAG, tools, and history.
         
         Args:
             user_query: User's query
+            rag_sources: Retrieved RAG documents
+            tool_results: Results from MCP tool calls
             
         Returns:
             Complete prompt string
@@ -273,6 +393,19 @@ class BaseAgent(ABC):
                 prompt_parts.append(
                     f"Additional Context: {self.context.additional_context}"
                 )
+        
+        # Add tool results if available
+        if tool_results:
+            prompt_parts.append("\nReal-time Data from MCP Tools:")
+            for tool_name, result in tool_results.items():
+                prompt_parts.append(f"\n{tool_name}:")
+                prompt_parts.append(f"{result}")
+        
+        # Add RAG retrieved context
+        if rag_sources:
+            prompt_parts.append("\nRelevant Historical Context:")
+            for i, doc in enumerate(rag_sources[:3], 1):  # Top 3 results
+                prompt_parts.append(f"{i}. {doc['content']}")
         
         # Add conversation history (last 3 exchanges)
         if self._conversation_history:
@@ -361,6 +494,59 @@ class BaseAgent(ABC):
     def clear_history(self) -> None:
         """Clear conversation history."""
         self._conversation_history.clear()
+    
+    async def _retrieve_rag_context(
+        self,
+        query: str,
+        k: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve relevant context from RAG system.
+        
+        Args:
+            query: User query for retrieval
+            k: Number of documents to retrieve
+            
+        Returns:
+            List of retrieved documents with content and metadata
+        """
+        if not self.rag_system:
+            return []
+        
+        try:
+            # Build metadata filters based on context
+            filters = {}
+            if self.context:
+                filters["year"] = self.context.year
+                filters["session_type"] = self.context.session_type
+            
+            # Retrieve from vector store
+            results = self.rag_system.search(
+                query=query,
+                k=k,
+                filter_metadata=filters if filters else None
+            )
+            
+            # Convert SearchResult objects to dicts
+            rag_docs = []
+            for result in results:
+                rag_docs.append({
+                    "content": result.content,
+                    "metadata": result.metadata,
+                    "score": result.score,
+                    "id": result.id
+                })
+            
+            logger.debug(
+                f"{self.config.name} retrieved {len(rag_docs)} RAG documents "
+                f"(scores: {[d['score'] for d in rag_docs[:3]]})"
+            )
+            
+            return rag_docs
+            
+        except Exception as e:
+            logger.warning(f"RAG retrieval failed: {e}")
+            return []
         logger.debug(f"Cleared conversation history for {self.config.name}")
     
     def get_capabilities(self) -> Dict[str, Any]:

@@ -15,7 +15,7 @@ from src.agents.base_agent import BaseAgent, AgentContext, AgentResponse
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(kw_only=False)
 class OrchestratedResponse:
     """
     Response from orchestrator containing multiple agent responses.
