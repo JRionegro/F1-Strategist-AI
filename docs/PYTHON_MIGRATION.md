@@ -1,102 +1,103 @@
-# Migración a Python 3.13 Único
+# Python 3.13 Migration
 
-**Fecha**: Diciembre 21, 2025
+**Date**: December 21, 2025
 
-## Resumen
+## Summary
 
-El proyecto **F1 Strategist AI** migró completamente de un esquema dual (Python 3.14 + Python 3.13) a **Python 3.13 exclusivo**.
+The **F1 Strategist AI** project migrated completely from a dual-environment setup (Python 3.14 + Python 3.13) to **Python 3.13 exclusively**.
 
-## Motivo
+## Reason
 
-**ChromaDB 1.3.7 no es compatible con Python 3.14** debido a dependencias en Pydantic v1. Dado que ChromaDB es una dependencia crítica para el módulo RAG (Retrieval-Augmented Generation), se decidió migrar completamente a Python 3.13 para:
+**ChromaDB 1.3.7 is incompatible with Python 3.14** due to Pydantic v1 dependencies. Since ChromaDB is a critical dependency for the RAG (Retrieval-Augmented Generation) module, the decision was made to fully migrate to Python 3.13 to:
 
-- ✅ Garantizar compatibilidad universal con todas las dependencias
-- ✅ Simplificar el desarrollo (un solo entorno virtual)
-- ✅ Facilitar despliegues en producción
-- ✅ Evitar problemas de versionado y confusión
+- ✅ Ensure universal compatibility with all dependencies
+- ✅ Simplify development (single virtual environment)
+- ✅ Facilitate production deployments
+- ✅ Avoid versioning issues and confusion
 
-## Cambios Realizados
+## Changes Made
 
-### 1. Entornos Virtuales
+### 1. Virtual Environments
 
-**Antes:**
-- `venv/` - Python 3.14 (desarrollo principal, tests unitarios)
-- `venv313/` - Python 3.13 (tests de integración ChromaDB)
+**Before:**
+- `venv/` - Python 3.14 (main development, unit tests)
+- `venv313/` - Python 3.13 (ChromaDB integration tests)
 
-**Después:**
-- `venv/` - Python 3.13 (todo: desarrollo, tests, producción)
-- `venv313/` - ELIMINADO
+**After:**
+- `venv/` - Python 3.13 (everything: development, tests, production)
+- `venv313/` - REMOVED
 
-### 2. Código
+### 2. Code Changes
 
 #### test_vector_store.py
-- **Eliminados**: Tests unitarios con mocks de ChromaDB (incompatibles con Python 3.13)
-- **Modificados**: Todos los tests ahora usan ChromaDB real con directorios temporales
-- **Motivo**: ChromaDB 1.3.7 en Python 3.13 tiene validación de tipos estricta que rechaza MagicMocks
+- **Removed**: Unit tests with ChromaDB mocks (incompatible with Python 3.13)
+- **Modified**: All tests now use real ChromaDB with temporary directories
+- **Reason**: ChromaDB 1.3.7 in Python 3.13 has strict type validation that rejects MagicMocks
 
 #### chromadb_store.py
-- **Agregados**: 7 anotaciones `# type: ignore` para compatibilidad con Pylance
-- **Líneas**: 126, 128, 169, 174 (2x), 242, 243
-- **Motivo**: ChromaDB usa tipos flexibles (OneOrMany) que confunden al type checker
+- **Added**: 7 `# type: ignore` annotations for Pylance compatibility
+- **Lines**: 126, 128, 169, 174 (2x), 242, 243
+- **Reason**: ChromaDB uses flexible types (OneOrMany) that confuse the type checker
 
-### 3. Configuración
+### 3. Configuration
 
 #### pytest.ini
-- Ya tenía `asyncio_mode = auto` correcto
-- No requirió cambios
+- Already had correct `asyncio_mode = auto`
+- No changes required
 
 #### requirements.txt
-- Agregado: `pytest-asyncio>=1.3.0`
-- **Motivo**: Soporte para tests async del MCP server
+- Added: `pytest-asyncio>=1.3.0`
+- **Reason**: Support for MCP server async tests
 
 #### .gitignore
-- Agregado: `venv313/` para ignorar el antiguo entorno
+- Added: `venv313/` to ignore old environment
+- Added: `venv312/` to ignore 32-bit environment
 
-### 4. Documentación
+### 4. Documentation
 
-#### Archivos actualizados:
+#### Updated files:
 - [README.md](../README.md)
-  - Eliminada nota sobre Python 3.14
-  - Instrucciones simplificadas a un solo entorno
-  - Versión requerida: Python 3.13
+  - Removed Python 3.14 note
+  - Simplified instructions to single environment
+  - Required version: Python 3.13
 
 - [PYTHON_ENVIRONMENTS.md](PYTHON_ENVIRONMENTS.md)
-  - Reescrito completamente
-  - Eliminada sección de entorno dual
-  - Documentados los 79 tests passing
+  - Completely rewritten
+  - Removed dual environment section
+  - Documented 79 passing tests
 
 - [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md)
-  - Agregado requisito Python 3.13
-  - Simplificadas instrucciones de instalación
+  - Added Python 3.13 requirement
+  - Simplified installation instructions
 
 - [QUICK_START.md](QUICK_START.md)
-  - Agregado requisito Python 3.13
-  - Actualizado mensaje de verificación
+  - Added Python 3.13 requirement
+  - Updated verification message
 
 - [PHASE_3A_COMPLETION.md](PHASE_3A_COMPLETION.md)
-  - Actualizado título de tests
-  - Eliminada referencia a entorno dual
+  - Updated test title
+  - Removed dual environment reference
 
 - [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)
-  - Actualizada versión de Python en output de pytest
+  - Updated Python version in pytest output
 
 - [CACHE_SYSTEM_IMPLEMENTATION.md](CACHE_SYSTEM_IMPLEMENTATION.md)
-  - Actualizada versión requerida
+  - Updated required version
 
-## Estado de Tests
+## Test Status
 
-### Antes de la migración (Python 3.14 + 3.13)
-- 52 tests passing (unitarios en 3.14, sin ChromaDB real)
-- 3 tests de integración (solo en 3.13)
-- Complejidad: 2 entornos, comandos diferentes
+### Before migration (Python 3.14 + 3.13)
+- 52 tests passing (unit tests in 3.14, no real ChromaDB)
+- 3 integration tests (only in 3.13)
+- Complexity: 2 environments, different commands
 
-### Después de la migración (Python 3.13 único)
-- **79 tests passing** (97.5% éxito funcional)
-- 2 skipped (requieren API keys)
-- 13 errors benignos (Windows file locking en teardown)
-- Simplicidad: 1 entorno, comandos unificados
+### After migration (Python 3.13 only)
+- **79 tests passing** (97.5% functional success)
+- 2 skipped (require API keys)
+- 13 benign errors (Windows file locking on teardown)
+- Simplicity: 1 environment, unified commands
 
-### Desglose por módulo:
+### Breakdown by module:
 ```
 Cache system:     14/14 ✅
 Data provider:     5/5  ✅
@@ -108,31 +109,31 @@ ChromaDB integ:    3/3  ✅
 TOTAL:           79/81 passing
 ```
 
-## Instrucciones de Uso
+## Usage Instructions
 
-### Instalación desde cero
+### Fresh installation
 
 ```powershell
-# Requiere Python 3.13 instalado
+# Requires Python 3.13 installed
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-### Ejecutar tests
+### Running tests
 
 ```powershell
-# Todos los tests
+# All tests
 pytest tests/ -v
 
-# Por módulo
+# By module
 pytest tests/test_cache_system.py -v
 pytest tests/test_llm_providers.py -v
 pytest tests/test_vector_store.py -v
 pytest tests/test_chromadb_integration.py -v
 ```
 
-### Producción
+### Production
 
 ```bash
 python3.13 -m venv venv_prod
@@ -140,24 +141,24 @@ source venv_prod/bin/activate
 pip install -r requirements.txt
 ```
 
-## Notas Técnicas
+## Technical Notes
 
-### Errores de Teardown (Benignos)
+### Teardown Errors (Benign)
 
-Los tests de ChromaDB generan 13 errores de teardown en Windows:
+ChromaDB tests generate 13 teardown errors on Windows:
 ```
 PermissionError: [WinError 32] The process cannot access the file...
 ```
 
-**Esto NO afecta la funcionalidad**. Es un problema conocido de Windows que no puede borrar archivos SQLite mientras están en uso. Los tests PASAN correctamente, solo falla el cleanup de directorios temporales.
+**This does NOT affect functionality**. This is a known Windows issue where SQLite files cannot be deleted while in use. Tests PASS correctly, only temporary directory cleanup fails.
 
-### Type Hints con ChromaDB
+### Type Hints with ChromaDB
 
-ChromaDB usa tipos flexibles (`OneOrMany[T]`) que requieren `# type: ignore` en algunos lugares. Esto es esperado y no afecta el funcionamiento del código.
+ChromaDB uses flexible types (`OneOrMany[T]`) that require `# type: ignore` in some places. This is expected and does not affect code functionality.
 
-### Compatibilidad de Dependencias
+### Dependency Compatibility
 
-| Paquete | Python 3.13 |
+| Package | Python 3.13 |
 |---------|-------------|
 | pandas | ✅ 2.3.3 |
 | fastf1 | ✅ 3.7.0 |
@@ -168,20 +169,20 @@ ChromaDB usa tipos flexibles (`OneOrMany[T]`) que requieren `# type: ignore` en 
 | chromadb | ✅ 1.3.7 |
 | pytest-asyncio | ✅ 1.3.0 |
 
-## Migración Futura
+## Future Migration
 
-Si ChromaDB soporta Python 3.14+ en el futuro:
-1. Evaluar compatibilidad de todas las dependencias
-2. Actualizar requirements.txt
-3. Ejecutar test suite completo
-4. Actualizar documentación
+If ChromaDB supports Python 3.14+ in the future:
+1. Evaluate compatibility of all dependencies
+2. Update requirements.txt
+3. Run complete test suite
+4. Update documentation
 
-Por ahora, **Python 3.13 es la versión estándar del proyecto**.
+For now, **Python 3.13 is the project's standard version**.
 
-## Conclusión
+## Conclusion
 
-✅ Migración exitosa  
-✅ Proyecto 100% funcional en Python 3.13  
-✅ Documentación actualizada  
-✅ Tests validados (79/81 passing)  
-✅ Entorno simplificado (1 solo venv)
+✅ Successful migration  
+✅ Project 100% functional on Python 3.13  
+✅ Documentation updated  
+✅ Tests validated (79/81 passing)  
+✅ Simplified environment (single venv)

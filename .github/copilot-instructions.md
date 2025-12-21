@@ -1,31 +1,38 @@
 # Instrucciones para GitHub Copilot (Python)
 
 ## Objetivo
-Generar código Python limpio, seguro y conforme a PEP8
+Generar cï¿½digo Python limpio, seguro y conforme a PEP8
 
 ---
 
-## ? Buenas prácticas obligatorias
-- Cumplir con PEP8 (indentación, nombres de variables, longitud de línea ? 120 caracteres).
+## ðŸ“ Idioma del Proyecto
+- **Toda la documentaciÃ³n debe estar en inglÃ©s** (archivos .md, comentarios de cÃ³digo, docstrings).
+- **Todo el cÃ³digo y mensajes deben estar en inglÃ©s** (nombres de variables, funciones, clases, logs).
+- **ExcepciÃ³n**: Solo los mensajes dirigidos al usuario final en la UI pueden estar en espaÃ±ol si es necesario.
+
+---
+
+## ? Buenas prï¿½cticas obligatorias
+- Cumplir con PEP8 (indentaciï¿½n, nombres de variables, longitud de lï¿½nea ? 120 caracteres).
 - Usar type hints en funciones siempre que sea posible.
-- Añadir docstrings descriptivos en funciones y clases.
-- Evitar código redundante y variables sin uso.
+- Aï¿½adir docstrings descriptivos en funciones y clases.
+- Evitar cï¿½digo redundante y variables sin uso.
 
 ---
 
 ## ? Errores que NO deben aparecer
 - **F541**: No generar f-strings sin placeholders.
-  - Si no hay interpolación, usar comillas normales:
+  - Si no hay interpolaciï¿½n, usar comillas normales:
     ```python
     mensaje = "Texto fijo"
     ```
-  - Si hay interpolación:
+  - Si hay interpolaciï¿½n:
     ```python
     nombre = "Gerardo"
     mensaje = f"Hola, {nombre}"
     ```
-- Evitar `print` en código de producción; usar `logging`.
-- No ignorar excepciones con `except:` vacío.
+- Evitar `print` en cï¿½digo de producciï¿½n; usar `logging`.
+- No ignorar excepciones con `except:` vacï¿½o.
 
 ---
 
@@ -33,14 +40,14 @@ Generar código Python limpio, seguro y conforme a PEP8
 - Usar `snake_case` para variables y funciones.
 - Usar `PascalCase` para clases.
 - Preferir list comprehensions sobre bucles simples cuando sea legible.
-- Evitar comentarios innecesarios; usar comentarios solo para aclarar lógica compleja.
+- Evitar comentarios innecesarios; usar comentarios solo para aclarar lï¿½gica compleja.
 
 ---
 
-## ? Librerías recomendadas
+## ? Librerï¿½as recomendadas
 - Para logs: `import logging`
 - Para manejo de errores: `try/except` con mensajes claros.
-- Para validación: usar `assert` o librerías como `pydantic` si aplica.
+- Para validaciï¿½n: usar `assert` o librerï¿½as como `pydantic` si aplica.
 
 ---
 
@@ -48,8 +55,8 @@ Generar código Python limpio, seguro y conforme a PEP8
 
 - Seguir las reglas definidas en `.markdownlint.json`.
 - Evitar errores comunes como:
-  - MD051: fragmentos de enlace inválidos
-  - MD013: líneas demasiado largas
+  - MD051: fragmentos de enlace invï¿½lidos
+  - MD013: lï¿½neas demasiado largas
   - MD033: uso de HTML en Markdown
 - Mantener consistencia en encabezados, listas, enlaces y espaciado.
 
@@ -61,60 +68,60 @@ import logging
 def saludar(nombre: str) -> str:
     """Devuelve un saludo personalizado."""
     if not nombre:
-        logging.warning("Nombre vacío recibido")
+        logging.warning("Nombre vacï¿½o recibido")
         return "Hola"
     return f"Hola, {nombre}"
 
 
 ## Ficheros de Test
-- Los ficheros de test deben validar que **no existan errores F541** en el código generado.
+- Los ficheros de test deben validar que **no existan errores F541** en el cï¿½digo generado.
 - Los ficheros de test deben crearse dentro de la carpeta `tests/`.
-- Cada test debe usar `flake8` o `pytest-flake8` para comprobar que el código cumple las reglas.
+- Cada test debe usar `flake8` o `pytest-flake8` para comprobar que el cï¿½digo cumple las reglas.
 - Ejemplo de test con `pytest`:
     ```python
     import subprocess
 
     def test_flake8_compliance():
-        """Verifica que no haya errores F541 en el código."""
+        """Verifica que no haya errores F541 en el cï¿½digo."""
         result = subprocess.run(["flake8", "--select=F541", "src/"], capture_output=True, text=True)
         assert result.returncode == 0, f"Errores F541 encontrados:\n{result.stdout}"
     ```
 
-Aquí tienes un bloque completo listo para incorporar en tu fichero **`copilot-instructions.md`**, bajo una sección dedicada a estándares de programación en Python:
+Aquï¿½ tienes un bloque completo listo para incorporar en tu fichero **`copilot-instructions.md`**, bajo una secciï¿½n dedicada a estï¿½ndares de programaciï¿½n en Python:
 
 ---
 
-## **Estándares de Código Python**
+## **Estï¿½ndares de Cï¿½digo Python**
 
-Para garantizar calidad y evitar errores comunes al generar código Python, sigue estas directrices:
+Para garantizar calidad y evitar errores comunes al generar cï¿½digo Python, sigue estas directrices:
 
 ### ? **1. Cumplimiento PEP 8**
-- Usa **indentación de 4 espacios**.
+- Usa **indentaciï¿½n de 4 espacios**.
 - Nombres de variables y funciones en **snake_case**.
 - Clases en **CamelCase**.
 - Evita nombres ambiguos; usa nombres descriptivos.
 
-### ? **2. Evitar el error E501 (líneas demasiado largas)**
-- **Longitud máxima de línea**:  
-  - Código: **79 caracteres**.  
+### ? **2. Evitar el error E501 (lï¿½neas demasiado largas)**
+- **Longitud mï¿½xima de lï¿½nea**:  
+  - Cï¿½digo: **79 caracteres**.  
   - Comentarios y docstrings: **72 caracteres**.
-- **Divide líneas largas con paréntesis**:  
+- **Divide lï¿½neas largas con parï¿½ntesis**:  
   ```python
   resultado = (
       funcion_larga(parametro1, parametro2, parametro3, parametro4)
   )
   ```
-- **Concatenación de cadenas**:  
+- **Concatenaciï¿½n de cadenas**:  
   ```python
   mensaje = (
       "Este es un texto muy largo que se divide "
-      "en varias líneas para cumplir con PEP 8."
+      "en varias lï¿½neas para cumplir con PEP 8."
   )
   ```
 - **Evita barras invertidas (`\`)**:  
-  Prefiere paréntesis para dividir líneas.
+  Prefiere parï¿½ntesis para dividir lï¿½neas.
 - **Configura herramientas de linting**:  
-  Si usas **Flake8**, añade:  
+  Si usas **Flake8**, aï¿½ade:  
   ```ini
   [flake8]
   max-line-length = 79
