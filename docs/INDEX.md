@@ -1,48 +1,49 @@
 # F1 Strategist AI - Documentation Index
 
 **Last Updated**: December 21, 2025  
-**Project Status**: Phase 3A Complete ✅ | Phase 3B Starting 🔄
+**Project Status**: Phase 3B Complete ✅ | Phase 3C Integration Testing 🔄
 
 ---
 
-## 📖 Quick Start Guides
+## 📖 Main Documentation (Root Level)
 
+### Essential Guides
 | Document | Description | Audience |
 |----------|-------------|----------|
-| [README.md](../README.md) | Project summary and quick start | Everyone |
-| [QUICK_START.md](./QUICK_START.md) | Installation and initial setup | New developers |
-| [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md) | Workflow and code conventions | Active developers |
+| [README.md](../README.md) | Project overview and quick start | Everyone |
+| [QUICK_START.md](./QUICK_START.md) | Installation and setup guide | New developers |
 
----
-
-## 🏗️ Architecture and Design
-
+### Technical Specifications
 | Document | Description | Last Updated |
 |----------|-------------|-------------|
-| [ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md) | Main architectural decisions (ADR) | 12/20/2025 ✅ |
-| [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) | **Final technology stack** | 12/20/2025 ✅ |
-| [PROJECT_SPECIFICATIONS.md](./PROJECT_SPECIFICATIONS.md) | Complete technical specifications | 12/20/2025 ✅ |
+| [PROJECT_SPECIFICATIONS.md](./PROJECT_SPECIFICATIONS.md) | Complete project specifications | 12/20/2025 ✅ |
+| [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) | Technology stack and architecture | 12/20/2025 ✅ |
+| [AGENTS_ARCHITECTURE.md](./AGENTS_ARCHITECTURE.md) | Multi-agent system architecture | 12/21/2025 ✅ |
+| [MCP_API_REFERENCE.md](./MCP_API_REFERENCE.md) | MCP Server API reference (13 tools) | 12/20/2025 ✅ |
+| [UI_UX_SPECIFICATION.md](./UI_UX_SPECIFICATION.md) | User interface specifications | 12/20/2025 ✅ |
 
 ---
 
-## 🤖 Agents and LLM
+## 🚀 Project Development Documentation
 
-| Document | Description | Status |
-|----------|-------------|--------|
-| [MULTI_SESSION_AGENTS.md](./MULTI_SESSION_AGENTS.md) | **Adaptive agents (Race & Qualifying)** | Complete ✅ |
-| [RACE_POSITION_AGENT_SPEC.md](./RACE_POSITION_AGENT_SPEC.md) | 5th agent specification (Race Position) | Approved ✅ |
-| [GEMINI_FLASH_THINKING_GUIDE.md](./GEMINI_FLASH_THINKING_GUIDE.md) | Complete Gemini 2.0 Flash Thinking guide | Complete ✅ |
-| **[LLM_PROVIDERS_SPEC.md]** | Providers implementation (pending) | Planned 📋 |
+All phase implementations, architectural decisions, and development progress are located in:  
+**[`project_development/`](./project_development/)** folder
 
----
+### Development Guides
+- [DEVELOPMENT_GUIDE.md](./project_development/DEVELOPMENT_GUIDE.md) - Development workflow and conventions
+- [ARCHITECTURE_DECISIONS.md](./project_development/ARCHITECTURE_DECISIONS.md) - Architectural Decision Records (ADR)
+- [PROJECT_STATUS.md](./project_development/PROJECT_STATUS.md) - Current project status and progress
 
-## 💾 Data Systems
+### Phase Completion Reports
+- [PHASE_1_2_FOUNDATION.md](./project_development/PHASE_1_2_FOUNDATION.md) - Foundation & Data Layer (Phase 1-2)
+- [PHASE_2C_CACHE_SYSTEM.md](./project_development/PHASE_2C_CACHE_SYSTEM.md) - Cache system implementation (Phase 2C)
+- [PHASE_2D_ARCHITECTURE_PLANNING.md](./project_development/PHASE_2D_ARCHITECTURE_PLANNING.md) - Architecture planning (Phase 2D)
+- [PHASE_3A_LLM_RAG.md](./project_development/PHASE_3A_LLM_RAG.md) - LLM + RAG implementation (Phase 3A)
+- [PHASE_3B_MULTIAGENT.md](./project_development/PHASE_3B_MULTIAGENT.md) - Multi-agent system (Phase 3B) ⭐ NEW
 
-| Document | Description | Status |
-|----------|-------------|--------|
-| [CACHE_SYSTEM_IMPLEMENTATION.md](./CACHE_SYSTEM_IMPLEMENTATION.md) | Hybrid cache system (Parquet) | Implemented ✅ |
-| [MCP_API_REFERENCE.md](./MCP_API_REFERENCE.md) | Complete reference for 13 MCP tools | Complete ✅ |
-| **[VECTOR_STORE_GUIDE.md]** | ChromaDB + Pinecone setup (pending) | Planned 📋 |
+### Environment and Migration
+- [PYTHON_ENVIRONMENTS.md](./project_development/PYTHON_ENVIRONMENTS.md) - Python environment setup
+- [PYTHON_MIGRATION.md](./project_development/PYTHON_MIGRATION.md) - Python 3.13 migration guide
 
 ---
 
@@ -52,87 +53,96 @@
 |----------|-------------|--------|
 | [UI_UX_SPECIFICATION.md](./UI_UX_SPECIFICATION.md) | **Complete dashboard and interface specification** | Complete ✅ |
 
----
-
-## 📊 Monitoring and Observability
-
-| Document | Description | Status |
-|----------|-------------|--------|
-| [MONITORING_SETUP.md](./MONITORING_SETUP.md) | LangSmith + LocalTokenTracker | Implemented ✅ |
-| **[COST_OPTIMIZATION.md]** | Cost optimization strategies | Planned 📋 |
 
 ---
 
-## 📝 Implementation Summaries
-
-| Document | Description | Status |
-|----------|-------------|--------|
-| [IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md) | Summary of completed work | Updated ✅ |
-
----
-
-## 🎯 Documents by Project Phase
+## 🎯 Project Phases Overview
 
 ### ✅ Phase 1-2: Foundation & Data Layer (COMPLETED)
 
-**Key Documents**:
-1. [MCP_API_REFERENCE.md](./MCP_API_REFERENCE.md) - 13 implemented tools
-2. [CACHE_SYSTEM_IMPLEMENTATION.md](./CACHE_SYSTEM_IMPLEMENTATION.md) - Hybrid system
-3. [MONITORING_SETUP.md](./MONITORING_SETUP.md) - LangSmith + fallback
+**Status**: Complete with 81 tests passing  
+**Documentation**: See [project_development/](./project_development/) folder
 
-**Tests**: 81 passing (43 MCP + 14 cache + 12 monitoring + 12 data provider)
+**Key Achievements**:
+- ✅ MCP Server with 13 tools
+- ✅ Hybrid cache system (Parquet)
+- ✅ Monitoring setup (LangSmith)
+- ✅ F1 Data Provider
 
 ---
 
 ### ✅ Phase 2D: Architecture Planning (COMPLETED)
 
+**Status**: Complete - All decisions documented  
 **Key Documents**:
-1. [ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md) - LangChain framework
-2. [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) - **Complete approved stack**
-3. [GEMINI_FLASH_THINKING_GUIDE.md](./GEMINI_FLASH_THINKING_GUIDE.md) - Gemini guide
-4. [RACE_POSITION_AGENT_SPEC.md](./RACE_POSITION_AGENT_SPEC.md) - 5th agent
+- [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) - Complete approved stack
+- [project_development/ARCHITECTURE_DECISIONS.md](./project_development/ARCHITECTURE_DECISIONS.md) - ADR records
 
 **Final Decisions**:
-- LLM: Hybrid Claude + Gemini 2.0 Flash Thinking
-- Vector Store: ChromaDB (MVP) + Pinecone (prod)
+- LLM: Hybrid Claude 3.5 Sonnet + Gemini 2.0 Flash Thinking
+- Vector Store: ChromaDB (MVP) + Pinecone (production)
 - Embeddings: all-MiniLM-L6-v2
 - Cache: Parquet only (no Redis in MVP)
-- Monitoring: LangSmith from Phase 3A
+- Framework: Native Python (simplified from LangChain)
 
 ---
 
-### 🔄 Phase 3A: LangChain Foundation (CURRENT)
+### ✅ Phase 3A: LLM + RAG Foundation (COMPLETED)
 
-**Required Documents** (pending creation):
-1. **LLM_PROVIDERS_SPEC.md** - Claude and Gemini providers implementation
-2. **VECTOR_STORE_GUIDE.md** - ChromaDB and Pinecone setup
-3. **AGENT_BASE_FRAMEWORK.md** - Base agent architecture
+**Status**: Complete with 79/81 tests passing (97.5%)  
+**Documentation**: [project_development/PHASE_3A_LLM_RAG.md](./project_development/PHASE_3A_LLM_RAG.md)
 
-**Tasks**:
-- [ ] Implement `src/llm/claude_provider.py`
-- [ ] Implement `src/llm/gemini_provider.py`
-- [ ] Implement `src/llm/hybrid_router.py`
-- [ ] Implement `src/rag/chromadb_store.py`
-- [ ] Implement `src/rag/factory.py`
-- [ ] Integration tests (15+)
+**Key Achievements**:
+- ✅ LLM Providers (Claude, Gemini, Hybrid Router) - 15/17 tests
+- ✅ RAG Module (VectorStore, ChromaDB) - 18/18 tests
+- ✅ Integration Tests - 3/3 tests
+- ✅ Python 3.13 migration complete
 
 ---
 
-### 📋 Phase 3B: Agent Implementation (NEXT)
+### ✅ Phase 3B: Multi-Agent System (COMPLETED) ⭐
 
-**Planned Documents**:
-1. **MULTI_AGENT_ORCHESTRATION.md** - Agent coordination
-2. **RAG_IMPLEMENTATION.md** - Complete RAG system
-3. **TOOL_INTEGRATION.md** - MCP → LangChain conversion
+**Status**: Complete with 140/140 tests passing (100%)  
+**Documentation**: [project_development/PHASE_3B_MULTIAGENT.md](./project_development/PHASE_3B_MULTIAGENT.md)
+
+**Key Achievements**:
+- ✅ BaseAgent (abstract foundation) - 29 tests
+- ✅ StrategyAgent (tire/pit strategy) - 16 tests
+- ✅ WeatherAgent (rain/temperature) - 19 tests
+- ✅ PerformanceAgent (lap times/telemetry) - 20 tests
+- ✅ RaceControlAgent (flags/penalties) - 20 tests
+- ✅ RacePositionAgent (positions/overtakes) - 21 tests
+- ✅ AgentOrchestrator (multi-agent coordination) - 15 tests
+
+**Total Phase 3B**: ~4,370 lines of code across 14 files
 
 ---
 
-### 📋 Phase 4: User Interface (FUTURE)
+### 🔄 Phase 3C: Integration Testing (CURRENT)
 
-**Planned Documents**:
-1. **CHATBOT_DESIGN.md** - User interface
-2. **API_DOCUMENTATION.md** - Public API
-3. **DEPLOYMENT_GUIDE.md** - Deployment guide
+**Status**: In Progress  
+**Planned Tests**: 8 integration scenarios
+
+**Integration Scenarios**:
+1. Full race strategy analysis (all agents)
+2. Qualifying with weather uncertainty
+3. Safety car decision making
+4. Real-time race monitoring
+5. Agent disagreement resolution
+6. Performance under load
+7. Error recovery
+8. Session type adaptation
+
+---
+
+### 📋 Phase 4: Full System Integration (FUTURE)
+
+**Planned Components**:
+- Real MCP tool integration
+- RAG with historical F1 data
+- Live session monitoring
+- User interface (chatbot)
+- API deployment
 
 ---
 
@@ -140,65 +150,107 @@
 
 ### Need information about...?
 
-**Initial Setup**:
+**Getting Started**:
 - → [QUICK_START.md](./QUICK_START.md)
-- → [config/.env.example](../config/.env.example)
 
-**System Architecture**:
-- → [ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md)
+**Technical Specifications**:
+- → [PROJECT_SPECIFICATIONS.md](./PROJECT_SPECIFICATIONS.md)
+- → [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md)
+- → [MCP_API_REFERENCE.md](./MCP_API_REFERENCE.md)
+
+**Development Progress**:
+- → [project_development/PROJECT_STATUS.md](./project_development/PROJECT_STATUS.md)
+- → [project_development/DEVELOPMENT_GUIDE.md](./project_development/DEVELOPMENT_GUIDE.md)
+
+**Phase Completion Reports**:
+- → [project_development/PHASE_1_2_FOUNDATION.md](./project_development/PHASE_1_2_FOUNDATION.md)
+- → [project_development/PHASE_2D_ARCHITECTURE_PLANNING.md](./project_development/PHASE_2D_ARCHITECTURE_PLANNING.md)
+- → [project_development/PHASE_3A_LLM_RAG.md](./project_development/PHASE_3A_LLM_RAG.md)
+- → [project_development/PHASE_3B_MULTIAGENT.md](./project_development/PHASE_3B_MULTIAGENT.md)
+
+**Architecture and Design**:
+- → [project_development/ARCHITECTURE_DECISIONS.md](./project_development/ARCHITECTURE_DECISIONS.md)
 - → [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md)
 
-**Technology Stack**:
-- → [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) ⭐ **MAIN REFERENCE**
+**Python Environment**:
+- → [project_development/PYTHON_ENVIRONMENTS.md](./project_development/PYTHON_ENVIRONMENTS.md)
+- → [project_development/PYTHON_MIGRATION.md](./project_development/PYTHON_MIGRATION.md)
 
-**LLM and Models**:
-- → [GEMINI_FLASH_THINKING_GUIDE.md](./GEMINI_FLASH_THINKING_GUIDE.md)
-- → [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) ("Hybrid LLM Strategy" section)
-
-**AI Agents**:
-- → [RACE_POSITION_AGENT_SPEC.md](./RACE_POSITION_AGENT_SPEC.md)
-- → [ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md) (Phase 3B)
-
-**Data System**:
-- → [MCP_API_REFERENCE.md](./MCP_API_REFERENCE.md)
-- → [CACHE_SYSTEM_IMPLEMENTATION.md](./CACHE_SYSTEM_IMPLEMENTATION.md)
-
-**Monitoring and Costs**:
-- → [MONITORING_SETUP.md](./MONITORING_SETUP.md)
-- → [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) ("Cost Projections" section)
-
-**Testing**:
-- → [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md) ("Testing" section)
-- → `tests/` directory with 81 tests
+**Agent System**:
+- → [AGENTS_ARCHITECTURE.md](./AGENTS_ARCHITECTURE.md) - Architecture and design
+- → [project_development/PHASE_3B_MULTIAGENT.md](./project_development/PHASE_3B_MULTIAGENT.md) - Implementation report
 
 ---
 
 ## 📌 Essential Documents
 
-### ⭐ Top 3 Documents for New Developers
+### ⭐ For New Developers
 
-1. **[TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md)** - Complete stack decisions
-2. **[QUICK_START.md](./QUICK_START.md)** - Quick start guide
-3. **[MCP_API_REFERENCE.md](./MCP_API_REFERENCE.md)** - Tools API
+1. **[QUICK_START.md](./QUICK_START.md)** - Installation and setup
+2. **[PROJECT_SPECIFICATIONS.md](./PROJECT_SPECIFICATIONS.md)** - Project overview
+3. **[project_development/DEVELOPMENT_GUIDE.md](./project_development/DEVELOPMENT_GUIDE.md)** - Development workflow
 
-### ⭐ Top 3 Documents for Architecture
+### ⭐ For Technical Architecture
 
-1. **[ARCHITECTURE_DECISIONS.md](./ARCHITECTURE_DECISIONS.md)** - Main ADR
-2. **[TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md)** - Complete stack
-3. **[GEMINI_FLASH_THINKING_GUIDE.md](./GEMINI_FLASH_THINKING_GUIDE.md)** - LLM strategy
+1. **[TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md)** - Complete technology stack
+2. **[AGENTS_ARCHITECTURE.md](./AGENTS_ARCHITECTURE.md)** - Multi-agent system architecture
+3. **[project_development/ARCHITECTURE_DECISIONS.md](./project_development/ARCHITECTURE_DECISIONS.md)** - ADR records
+4. **[MCP_API_REFERENCE.md](./MCP_API_REFERENCE.md)** - MCP tools reference
+
+### ⭐ For Phase Implementation
+
+1. **[project_development/PHASE_3B_MULTIAGENT.md](./project_development/PHASE_3B_MULTIAGENT.md)** - Latest phase (multi-agent)
+2. **[project_development/PHASE_3A_LLM_RAG.md](./project_development/PHASE_3A_LLM_RAG.md)** - LLM + RAG
+3. **[project_development/PROJECT_STATUS.md](./project_development/PROJECT_STATUS.md)** - Current progress
 
 ---
 
-## 🔄 Update Status
+## 📁 Documentation Structure
 
-| Category | Updated | Date |
-|----------|---------|------|
-| **Architecture** | ✅ | 12/20/2025 |
-| **Tech Stack** | ✅ | 12/20/2025 |
-| **LLM Strategy** | ✅ | 12/20/2025 |
-| **Data Layer** | ✅ | 12/15/2025 |
-| **Monitoring** | ✅ | 12/15/2025 |
-| **Agent Specs** | ✅ | 12/20/2025 |
+```
+docs/
+├── README.md                          # Project overview
+├── INDEX.md                           # This file - documentation index
+├── QUICK_START.md                     # Getting started guide
+├── PROJECT_SPECIFICATIONS.md          # Technical specifications
+├── TECH_STACK_FINAL.md               # Technology stack
+├── AGENTS_ARCHITECTURE.md            # Multi-agent system architecture
+├── MCP_API_REFERENCE.md              # MCP Server API reference
+├── UI_UX_SPECIFICATION.md            # User interface specs
+│
+└── project_development/               # 📂 Development documentation
+    ├── DEVELOPMENT_GUIDE.md          # Development workflow
+    ├── ARCHITECTURE_DECISIONS.md     # Architectural decisions
+    ├── PROJECT_STATUS.md             # Project progress
+    │
+    ├── PHASE_1_2_FOUNDATION.md       # Foundation & Data Layer (Phase 1-2)
+    ├── PHASE_2C_CACHE_SYSTEM.md      # Cache implementation (Phase 2C)
+    ├── PHASE_2D_ARCHITECTURE_PLANNING.md  # Architecture planning (Phase 2D)
+    ├── PHASE_3A_LLM_RAG.md           # LLM + RAG (Phase 3A)
+    ├── PHASE_3B_MULTIAGENT.md        # Multi-agent system (Phase 3B) ⭐
+    │
+    ├── PYTHON_ENVIRONMENTS.md        # Environment setup
+    └── PYTHON_MIGRATION.md           # Python 3.13 migration
+```
+
+---
+
+## 🔄 Document Update Status
+
+| Category | Last Updated | Status |
+|----------|-------------|--------|
+| **Phase 3B Agents** | 12/21/2025 | ✅ Complete |
+| **Phase 3A LLM/RAG** | 12/20/2025 | ✅ Complete |
+| **Architecture** | 12/20/2025 | ✅ Complete |
+| **Tech Stack** | 12/20/2025 | ✅ Complete |
+| **MCP API** | 12/20/2025 | ✅ Complete |
+| **UI Specs** | 12/20/2025 | ✅ Complete |
+
+---
+
+**Index Last Updated**: December 21, 2025  
+**Documentation Organization**: Completed ✅  
+**Total Documents**: 15 (9 root + 6 project_development)
 | **API Reference** | ✅ | 12/10/2025 |
 | **Testing Guide** | 🟡 Partial | - |
 | **Deployment** | ❌ Pending | - |
