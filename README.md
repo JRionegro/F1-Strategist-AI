@@ -20,7 +20,14 @@ An AI-powered Formula 1 race strategy assistant with hybrid caching system for h
 - **Embeddings**: all-MiniLM-L6-v2 (384 dims, local, free)
 - **Cost Projection**: $8.50/mo MVP, $294/mo production
 
-### 🔄 Next: Phase 3A - LangChain Foundation (Week 5-6)
+### ✅ Phase 3A: LangChain Foundation (COMPLETED)
+
+- **LLM Providers**: 15/15 tests passing (Claude, Gemini, Hybrid Router)
+- **RAG Module**: VectorStore interface, ChromaDB implementation
+- **Unit Tests**: 15/15 passing (with mocks)
+- **Integration Tests**: 3/3 passing (Python 3.13)
+
+### 🔄 Next: Phase 3B - LangChain Agents (Week 7-8)
 
 See [TECH_STACK_FINAL.md](docs/TECH_STACK_FINAL.md) for complete decisions.
 
@@ -35,10 +42,10 @@ See [TECH_STACK_FINAL.md](docs/TECH_STACK_FINAL.md) for complete decisions.
 git clone [repo-url]
 cd "F1 Strategist AI"
 
-# Activate virtual environment
+# Activate virtual environment (Python 3.13)
 .\venv\Scripts\Activate.ps1
 
-# Install dependencies (if necessary)
+# Install dependencies
 pip install -r requirements.txt
 ```
 
@@ -142,7 +149,7 @@ F1 Strategist AI/
 ├── docs/                 # Documentation
 ├── notebooks/            # Jupyter notebooks for analysis
 ├── config/               # Configuration files
-├── venv/                 # Virtual environment (not in git)
+├── venv/                 # Virtual environment Python 3.13 (not in git)
 ├── requirements.txt      # Python dependencies
 └── README.md            # This file
 ```
@@ -150,7 +157,7 @@ F1 Strategist AI/
 ## Technology Stack
 
 ### Core Framework
-- **Python 3.14** (64-bit)
+- **Python 3.13** (64-bit)
 - **LangChain** for multi-agent orchestration
 - **MCP (Model Context Protocol)** for tool integration
 
@@ -313,6 +320,7 @@ cd "F1 Strategist AI"
 
 2. Create and activate virtual environment:
 ```bash
+# Requiere Python 3.13
 python -m venv venv
 .\venv\Scripts\Activate.ps1  # Windows PowerShell
 ```

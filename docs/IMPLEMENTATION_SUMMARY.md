@@ -163,7 +163,7 @@ async def handle_call_tool(name: str, arguments: dict):
 pytest tests/ -v --tb=short
 
 ================================ test session starts ================================
-platform win32 -- Python 3.14.0, pytest-9.0.2, pluggy-1.6.0
+platform win32 -- Python 3.13.9, pytest-9.0.2, pluggy-1.6.0
 collected 39 items
 
 tests/test_f1_data_provider.py::TestFastF1Provider::test_initialization PASSED [ 2%]

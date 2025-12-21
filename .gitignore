@@ -25,6 +25,8 @@ MANIFEST
 
 # Virtual Environment
 venv/
+venv313/
+venv312/
 env/
 ENV/
 env.bak/
@@ -42,11 +44,10 @@ venv.bak/
 .ipynb_checkpoints
 *.ipynb_checkpoints/
 
-# Environment variables
-.env
-.env.local
-.env.*.local
+# Environment variables (only ignore config/.env, keep config/.env.example)
 config/.env
+config/.env.local
+config/.env.*.local
 
 # Data files (large datasets)
 data/raw/

@@ -259,7 +259,7 @@ With the complete cache system, you can now:
 
 ### Compatibility
 
-- ✅ Python 3.14
+- ✅ Python 3.13
 - ✅ PEP 8 compliant
 - ✅ Complete type hints
 - ✅ No F541 errors

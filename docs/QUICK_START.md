@@ -46,7 +46,7 @@ python -m venv venv
 # Activate it
 .\venv\Scripts\Activate.ps1
 
-# Verify activation (you should see (venv) in prompt)
+# Verify activation (you should see (venv) in prompt with Python 3.13)
 python --version
 ```
 

@@ -7,6 +7,7 @@
 Create and activate the virtual environment:
 
 ```powershell
+# Requiere Python 3.13
 # Create virtual environment
 python -m venv venv
 
