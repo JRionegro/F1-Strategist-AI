@@ -1,52 +1,308 @@
 # F1 Strategist AI - UI/UX Specification
 
-**Version**: 1.0  
-**Date**: December 20, 2025  
-**Status**: Initial Design
+**Version**: 2.0  
+**Date**: December 22, 2025  
+**Status**: MVP Implementation
 
 ---
 
 ## 📋 Index
 
 1. [Overview](#overview)
-2. [Interface Architecture](#interface-architecture)
-3. [Main Dashboards](#main-dashboards)
-4. [Advanced Dashboards](#advanced-dashboards)
-5. [Top Menu](#top-menu)
+2. [Application Architecture](#application-architecture)
+3. [Interface Structure](#interface-structure)
+4. [Top Menu & Navigation](#top-menu--navigation)
+5. [Session Management](#session-management)
+6. [Simulation Controls](#simulation-controls)
+7. [Main Dashboards](#main-dashboards)
+8. [Advanced Dashboards](#advanced-dashboards)
 
 ---
 
 ## 🎯 Overview
 
-F1 Strategist AI provides a comprehensive interface for strategy engineers enabling real-time analysis (Live) and historical simulations. The interface is designed to maximize visible information while maintaining usability during high-pressure situations.
+F1 Strategist AI is a **multi-dashboard container application** that provides comprehensive F1 strategy analysis through real-time and simulation modes. The application features a modular architecture where multiple specialized dashboards can be displayed simultaneously.
 
 **Target Users**: Strategy engineers, performance analysts, race teams
 
 **Usage Contexts**:
-- **Live Race/Qualifying**: Real-time decisions (<5s latency)
-- **Race Weekend Analysis**: Between-session analysis (practice, qualifying, race)
-- **Historical Simulation**: Post-race analysis, training, research
+- **Live Mode (🔴)**: Real-time analysis during active F1 sessions (<5s latency)
+- **Simulation Mode (🔵)**: Historical data replay with time controls (1x-3x speed)
+
+**Key Features**:
+- Global session context shared across all dashboards
+- Automatic live session detection (within 3-hour window)
+- Multi-agent AI assistant with conversational interface
+- Flexible dashboard layout with show/hide controls
+- Comprehensive simulation playback controls
 
 ---
 
-## 🏗️ Interface Architecture
+## 🏗️ Application Architecture
 
-### Main Components
+### Container-Based Structure
+
+The application uses a **container pattern** where:
+
+1. **Main Container** (`app.py`)
+   - Manages global session state
+   - Provides top menu and navigation
+   - Handles live/simulation mode switching
+   - Renders simulation controls
+   - Orchestrates dashboard display
+
+2. **Session Management** (`src/session/`)
+   - `GlobalSession`: Shared state (mode, race context, UI preferences)
+   - `SimulationController`: Playback time control
+   - Automatic context inheritance for all dashboards
+
+3. **Dashboard Modules** (`src/dashboards/`)
+   - Independent, self-contained components
+   - Receive global context via props
+   - Can be shown/hidden dynamically
+   - Currently implemented:
+     - ✅ AI Assistant Dashboard
+
+4. **UI Components** (`src/ui/`)
+   - `TopMenu`: Mode selector, configuration, dashboard toggles
+   - `SimulationControls`: Playback controls (play/pause/speed)
+
+### Session Context Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  TOP MENU: Live/Sim | Config | Dashboards | Settings            │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                   │
-│              DASHBOARD AREA (Multi-panel)                        │
-│                                                                   │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌───────────────┐ │
-│  │   Dashboard 1    │  │   Dashboard 2    │  │  Dashboard 3  │ │
-│  │                  │  │                  │  │               │ │
-│  └──────────────────┘  └──────────────────┘  └───────────────┘ │
-│                                                                   │
-└─────────────────────────────────────────────────────────────────┘
+app.py (Main Container)
+  ↓
+GlobalSession (year, circuit, session, driver, team)
+  ↓
+All Dashboards inherit context automatically
+  ↓
+Dashboards display data for current context
 ```
+
+---
+
+## 🎨 Interface Structure
+
+### Complete Application Layout
+
+```
+┌───────────────────────────────────────────────────────────────────────┐
+│  🏎️ F1 STRATEGIST AI                                                  │
+│                                                                        │
+│  [🔴 LIVE / 🔵 SIMULATION]  [Dashboards ▼] [Configuration] [Help]    │
+├───────────────────────────────────────────────────────────────────────┤
+│  SIDEBAR                     │ MAIN AREA                              │
+│  ┌─────────────────────────┐ │                                        │
+│  │ 📍 SESSION CONTEXT      │ │ 🔵 2023 Bahrain | Race | Lap 18/57   │
+│  │                         │ │ ⚡ Playback: ▶️ Playing (2x)          │
+│  │ Year: [2023 ▼]          │ ├────────────────────────────────────────┤
+│  │ Circuit: [Bahrain ▼]    │ │ 🎮 SIMULATION CONTROLS                │
+│  │ Session: [Race ▼]       │ │ [▶️ Play] [⏮️ Restart] [2x] [⏪][⏩]  │
+│  │                         │ │ ████████░░░░░░ 65% Progress            │
+│  │ 🎯 FOCUS                │ ├────────────────────────────────────────┤
+│  │ Driver: [VER ▼]         │ │                                        │
+│  │ Team: [Red Bull ▼]      │ │ 🤖 AI ASSISTANT DASHBOARD             │
+│  │                         │ │ ┌────────────────────────────────────┐│
+│  ├─────────────────────────┤ │ │ 💭 Chat interface with 5 agents    ││
+│  │ 📊 DASHBOARD SELECTION  │ │ │ [User message history...]          ││
+│  │                         │ │ │ [Agent responses with metadata...] ││
+│  │ ☑️ AI Assistant          │ │ │                                    ││
+│  │ ☐ Circuit & Positions   │ │ │ [Chat input...]                    ││
+│  │ ☐ Telemetry Comparison  │ │ └────────────────────────────────────┘│
+│  │ ☐ Tire Strategy         │ │                                        │
+│  │ ☐ Weather               │ │ (Additional dashboards render below)   │
+│  │ ☐ Lap Analysis          │ │                                        │
+│  │ ☐ Race Control          │ │                                        │
+│  │ ☐ Qualifying Progress   │ │                                        │
+│  │                         │ │                                        │
+│  ├─────────────────────────┤ │                                        │
+│  │ ⚡ ACTIONS              │ │                                        │
+│  │ [🗑️ Clear All History]  │ │                                        │
+│  └─────────────────────────┘ │                                        │
+└───────────────────────────────┴────────────────────────────────────────┘
+```
+
+### Responsive Behavior
+
+- **Wide screens (>1920px)**: Up to 3 dashboards side-by-side
+- **Standard screens (1280-1920px)**: 2 dashboards side-by-side
+- **Narrow screens (<1280px)**: Single dashboard, stacked layout
+
+---
+
+## 🧭 Top Menu & Navigation
+
+### Horizontal Menu Structure
+
+```
+[🔴 LIVE / 🔵 SIMULATION]  │  [Dashboards ▼] [Configuration] [Help]
+```
+
+### Menu Options
+
+#### 1. **Mode Selector**
+- **Live Mode (🔴)**: Connects to real-time F1 data
+  - Auto-activates when live session detected (within 3-hour window)
+  - Shows connection status indicator
+  - Real-time data updates
+  
+- **Simulation Mode (🔵)**: Historical data replay
+  - Default mode on startup
+  - Requires session selection
+  - Provides playback controls
+
+#### 2. **Dashboards Menu**
+Opens dashboard selector panel showing:
+- ☑️ AI Assistant (currently visible)
+- ☐ Circuit & Positions (Coming Soon)
+- ☐ Telemetry Comparison (Coming Soon)
+- ☐ Tire Strategy (Coming Soon)
+- ☐ Weather (Coming Soon)
+- ☐ Lap Analysis (Coming Soon)
+- ☐ Race Control (Coming Soon)
+- ☐ Qualifying Progress (Coming Soon)
+
+**Layout Presets** (Future):
+- Race Day: AI + Circuit + Tire Strategy
+- Qualifying: AI + Qualifying Progress + Circuit
+- Practice: Practice Analysis + Telemetry + Weather
+- Custom: User-defined layouts
+
+#### 3. **Configuration Menu**
+Access to:
+- **API Keys** (loaded from .env)
+  - Anthropic Claude API Key
+  - Google Gemini API Key
+- **LLM Settings**
+  - Provider selection (Hybrid/Claude/Gemini)
+  - Temperature (0.0-1.0)
+  - Max tokens (1024-8192)
+- **Data Sources**
+  - FastF1 cache directory
+  - Vector store selection (ChromaDB/Pinecone)
+
+#### 4. **Help Menu**
+Provides:
+- Quick Start Guide
+- Agent descriptions
+- Keyboard shortcuts
+- About/Version information
+
+---
+
+## 📍 Session Management
+
+### Global Session Context
+
+All dashboards share a **single global session** containing:
+
+```python
+GlobalSession:
+  mode: SessionMode (LIVE | SIMULATION)
+  race_context: RaceContext
+    - year: int
+    - circuit_name: str
+    - circuit_key: str
+    - session_type: SessionType
+    - total_laps: int
+    - current_lap: int
+    - focused_driver: Optional[str]
+    - focused_team: Optional[str]
+  simulation_state:
+    - speed: float (1.0 - 3.0)
+    - paused: bool
+    - current_time: datetime
+  ui_state:
+    - visible_dashboards: List[str]
+    - active_dashboard: str
+```
+
+### Context Selection (Sidebar)
+
+**Session Context Panel**:
+```
+📍 SESSION CONTEXT
+─────────────────────
+Year:     [2023 ▼]
+Circuit:  [Bahrain International Circuit ▼]
+Session:  [Race ▼]
+
+🎯 FOCUS
+─────────────────────
+Driver:   [VER ▼]
+Team:     [Red Bull Racing ▼]
+```
+
+**Auto-Detection** (Live Mode):
+- On app startup, check current date/time
+- Query F1 calendar for active sessions
+- If session found within -3 hour window:
+  - Auto-switch to Live Mode
+  - Load session context automatically
+  - Display "🔴 Live session detected!" message
+
+**Manual Selection** (Simulation Mode):
+- Year: 2018-2025
+- Circuit: Full calendar (20+ circuits)
+- Session: FP1/FP2/FP3/Qualifying/Sprint/Race
+- Driver: All 20 drivers (2024 grid)
+- Team: All 10 teams
+
+---
+
+## 🎮 Simulation Controls
+
+### Control Panel (Simulation Mode Only)
+
+Appears below top menu when in Simulation Mode:
+
+```
+🎮 SIMULATION CONTROLS                               ⏮️ At Start
+─────────────────────────────────────────────────────────────────
+[▶️ Play] [⏮️ Restart]  [1x|1.25x|1.5x|1.75x|2x|2.5x|3x]  [⏪ -30s] [⏩ +30s]
+
+████████████████████████████████░░░░░░░░░░░ 65% Progress
+
+⏱️ Elapsed: 45m 23s    🕐 Current: 15:45:23    ⏳ Remaining: 24m 37s
+
+⚙️ Advanced Controls ▼
+  Jump to Lap: [18 ▼] [Jump]
+  Jump (minutes): [-10 ◀ 0 ▶ +10] [Apply]
+```
+
+### Playback Controls
+
+**Primary Actions**:
+- **▶️ Play / ⏸️ Pause**: Start/stop time progression
+- **⏮️ Restart**: Jump to session start (paused)
+- **Speed Selector**: 1.0x, 1.25x, 1.5x, 1.75x, 2.0x, 2.5x, 3.0x
+- **⏪ -30s / ⏩ +30s**: Quick time jumps
+
+**Advanced Controls**:
+- **Jump to Lap**: Direct lap number selection
+- **Time Jump**: Jump by minutes (positive or negative)
+
+**Progress Indicator**:
+- Visual progress bar (0-100%)
+- Elapsed time (from session start)
+- Current time (absolute timestamp)
+- Remaining time (to session end)
+
+### Time Progression Logic
+
+```
+Real Time          Simulation Time
+---------          ---------------
+1 second    x1.0 →    1 second
+1 second    x1.5 →    1.5 seconds
+1 second    x2.0 →    2 seconds
+1 second    x3.0 →    3 seconds (maximum)
+```
+
+**Auto-Pause Conditions**:
+- Simulation reaches session end
+- User clicks Pause button
+- Critical error occurs
 
 ---
 

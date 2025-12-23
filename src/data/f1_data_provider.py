@@ -7,7 +7,7 @@ sources (FastF1 for historical analysis and OpenF1 for real-time).
 
 import logging
 import os
-from typing import Optional
+from typing import Optional, Union, TYPE_CHECKING
 from abc import ABC, abstractmethod
 
 import pandas as pd
@@ -15,6 +15,10 @@ import fastf1
 
 from .cache_manager import CacheManager
 from .cache_config import CacheMode, DataType
+from .openf1_data_provider import OpenF1DataProvider
+
+if TYPE_CHECKING:
+    from typing import Type
 
 logger = logging.getLogger(__name__)
 
@@ -490,6 +494,9 @@ class UnifiedF1DataProvider:
     Uses FastF1 for historical analysis and OpenF1 for real-time.
     """
 
+    fastf1_provider: FastF1Provider
+    openf1_provider: OpenF1DataProvider
+
     def __init__(
         self,
         use_cache: bool = True,
@@ -510,9 +517,7 @@ class UnifiedF1DataProvider:
             cache_dir=cache_dir,
             use_smart_cache=use_smart_cache
         )
-        self.openf1_provider = OpenF1Provider(
-            api_key=openf1_api_key
-        )
+        self.openf1_provider = OpenF1DataProvider()
         logger.info("UnifiedF1DataProvider initialized")
 
     def get_race_results(
@@ -521,12 +526,9 @@ class UnifiedF1DataProvider:
         round_number: int,
         use_realtime: bool = False
     ) -> pd.DataFrame:
-        """Get race results."""
-        provider = (
-            self.openf1_provider if use_realtime
-            else self.fastf1_provider
-        )
-        return provider.get_race_results(year, round_number)
+        """Get race results (uses FastF1)."""
+        # OpenF1DataProvider doesn't have this method, use FastF1
+        return self.fastf1_provider.get_race_results(year, round_number)
 
     def get_telemetry(
         self,
@@ -535,12 +537,9 @@ class UnifiedF1DataProvider:
         driver: str,
         use_realtime: bool = False
     ) -> pd.DataFrame:
-        """Get telemetry data."""
-        provider = (
-            self.openf1_provider if use_realtime
-            else self.fastf1_provider
-        )
-        return provider.get_telemetry(year, round_number, driver)
+        """Get telemetry data (uses FastF1)."""
+        # OpenF1DataProvider doesn't have this method, use FastF1
+        return self.fastf1_provider.get_telemetry(year, round_number, driver)
 
     def get_qualifying_results(
         self,
@@ -548,12 +547,9 @@ class UnifiedF1DataProvider:
         round_number: int,
         use_realtime: bool = False
     ) -> pd.DataFrame:
-        """Get qualifying results."""
-        provider = (
-            self.openf1_provider if use_realtime
-            else self.fastf1_provider
-        )
-        return provider.get_qualifying_results(year, round_number)
+        """Get qualifying results (uses FastF1)."""
+        # OpenF1DataProvider doesn't have this method, use FastF1
+        return self.fastf1_provider.get_qualifying_results(year, round_number)
 
     def get_lap_times(
         self,

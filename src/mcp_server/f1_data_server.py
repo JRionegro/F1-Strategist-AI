@@ -63,6 +63,12 @@ class F1DataMCPServer:
                 self._create_get_driver_info_tool(),
                 self._create_get_track_status_tool(),
                 self._create_get_race_control_tool(),
+                self._create_get_positions_tool(),
+                self._create_get_intervals_tool(),
+                self._create_get_location_tool(),
+                self._create_get_team_radio_tool(),
+                self._create_get_meetings_tool(),
+                self._create_get_overtakes_tool(),
             ]
 
         @self.server.call_tool()
@@ -103,6 +109,24 @@ class F1DataMCPServer:
                     ),
                     "get_race_control_messages": (
                         self.handle_get_race_control
+                    ),
+                    "get_positions": (
+                        self.handle_get_positions
+                    ),
+                    "get_intervals": (
+                        self.handle_get_intervals
+                    ),
+                    "get_location": (
+                        self.handle_get_location
+                    ),
+                    "get_team_radio": (
+                        self.handle_get_team_radio
+                    ),
+                    "get_meetings": (
+                        self.handle_get_meetings
+                    ),
+                    "get_overtakes": (
+                        self.handle_get_overtakes
                     ),
                 }
 
@@ -791,6 +815,269 @@ class F1DataMCPServer:
             return [
                 TextContent(type="text", text=f"Error: {str(e)}")
             ]
+
+    async def handle_get_positions(
+        self, arguments: Dict[str, Any]
+    ) -> Sequence[TextContent]:
+        """Handle get_positions tool call (OpenF1)."""
+        try:
+            positions = self.provider.openf1_provider.get_positions(
+                session_key=arguments["session_key"],
+                driver_number=arguments.get("driver_number")
+            )
+            data = self._dataframe_to_dict(positions)
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(data, indent=2)
+                )
+            ]
+        except Exception as e:
+            return [
+                TextContent(type="text", text=f"Error: {str(e)}")
+            ]
+
+    async def handle_get_intervals(
+        self, arguments: Dict[str, Any]
+    ) -> Sequence[TextContent]:
+        """Handle get_intervals tool call (OpenF1)."""
+        try:
+            intervals = self.provider.openf1_provider.get_intervals(
+                session_key=arguments["session_key"],
+                driver_number=arguments.get("driver_number")
+            )
+            data = self._dataframe_to_dict(intervals)
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(data, indent=2)
+                )
+            ]
+        except Exception as e:
+            return [
+                TextContent(type="text", text=f"Error: {str(e)}")
+            ]
+
+    async def handle_get_location(
+        self, arguments: Dict[str, Any]
+    ) -> Sequence[TextContent]:
+        """Handle get_location tool call (OpenF1)."""
+        try:
+            location = self.provider.openf1_provider.get_location(
+                session_key=arguments["session_key"],
+                driver_number=arguments.get("driver_number")
+            )
+            data = self._dataframe_to_dict(location)
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(data, indent=2)
+                )
+            ]
+        except Exception as e:
+            return [
+                TextContent(type="text", text=f"Error: {str(e)}")
+            ]
+
+    async def handle_get_team_radio(
+        self, arguments: Dict[str, Any]
+    ) -> Sequence[TextContent]:
+        """Handle get_team_radio tool call (OpenF1)."""
+        try:
+            radio = self.provider.openf1_provider.get_team_radio(
+                session_key=arguments["session_key"],
+                driver_number=arguments.get("driver_number")
+            )
+            data = self._dataframe_to_dict(radio)
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(data, indent=2)
+                )
+            ]
+        except Exception as e:
+            return [
+                TextContent(type="text", text=f"Error: {str(e)}")
+            ]
+
+    async def handle_get_meetings(
+        self, arguments: Dict[str, Any]
+    ) -> Sequence[TextContent]:
+        """Handle get_meetings tool call (OpenF1)."""
+        try:
+            meetings = self.provider.openf1_provider.get_meetings(
+                year=arguments.get("year"),
+                country_name=arguments.get("country")
+            )
+            data = self._dataframe_to_dict(meetings)
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(data, indent=2)
+                )
+            ]
+        except Exception as e:
+            return [
+                TextContent(type="text", text=f"Error: {str(e)}")
+            ]
+
+    async def handle_get_overtakes(
+        self, arguments: Dict[str, Any]
+    ) -> Sequence[TextContent]:
+        """Handle get_overtakes tool call (OpenF1)."""
+        try:
+            overtakes = self.provider.openf1_provider.get_overtakes(
+                session_key=arguments["session_key"],
+                driver_number=arguments.get("driver_number")
+            )
+            data = self._dataframe_to_dict(overtakes)
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(data, indent=2)
+                )
+            ]
+        except Exception as e:
+            return [
+                TextContent(type="text", text=f"Error: {str(e)}")
+            ]
+
+    def _create_get_positions_tool(self) -> Tool:
+        """Create tool for getting real positions (OpenF1)."""
+        return Tool(
+            name="get_positions",
+            description=(
+                "Get real race positions from OpenF1 /position endpoint."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_key": {
+                        "type": "integer",
+                        "description": "OpenF1 session identifier"
+                    },
+                    "driver_number": {
+                        "type": "integer",
+                        "description": "Driver number (optional)"
+                    }
+                },
+                "required": ["session_key"]
+            }
+        )
+
+    def _create_get_intervals_tool(self) -> Tool:
+        """Create tool for getting time intervals (OpenF1)."""
+        return Tool(
+            name="get_intervals",
+            description=(
+                "Get time gaps between drivers from OpenF1 /intervals."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_key": {
+                        "type": "integer",
+                        "description": "OpenF1 session identifier"
+                    },
+                    "driver_number": {
+                        "type": "integer",
+                        "description": "Driver number (optional)"
+                    }
+                },
+                "required": ["session_key"]
+            }
+        )
+
+    def _create_get_location_tool(self) -> Tool:
+        """Create tool for getting GPS location (OpenF1)."""
+        return Tool(
+            name="get_location",
+            description=(
+                "Get driver GPS coordinates from OpenF1 /location."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_key": {
+                        "type": "integer",
+                        "description": "OpenF1 session identifier"
+                    },
+                    "driver_number": {
+                        "type": "integer",
+                        "description": "Driver number (optional)"
+                    }
+                },
+                "required": ["session_key"]
+            }
+        )
+
+    def _create_get_team_radio_tool(self) -> Tool:
+        """Create tool for getting team radio (OpenF1)."""
+        return Tool(
+            name="get_team_radio",
+            description=(
+                "Get team radio messages from OpenF1 /team_radio."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_key": {
+                        "type": "integer",
+                        "description": "OpenF1 session identifier"
+                    },
+                    "driver_number": {
+                        "type": "integer",
+                        "description": "Driver number (optional)"
+                    }
+                },
+                "required": ["session_key"]
+            }
+        )
+
+    def _create_get_meetings_tool(self) -> Tool:
+        """Create tool for getting race meetings (OpenF1)."""
+        return Tool(
+            name="get_meetings",
+            description=(
+                "Get race weekend info from OpenF1 /meetings."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "year": {
+                        "type": "integer",
+                        "description": "Season year (optional)"
+                    },
+                    "country": {
+                        "type": "string",
+                        "description": "Country name (optional)"
+                    }
+                }
+            }
+        )
+
+    def _create_get_overtakes_tool(self) -> Tool:
+        """Create tool for getting overtakes (OpenF1)."""
+        return Tool(
+            name="get_overtakes",
+            description=(
+                "Get overtaking maneuvers from OpenF1 /overtakes."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_key": {
+                        "type": "integer",
+                        "description": "OpenF1 session identifier"
+                    },
+                    "driver_number": {
+                        "type": "integer",
+                        "description": "Driver number (optional)"
+                    }
+                },
+                "required": ["session_key"]
+            }
+        )
 
     def _dataframe_to_dict(
         self, df: pd.DataFrame

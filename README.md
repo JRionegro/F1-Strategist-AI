@@ -1,16 +1,16 @@
 # F1 Strategist AI
 
-An AI-powered Formula 1 race strategy assistant with hybrid caching system for historical analysis and real-time monitoring.
+An AI-powered Formula 1 race strategy assistant with unified OpenF1 data source for both historical simulations and real-time monitoring.
 
 ## 🎯 Project Status
 
 ### ✅ Phase 1-2: Foundation & Data Layer (COMPLETED)
 
-- **MCP Server**: 13 operational tools (100% FastF1/OpenF1 coverage)
+- **Data Source**: Unified OpenF1 API (2023+ coverage, historical + live)
 - **Cache System**: Hybrid system (historical + live) with Parquet
 - **Monitoring**: LangSmith + LocalTokenTracker fallback
-- **Data Provider**: Complete integration with FastF1 and OpenF1
-- **Tests**: 81 tests passing (43 MCP + 14 cache + 12 monitoring + 12 data provider)
+- **Data Provider**: OpenF1 with FastF1-compatible adapter layer
+- **Migration**: Completed from FastF1 to OpenF1 (Dec 2025)
 
 ### ✅ Phase 2D: Architecture & Tech Stack (FINALIZED)
 
@@ -52,14 +52,20 @@ pip install -r requirements.txt
 ### Basic Usage
 
 ```python
-from src.data import UnifiedF1DataProvider
+from src.data import OpenF1DataProvider
+from src.data.openf1_adapter import get_session
 
-# Initialize with smart cache
-provider = UnifiedF1DataProvider(use_smart_cache=True)
+# Initialize OpenF1 provider
+provider = OpenF1DataProvider()
 
-# Get results (fast with cache)
-results = provider.get_race_results(2024, 1)  # Bahrain
-telemetry = provider.get_telemetry(2024, 1, "VER")
+# Get session (FastF1-compatible interface)
+session = get_session(2024, 1, "R", provider)  # Bahrain Race
+session.load()
+
+# Access data
+laps = session.laps
+results = session.results
+weather = session.weather_data
 ```
 
 ### Utility Scripts
@@ -79,25 +85,27 @@ python scripts/clean_cache.py --types telemetry
 
 ## 📊 Core Features
 
-### Hybrid Cache System
+### Unified Data Architecture
 
-- **Historical Mode**: Datos permanentes con Parquet optimizado
-- **Live Mode**: Sesiones en tiempo real con OpenF1
-- **Smart Retention**: Políticas automáticas por tipo de dato
-- **Performance**: 100ms vs 10s (FastF1 directo)
+- **Single API**: OpenF1 for both historical (2023+) and live data
+- **No Translation**: Eliminates FastF1/OpenF1 format conflicts
+- **Native Timestamps**: Real datetime instead of Timedelta issues
+- **Streaming Ready**: Built for real-time race monitoring
+- **Performance**: Direct API access with intelligent caching
 
-### MCP Tools (13 Available)
+### OpenF1 Data Endpoints
 
-1. `get_race_results` - Resultados oficiales
-2. `get_qualifying_results` - Clasificación
-3. `get_telemetry` - Telemetría detallada
-4. `get_lap_times` - Tiempos por vuelta
-5. `get_pit_stops` - Análisis de boxes
-6. `get_weather` - Condiciones meteorológicas
-7. `get_tire_strategy` - Estrategia de neumáticos
-8. `get_practice_results` - Entrenamientos libres
-9. `get_sprint_results` - Carreras sprint
-10. `get_driver_info` - Información de pilotos
+1. `get_laps` - Lap times and metadata
+2. `get_drivers` - Driver information
+3. `get_positions` - Real-time position updates
+4. `get_stints` - Tire strategy and stints
+5. `get_pit_stops` - Pit stop analysis
+6. `get_weather` - Weather conditions
+7. `get_race_control_messages` - Flags, SC, VSC
+8. `get_session` - Session metadata
+9. `stream_live_data` - Real-time streaming (future)
+
+**Coverage**: All F1 seasons from 2023 onwards
 11. `get_track_status` - Estados de pista
 12. `get_race_control_messages` - Mensajes de dirección
 13. `get_season_schedule` - Calendario de temporada
