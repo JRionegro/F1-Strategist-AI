@@ -48,29 +48,75 @@ class OpenF1DataProvider:
                 sleep(self.rate_limit_delay - elapsed)
         self._last_request_time = datetime.now()
 
-    def _request(self, endpoint: str, params: Optional[Dict] = None) -> List[Dict]:
+    def _request(
+        self,
+        endpoint: str,
+        params: Optional[Dict] = None,
+        max_retries: int = 3,
+        base_delay: float = 2.0
+    ) -> List[Dict]:
         """
-        Make API request with rate limiting and error handling.
+        Make API request with rate limiting and exponential backoff retry.
         
         Args:
             endpoint: API endpoint (e.g., 'sessions', 'laps')
             params: Query parameters
+            max_retries: Maximum number of retry attempts
+            base_delay: Base delay in seconds for exponential backoff
             
         Returns:
             List of JSON objects from API response
         """
-        self._rate_limit()
-        
         url = f"{self.BASE_URL}/{endpoint}"
-        try:
-            response = requests.get(url, params=params, timeout=30)
-            response.raise_for_status()
-            data = response.json()
-            logger.debug(f"OpenF1 API: GET {endpoint} -> {len(data)} records")
-            return data
-        except requests.RequestException as e:
-            logger.error(f"OpenF1 API error on {endpoint}: {e}")
-            return []
+        
+        for attempt in range(max_retries + 1):
+            self._rate_limit()
+            
+            try:
+                response = requests.get(url, params=params, timeout=30)
+                response.raise_for_status()
+                data = response.json()
+                logger.debug(
+                    f"OpenF1 API: GET {endpoint} -> {len(data)} records"
+                )
+                return data
+                
+            except requests.HTTPError as e:
+                if e.response.status_code == 429:
+                    if attempt < max_retries:
+                        wait_time = base_delay * (2 ** attempt)
+                        logger.warning(
+                            f"Rate limit hit on {endpoint} "
+                            f"(attempt {attempt + 1}/{max_retries + 1}). "
+                            f"Waiting {wait_time}s before retry..."
+                        )
+                        sleep(wait_time)
+                        continue
+                    else:
+                        logger.error(
+                            f"Rate limit exceeded on {endpoint} "
+                            f"after {max_retries} retries"
+                        )
+                        raise
+                else:
+                    logger.error(f"OpenF1 API HTTP error on {endpoint}: {e}")
+                    raise
+                    
+            except requests.RequestException as e:
+                logger.error(f"OpenF1 API error on {endpoint}: {e}")
+                if attempt < max_retries:
+                    wait_time = base_delay * (2 ** attempt)
+                    logger.info(
+                        f"Retrying {endpoint} "
+                        f"(attempt {attempt + 1}/{max_retries + 1}) "
+                        f"after {wait_time}s..."
+                    )
+                    sleep(wait_time)
+                    continue
+                else:
+                    raise
+        
+        return []
 
     def get_session(
         self, 

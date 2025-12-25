@@ -33,9 +33,6 @@ from src.session.live_detector import check_for_live_session
 # Dash dashboards
 from src.dashboards_dash.ai_assistant_dashboard import AIAssistantDashboard
 from src.dashboards_dash.race_overview_dashboard import RaceOverviewDashboard
-from src.dashboards_dash.live_leaderboard_dashboard import (
-    LiveLeaderboardDashboard
-)
 
 # Configure logging
 logging.basicConfig(
@@ -47,8 +44,8 @@ logger = logging.getLogger(__name__)
 # Initialize OpenF1 provider (replaces FastF1)
 openf1_provider = OpenF1DataProvider()
 
-# Initialize Live Leaderboard Dashboard
-leaderboard_dashboard = LiveLeaderboardDashboard(openf1_provider)
+# Initialize Race Overview Dashboard
+race_overview_dashboard = RaceOverviewDashboard(openf1_provider)
 
 # Initialize Dash app with F1 theme
 app = Dash(
@@ -213,7 +210,7 @@ def create_sidebar():
             # Context selector (collapsed)
             dbc.Accordion([
                 dbc.AccordionItem([
-                    dbc.Label("**Year**", className="fw-bold"),
+                    dbc.Label("Year", className="fw-bold"),
                     dcc.Dropdown(
                         id='year-selector',
                         options=[
@@ -225,7 +222,7 @@ def create_sidebar():
                         clearable=False
                     ),
                     
-                    dbc.Label("**Circuit**", className="fw-bold"),
+                    dbc.Label("Circuit", className="fw-bold"),
                     dcc.Dropdown(
                         id='circuit-selector',
                         options=[],  # Will be populated by callback
@@ -234,7 +231,7 @@ def create_sidebar():
                         clearable=False
                     ),
                     
-                    dbc.Label("**Session**", className="fw-bold"),
+                    dbc.Label("Session", className="fw-bold"),
                     dcc.Dropdown(
                         id='session-selector',
                         options=[],  # Will be populated by callback
@@ -243,7 +240,7 @@ def create_sidebar():
                         clearable=False
                     ),
                     
-                    dbc.Label("**Driver**", className="fw-bold"),
+                    dbc.Label("Driver", className="fw-bold"),
                     html.Div(id='driver-dropdown-container', children=[
                         dcc.Loading(
                             dcc.Dropdown(
@@ -258,29 +255,32 @@ def create_sidebar():
                             color="#e10600"
                         )
                     ])
-                ], title="📍 Context", className="mb-3")
+                ], title="🗺️ Context", className="mb-3")
             ], start_collapsed=True),
             
             html.Hr(),
             
-            # Dashboard selector
-            html.H6("📊 Dashboards", className="mb-2"),
-            dbc.Checklist(
-                id="dashboard-selector",
-                options=[
-                    {"label": " Race Overview", "value": "race_overview"},
-                    {"label": " Live Leaderboard", "value": "live_leaderboard"},
-                    {"label": " Telemetry", "value": "telemetry"},
-                    {"label": " Tire Strategy", "value": "tires"},
-                    {"label": " Weather", "value": "weather"},
-                    {"label": " Lap Analysis", "value": "laps"},
-                    {"label": " Race Control", "value": "control"},
-                    {"label": " Qualifying", "value": "qualifying"},
-                    {"label": " AI Assistant", "value": "ai"}
-                ],
-                value=["race_overview", "ai"],
-                className="mb-3"
-            ),
+            # Dashboard selector (collapsed)
+            dbc.Accordion([
+                dbc.AccordionItem([
+                    dbc.Checklist(
+                        id="dashboard-selector",
+                        options=[
+                            {"label": " AI Assistant", "value": "ai"},
+                            {"label": " Race Overview", "value": "race_overview"},
+                            {"label": " Weather", "value": "weather"},
+                            {"label": " Telemetry", "value": "telemetry"},
+                            {"label": " Race Control", "value": "control"},
+                            # Phase 2 Dashboards (Coming Soon)
+                            # {"label": " Tire Strategy", "value": "tires"},
+                            # {"label": " Lap Analysis", "value": "laps"},
+                            # {"label": " Qualifying", "value": "qualifying"},
+                        ],
+                        value=["ai", "race_overview"],
+                        className="mb-2"
+                    )
+                ], title="📊 Dashboards", className="mb-3")
+            ], start_collapsed=False),
             
             html.Hr(),
             
@@ -451,15 +451,6 @@ def create_sidebar():
                 color="info",
                 outline=True,
                 size="sm",
-                className="w-100 mb-2"
-            ),
-            
-            dbc.Button(
-                [html.I(className="bi bi-trash me-1"), "Clear History"],
-                id="clear-history-btn",
-                color="danger",
-                outline=True,
-                size="sm",
                 className="w-100"
             )
             
@@ -525,6 +516,7 @@ app.layout = dbc.Container([
     }),
     dcc.Store(id='cache-buster-store', data={'timestamp': 0}),
     dcc.Store(id='sidebar-visible-store', data=True),
+    dcc.Store(id='simulation-time-store', data={'time': 0.0, 'timestamp': 0}),
     
     # Help Modal
     dbc.Modal([
@@ -570,6 +562,76 @@ app.layout = dbc.Container([
 # ============================================================================
 # CALLBACKS
 # ============================================================================
+
+# Callback to enable/disable Live mode based on live session availability
+@callback(
+    Output('mode-selector', 'options'),
+    Input('mode-selector', 'value'),  # Dummy input to trigger on load
+    prevent_initial_call=False
+)
+def update_live_mode_availability(_):
+    """Check if live session is available and enable/disable Live mode."""
+    live_session = check_for_live_session()
+    
+    if live_session:
+        # Live session available - enable both modes
+        return [
+            {"label": " 🏁 Live", "value": "live", "disabled": False},
+            {"label": " ⏯️ Simulation", "value": "sim", "disabled": False}
+        ]
+    else:
+        # No live session - disable Live mode
+        return [
+            {"label": " 🏁 Live (No race now)", "value": "live", "disabled": True},
+            {"label": " ⏯️ Simulation", "value": "sim", "disabled": False}
+        ]
+
+
+# Callback to lock/unlock Context controls based on mode
+@callback(
+    Output('year-selector', 'disabled'),
+    Output('circuit-selector', 'disabled'),
+    Output('session-selector', 'disabled'),
+    Output('year-selector', 'value', allow_duplicate=True),
+    Output('circuit-selector', 'value', allow_duplicate=True),
+    Output('session-selector', 'value', allow_duplicate=True),
+    Input('mode-selector', 'value'),
+    prevent_initial_call=True
+)
+def handle_mode_change(mode):
+    """Lock Context controls in Live mode and auto-load live session data."""
+    if mode == "live":
+        # Get live session information
+        live_session = check_for_live_session()
+        
+        if live_session:
+            # Lock controls and set values from live session
+            year = live_session.year
+            circuit_key = live_session.circuit_key
+            
+            # Map SessionType enum to dropdown value
+            session_type_map = {
+                'Practice 1': 'P1',
+                'Practice 2': 'P2',
+                'Practice 3': 'P3',
+                'Qualifying': 'Q',
+                'Sprint': 'S',
+                'Sprint Qualifying': 'SQ',
+                'Race': 'R'
+            }
+            session_value = session_type_map.get(live_session.session_type.value, 'R')
+            
+            logger.info(f"Live mode activated: year={year}, circuit={circuit_key}, session={session_value}")
+            
+            return True, True, True, year, circuit_key, session_value
+        else:
+            # No live session, keep simulation mode
+            logger.warning("Live mode selected but no live session available")
+            return False, False, False, 2025, None, None
+    else:
+        # Simulation mode - unlock controls
+        return False, False, False, 2025, None, None
+
 
 @callback(
     Output('circuit-selector', 'options'),
@@ -849,8 +911,30 @@ def update_drivers(session, circuit_key, year):
                     start_time = session_date + timedelta(seconds=float(first_lap_end))
                     end_time = session_date + timedelta(seconds=float(last_lap_end))
                     
-                    # Create controller - simulation starts at first lap
-                    simulation_controller = SimulationController(start_time, end_time)
+                    # Prepare lap data with absolute timestamps for accurate lap tracking
+                    lap_timing_data = None
+                    if 'LapStartTime' in laps.columns and 'LapNumber' in laps.columns and 'DriverNumber' in laps.columns:
+                        # Use LEADER's laps (DriverNumber=1) for race lap count
+                        leader_laps = laps[laps['DriverNumber'] == 1].copy()
+                        if not leader_laps.empty:
+                            # Convert LapStartTime (timedelta from session start) to absolute datetime
+                            lap_timing_data = leader_laps[['LapNumber', 'LapStartTime', 'DriverNumber']].copy()
+                            # Drop rows with NaT LapStartTime
+                            lap_timing_data = lap_timing_data.dropna(subset=['LapStartTime'])
+                            # LapStartTime is a timedelta from session start, convert to absolute datetime
+                            lap_timing_data['LapStartTime'] = session_date + lap_timing_data['LapStartTime']
+                            logger.info(f"Prepared lap timing data from LEADER: {len(lap_timing_data)} laps with absolute timestamps")
+                            logger.info(f"First lap timestamp: {lap_timing_data['LapStartTime'].min()}")
+                            logger.info(f"Last lap timestamp: {lap_timing_data['LapStartTime'].max()}")
+                        else:
+                            logger.warning("No laps found for leader (DriverNumber=1)")
+                    
+                    # Create controller with lap data for EXACT lap calculation
+                    simulation_controller = SimulationController(
+                        start_time,
+                        end_time,
+                        lap_data=lap_timing_data
+                    )
                     simulation_controller.pause()  # Start paused
                     
                     logger.info(
@@ -939,10 +1023,16 @@ def update_drivers(session, circuit_key, year):
     Output('dashboard-container', 'children'),
     Input('dashboard-selector', 'value'),
     Input('session-store', 'data'),
+    Input('simulation-time-store', 'data'),  # Real-time updates
     State('driver-selector', 'value'),
     prevent_initial_call=False
 )
-def update_dashboards(selected_dashboards, session_data, focused_driver):
+def update_dashboards(
+    selected_dashboards,
+    session_data,
+    simulation_time_data,
+    focused_driver
+):
     """Update visible dashboards based on selection."""
     if not selected_dashboards:
         return html.Div([
@@ -1007,14 +1097,39 @@ def update_dashboards(selected_dashboards, session_data, focused_driver):
                     )
                 else:
                     logger.info("Rendering race overview dashboard...")
-                    overview_content = RaceOverviewDashboard.render(
-                        session_obj=current_session_obj,
-                        focused_driver=focused_driver if focused_driver != 'none' else None
+                    # Get session_key from loaded session
+                    session_key = None
+                    simulation_time = None
+                    
+                    if current_session_obj and hasattr(current_session_obj, 'session_key'):
+                        session_key = current_session_obj.session_key
+                    
+                    # Get simulation time from callback parameter or controller
+                    if simulation_time_data and 'time' in simulation_time_data:
+                        simulation_time = simulation_time_data.get('time', 0.0)
+                        logger.info(f"Using simulation time from store: {simulation_time:.1f}s")
+                    elif simulation_controller is not None:
+                        try:
+                            simulation_time = simulation_controller.get_elapsed_seconds()
+                            logger.info(f"Using simulation time from controller: {simulation_time:.1f}s")
+                        except Exception as e:
+                            logger.warning(f"Could not get simulation time: {e}")
+                            simulation_time = 0.0
+                    
+                    # Get session start time from controller
+                    session_start_time = None
+                    if simulation_controller is not None:
+                        session_start_time = pd.Timestamp(simulation_controller.start_time)
+                    
+                    overview_content = race_overview_dashboard.render(
+                        session_key=session_key,
+                        simulation_time=simulation_time,
+                        session_start_time=session_start_time
                     )
                     dashboards.append(
                         dbc.Card([
-                            dbc.CardHeader(html.H5("🏁 Race Overview - Leaderboard & Circuit Map")),
-                            dbc.CardBody([overview_content])
+                            dbc.CardHeader(html.H5("🏁 Race Overview - Live Leaderboard")),
+                            dbc.CardBody(children=[overview_content])
                         ], className="mb-3")
                     )
                     logger.info("Race overview dashboard rendered successfully")
@@ -1026,27 +1141,6 @@ def update_dashboards(selected_dashboards, session_data, focused_driver):
                         dbc.CardHeader(html.H5("🏁 Race Overview - Leaderboard & Circuit Map")),
                         dbc.CardBody([
                             html.P(f"Error loading race overview: {str(e)}", className="text-danger")
-                        ])
-                    ], className="mb-3")
-                )
-        
-        elif dashboard_id == "live_leaderboard":
-            # Live Leaderboard Dashboard (OpenF1 real-time data)
-            try:
-                logger.info("Rendering live leaderboard dashboard...")
-                leaderboard_content = leaderboard_dashboard.create_layout()
-                dashboards.append(leaderboard_content)
-                logger.info("Live leaderboard dashboard rendered successfully")
-            except Exception as e:
-                logger.error(f"Error creating live leaderboard dashboard: {e}", exc_info=True)
-                dashboards.append(
-                    dbc.Card([
-                        dbc.CardHeader(html.H5("🏎️ Live Leaderboard")),
-                        dbc.CardBody([
-                            html.P(
-                                f"Error loading live leaderboard: {str(e)}",
-                                className="text-danger"
-                            )
                         ])
                     ], className="mb-3")
                 )
@@ -1081,7 +1175,29 @@ def update_dashboards(selected_dashboards, session_data, focused_driver):
                 ], className="mb-3")
             )
     
-    return dashboards
+    # Layout dashboards in 2 columns if multiple selected, otherwise full width
+    if len(dashboards) == 1:
+        return dashboards[0]
+    else:
+        # Create 2-column layout (65% / 35%)
+        dashboard_rows = []
+        for i in range(0, len(dashboards), 2):
+            if i + 1 < len(dashboards):
+                # Two dashboards in this row
+                dashboard_rows.append(
+                    dbc.Row([
+                        dbc.Col(dashboards[i], width=8, className="mb-3"),
+                        dbc.Col(dashboards[i+1], width=4, className="mb-3")
+                    ], className="g-2")
+                )
+            else:
+                # Only one dashboard in this row
+                dashboard_rows.append(
+                    dbc.Row([
+                        dbc.Col(dashboards[i], width=12, className="mb-3")
+                    ], className="g-2")
+                )
+        return html.Div(dashboard_rows)
 
 
 # Callback: Hide/Show Playback based on Mode
@@ -1176,22 +1292,8 @@ def toggle_play_pause(n_clicks):
     if simulation_controller is None:
         return "▶️", "success", True, "Play simulation"
     
-    # If starting to play for the first time, calculate offset from laps data
-    if not simulation_controller.is_playing and current_session_obj is not None:
-        laps = current_session_obj.laps
-        if 'LapStartTime' in laps.columns and not laps.empty:
-            # Get minimum LapStartTime to use as offset
-            laps_with_time = laps[pd.notna(laps['LapStartTime'])]
-            if not laps_with_time.empty:
-                min_lap_start = laps_with_time['LapStartTime'].min().total_seconds()
-                simulation_controller.play(start_from_seconds=min_lap_start)
-                is_playing = True
-            else:
-                is_playing = simulation_controller.toggle_play_pause()
-        else:
-            is_playing = simulation_controller.toggle_play_pause()
-    else:
-        is_playing = simulation_controller.toggle_play_pause()
+    # Toggle play/pause state (simulation always starts from 0)
+    is_playing = simulation_controller.toggle_play_pause()
     
     if is_playing:
         return "⏸️", "warning", False, "Pause simulation"  # Enable interval, change tooltip
@@ -1201,10 +1303,7 @@ def toggle_play_pause(n_clicks):
 
 # Callback: Restart simulation
 @callback(
-    Output('play-btn', 'children', allow_duplicate=True),
-    Output('play-btn', 'color', allow_duplicate=True),
-    Output('simulation-interval', 'disabled', allow_duplicate=True),
-    Output('play-btn-tooltip', 'children', allow_duplicate=True),
+    Output('restart-btn', 'n_clicks'),
     Input('restart-btn', 'n_clicks'),
     prevent_initial_call=True
 )
@@ -1215,13 +1314,12 @@ def restart_simulation(n_clicks):
     if simulation_controller:
         simulation_controller.restart()
     
-    return "▶️", "success", True, "Play simulation"  # Stop, reset, and reset tooltip
+    raise PreventUpdate  # Don't update anything, just execute the action
 
 
 # Callback: Change simulation speed
 @callback(
     Output('speed-slider', 'value'),
-    Output('simulation-progress', 'children', allow_duplicate=True),
     Input('speed-slider', 'value'),
     prevent_initial_call=True
 )
@@ -1233,27 +1331,17 @@ def change_speed(speed):
         try:
             simulation_controller.set_speed(float(speed))
             logger.info(f"Simulation speed changed to {speed}x")
-            
-            # Show immediate feedback in progress display
-            progress = simulation_controller.get_progress()
-            remaining = simulation_controller.get_remaining_time()
-            elapsed = simulation_controller.get_elapsed_time()
-            elapsed_seconds = elapsed.total_seconds()
-            current_lap = min(int(elapsed_seconds / 90) + 1, 57)
-            remaining_minutes = int(remaining.total_seconds() // 60)
-            remaining_seconds = int(remaining.total_seconds() % 60)
-            
-            return speed, f"⏱️ Lap {current_lap}/57 | ⏳ {remaining_minutes}m {remaining_seconds}s left | 🚀 {speed}x"
+            return speed
         except ValueError as e:
             logger.error(f"Invalid speed value: {e}")
-            return 1.0, "⚠️ Invalid speed"
+            return 1.0
     
-    return speed, "⏱️ Not started"
+    return speed
 
 
 # Callback: Jump backward (previous lap)
 @callback(
-    Output('simulation-progress', 'children', allow_duplicate=True),
+    Output('back-btn', 'n_clicks'),
     Input('back-btn', 'n_clicks'),
     prevent_initial_call=True
 )
@@ -1264,19 +1352,13 @@ def jump_backward(n_clicks):
     if simulation_controller:
         simulation_controller.jump_backward(90)  # ~90 seconds per lap
         logger.info("Jumped to previous lap")
-        
-        # Return updated progress
-        progress = simulation_controller.get_progress()
-        remaining = simulation_controller.get_remaining_time()
-        current_lap = int(progress * 57)  # Approximate lap count
-        return f"⏱️ Lap {current_lap}/57 | ⏳ {int(remaining.total_seconds() // 60)}m left"
     
-    return "⏱️ Not started"
+    raise PreventUpdate
 
 
 # Callback: Jump forward (next lap)
 @callback(
-    Output('simulation-progress', 'children', allow_duplicate=True),
+    Output('forward-btn', 'n_clicks'),
     Input('forward-btn', 'n_clicks'),
     prevent_initial_call=True
 )
@@ -1287,49 +1369,59 @@ def jump_forward(n_clicks):
     if simulation_controller:
         simulation_controller.jump_forward(90)  # ~90 seconds per lap
         logger.info("Jumped to next lap")
-        
-        # Return updated progress
-        progress = simulation_controller.get_progress()
-        remaining = simulation_controller.get_remaining_time()
-        current_lap = int(progress * 57)  # Approximate lap count
-        return f"⏱️ Lap {current_lap}/57 | ⏳ {int(remaining.total_seconds() // 60)}m left"
     
-    return "⏱️ Not started"
+    raise PreventUpdate
 
 
 # Callback: Update simulation progress display every second
 @callback(
-    Output('simulation-progress', 'children', allow_duplicate=True),
+    Output('simulation-progress', 'children'),
     Input('simulation-interval', 'n_intervals'),
-    prevent_initial_call=True
+    prevent_initial_call=False
 )
 def update_simulation_progress(n_intervals):
     """Update the simulation progress display in real-time."""
     global simulation_controller
     
+    logger.info(f"update_simulation_progress called: n_intervals={n_intervals}, controller={'present' if simulation_controller else 'None'}")
+    
     if simulation_controller is None:
         return "⏱️ Not started"
     
-    # Update simulation time
-    simulation_controller.update()
-    
-    # Get progress information
-    progress = simulation_controller.get_progress()
-    remaining = simulation_controller.get_remaining_time()
-    elapsed = simulation_controller.get_elapsed_time()
-    
-    # Calculate current lap (assuming ~90s per lap, 57 laps total)
-    elapsed_seconds = elapsed.total_seconds()
-    current_lap = min(int(elapsed_seconds / 90) + 1, 57)
-    
-    # Format remaining time
-    remaining_minutes = int(remaining.total_seconds() // 60)
-    remaining_seconds = int(remaining.total_seconds() % 60)
-    
-    # Get current speed multiplier
-    speed = simulation_controller.speed_multiplier
-    
-    return f"⏱️ Lap {current_lap}/57 | ⏳ {remaining_minutes}m {remaining_seconds}s left | 🚀 {speed}x"
+    try:
+        # Update simulation time
+        simulation_controller.update()
+        logger.info("Controller updated successfully")
+        
+        # Get progress information
+        remaining = simulation_controller.get_remaining_time()
+        logger.info(f"Remaining time: {remaining}")
+        
+        # Get EXACT current lap from simulation controller (no estimation)
+        current_lap = simulation_controller.get_current_lap()
+        logger.info(f"Current lap (OpenF1 internal): {current_lap}")
+        
+        # Convert to VISUAL racing lap
+        # OpenF1 has 2 laps before racing starts (lap 3 = racing lap 1)
+        visual_lap = max(1, current_lap - 2)
+        total_laps = 57  # 57 racing laps
+        
+        logger.info(f"Visual racing lap: {visual_lap}/{total_laps}")
+        
+        # Format remaining time
+        remaining_minutes = int(remaining.total_seconds() // 60)
+        remaining_seconds = int(remaining.total_seconds() % 60)
+        
+        # Get current speed multiplier
+        speed = simulation_controller.speed_multiplier
+        
+        progress_text = f"⏱️ Lap {int(visual_lap)}/{int(total_laps)} | ⏳ {remaining_minutes}m {remaining_seconds}s left | 🚀 {speed}x"
+        logger.info(f"Progress text: {progress_text}")
+        
+        return progress_text
+    except Exception as e:
+        logger.error(f"Error in update_simulation_progress: {e}", exc_info=True)
+        return f"⏱️ Error: {str(e)}"
 
 
 # NOTE: Circuit map real-time updates disabled
@@ -1345,21 +1437,21 @@ def update_simulation_progress(n_intervals):
 
 
 @callback(
-    Output('leaderboard-container', 'children'),
+    Output('simulation-time-store', 'data'),
     Input('simulation-interval', 'n_intervals'),
     State('dashboard-selector', 'value'),
     prevent_initial_call=True
 )
-def update_leaderboard_realtime(n_intervals, selected_dashboards):
-    """Update leaderboard table with current simulation time."""
-    global simulation_controller, current_session_obj
+def update_simulation_time_store(n_intervals, selected_dashboards):
+    """Update simulation time store for all dashboards to consume."""
+    global simulation_controller
     
     # Only update if race_overview dashboard is selected
     if not selected_dashboards or 'race_overview' not in selected_dashboards:
         raise PreventUpdate
     
-    # Check if simulation is running and session loaded
-    if simulation_controller is None or current_session_obj is None:
+    # Check if simulation is running
+    if simulation_controller is None:
         raise PreventUpdate
     
     # Only update if simulation is actively playing
@@ -1367,23 +1459,21 @@ def update_leaderboard_realtime(n_intervals, selected_dashboards):
         raise PreventUpdate
     
     try:
-        # Get elapsed simulation seconds
-        elapsed_seconds = simulation_controller.get_elapsed_seconds()
+        # Get current simulation time
+        simulation_time = simulation_controller.get_elapsed_seconds()
         
-        # Get session data
-        laps = current_session_obj.laps
-        results = current_session_obj.results
-        
-        # Generate updated leaderboard with elapsed time
-        leaderboard_table = RaceOverviewDashboard._build_leaderboard(
-            current_session_obj, laps, results, elapsed_seconds
-        )
-        
-        return leaderboard_table
+        return {
+            'time': simulation_time,
+            'timestamp': n_intervals  # Force update even if time is same
+        }
         
     except Exception as e:
-        logger.error(f"Error updating real-time leaderboard: {e}", exc_info=True)
+        logger.error(
+            f"Error updating simulation time store: {e}",
+            exc_info=True
+        )
         raise PreventUpdate
+
 
 
 # Callback: Update circuit map driver positions in real-time
@@ -1431,7 +1521,7 @@ def update_circuit_map_realtime(n_intervals, selected_dashboards, current_figure
                 # Find appropriate lap based on current_time
                 if 'Time' in driver_laps.columns:
                     valid_laps = driver_laps[
-                        pd.notna(driver_laps['Time']) & 
+                        pd.notna(driver_laps['Time']) &  # type: ignore
                         (driver_laps['Time'] <= current_time)
                     ]
                     if not valid_laps.empty:
@@ -1527,10 +1617,6 @@ if __name__ == '__main__':
     logger.info("Starting application...")
     logger.info("Open: http://localhost:8501")
     logger.info("="*60)
-    
-    # Register leaderboard callbacks
-    logger.info("Registering live leaderboard callbacks...")
-    leaderboard_dashboard.setup_callbacks(app)
     
     # Initialize session with last completed race
     last_race = get_last_completed_race()

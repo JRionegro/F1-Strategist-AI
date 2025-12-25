@@ -1,6 +1,38 @@
 # F1 Strategist AI - Quick Start Guide
 
-## Project Successfully Initialized! 🏎️
+## Running the Application 🏎️
+
+### Launch Dash UI
+
+```powershell
+# Navigate to project directory
+cd "c:\Users\jorgeg\OneDrive - CEGID\Desarrollador 10x con IA\CAPSTON PROJECT\F1\F1 Strategist AI"
+
+# Activate virtual environment
+.\venv\Scripts\Activate.ps1
+
+# Run the Dash application
+python app_dash.py
+
+# Application will be available at http://localhost:8050
+```
+
+### Interface Overview
+
+The application features:
+- **Mode Selector**: Switch between Live (🔴) and Simulation (🔵) modes
+- **Context Panel**: Select Year, Circuit, Session, and Driver focus
+- **Dashboard Selection**: Toggle multiple dashboards (AI Assistant, Race Overview, Weather, etc.)
+- **Live Mode Features**:
+  - Automatically detects active F1 sessions (±3 hours window)
+  - Locks Context controls to current session
+  - Real-time data updates every 5 seconds
+- **Simulation Mode Features**:
+  - Historical data replay with playback controls
+  - Speed adjustment (1x to 3x)
+  - Jump to specific laps or time points
+
+## Project Structure 📁
 
 Your F1 Strategist AI project has been set up with the following structure:
 

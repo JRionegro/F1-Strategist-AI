@@ -142,25 +142,41 @@ Dashboards display data for current context
 
 #### 1. **Mode Selector**
 - **Live Mode (🔴)**: Connects to real-time F1 data
-  - Auto-activates when live session detected (within 3-hour window)
+  - Only available when live session detected (within ±3-hour window)
+  - Button shows "🏁 Live (No race now)" and is disabled when no race is happening
+  - When activated:
+    - Context controls (Year, Circuit, Session) are automatically locked
+    - Values are set to current live session
+    - Only Driver selector remains active for focusing on specific drivers
   - Shows connection status indicator
-  - Real-time data updates
+  - Real-time data updates (<5s latency)
   
 - **Simulation Mode (🔵)**: Historical data replay
   - Default mode on startup
-  - Requires session selection
+  - Always available regardless of live session status
+  - All Context controls (Year, Circuit, Session, Driver) remain unlocked
+  - Requires manual session selection
   - Provides playback controls
 
 #### 2. **Dashboards Menu**
-Opens dashboard selector panel showing:
-- ☑️ AI Assistant (currently visible)
-- ☐ Circuit & Positions (Coming Soon)
-- ☐ Telemetry Comparison (Coming Soon)
-- ☐ Tire Strategy (Coming Soon)
-- ☐ Weather (Coming Soon)
-- ☐ Lap Analysis (Coming Soon)
-- ☐ Race Control (Coming Soon)
-- ☐ Qualifying Progress (Coming Soon)
+Opens dashboard selector panel with priority order:
+
+**Phase 1 - Active Dashboards**:
+1. ☑️ AI Assistant (Priority 1)
+2. ☑️ Race Overview (Priority 2)
+3. ☑️ Weather (Priority 3)
+4. ☑️ Telemetry (Priority 4)
+5. ☑️ Race Control (Priority 5)
+
+**Phase 2 - Coming Soon**:
+- ☐ Tire Strategy
+- ☐ Lap Analysis
+- ☐ Qualifying Progress
+
+**Dashboard Layout**:
+- First column: 65% width (main dashboards)
+- Second column: 35% width (supporting dashboards)
+- Responsive grid system with Bootstrap 12-column layout
 
 **Layout Presets** (Future):
 - Race Day: AI + Circuit + Tire Strategy
@@ -223,30 +239,35 @@ GlobalSession:
 ```
 📍 SESSION CONTEXT
 ─────────────────────
-Year:     [2023 ▼]
-Circuit:  [Bahrain International Circuit ▼]
-Session:  [Race ▼]
+Year:     [2023 ▼]        (locked in Live mode)
+Circuit:  [Bahrain International Circuit ▼]  (locked in Live mode)
+Session:  [Race ▼]         (locked in Live mode)
 
 🎯 FOCUS
 ─────────────────────
-Driver:   [VER ▼]
-Team:     [Red Bull Racing ▼]
+Driver:   [VER ▼]          (always active)
+Team:     [Red Bull Racing ▼]  (always active)
 ```
 
-**Auto-Detection** (Live Mode):
-- On app startup, check current date/time
-- Query F1 calendar for active sessions
-- If session found within -3 hour window:
-  - Auto-switch to Live Mode
-  - Load session context automatically
-  - Display "🔴 Live session detected!" message
+**Live Mode Behavior**:
+- Check for live session availability on app load
+- Live mode button states:
+  - **Enabled**: "🏁 Live" when race is happening (±3 hours)
+  - **Disabled**: "🏁 Live (No race now)" when no active session
+- When Live mode activated:
+  - Year, Circuit, Session dropdowns become **disabled** (grayed out)
+  - Values automatically set to current live session
+  - Driver and Team selectors remain **active** for focus selection
+  - All dashboards display real-time data
 
-**Manual Selection** (Simulation Mode):
-- Year: 2018-2025
-- Circuit: Full calendar (20+ circuits)
-- Session: FP1/FP2/FP3/Qualifying/Sprint/Race
-- Driver: All 20 drivers (2024 grid)
-- Team: All 10 teams
+**Simulation Mode Behavior**:
+- All Context controls remain **unlocked**
+- Manual selection available:
+  - Year: 2018-2025
+  - Circuit: Full calendar (20+ circuits)
+  - Session: FP1/FP2/FP3/Qualifying/Sprint/Race
+  - Driver: All 20 drivers (current grid)
+  - Team: All 10 teams
 
 ---
 
@@ -307,6 +328,25 @@ Real Time          Simulation Time
 ---
 
 ## 📊 Main Dashboards
+
+**Dashboard Priority Order** (Phase 1 - Active):
+1. 🤖 **AI Assistant** - MVP (Active)
+2. 🏎️ **Race Overview** - MVP (Active)
+3. 🌦️ **Weather** - Phase 1 (Active)
+4. 📈 **Telemetry** - Phase 1 (Active)
+5. 🚦 **Race Control** - Phase 1 (Active)
+
+**Phase 2 Dashboards** (Coming Soon):
+- 🛞 Tire Strategy
+- ⏱️ Lap Analysis
+- 🏁 Qualifying Progress
+
+**Dashboard Layout**:
+- **First Column**: 65% width (main dashboards like Race Overview, Telemetry)
+- **Second Column**: 35% width (supporting dashboards like AI Assistant, Weather)
+- Bootstrap 12-column grid system (width=8 for first column, width=4 for second)
+
+---
 
 ### 1. AI Assistant / Chatbot 🤖
 
@@ -380,7 +420,44 @@ Features Visible:
 
 ---
 
-### 2. Weather & Meteorological Conditions 🌦️
+### 2. Race Overview Dashboard 🏎️
+
+**Mission**: Real-time leaderboard with comprehensive race standings and tire information.
+
+**MCP Tools**:
+- `get_positions`: Real-time driver positions
+- `get_laps`: Lap times and metadata
+- `get_stints`: Tire strategy and stint data
+- `get_drivers`: Driver and team information
+
+**Features**:
+- Live standings table with:
+  - Position, Driver (with team color coding), Lap, Time
+  - Interval (gap to driver ahead), Gap To Leader
+  - Tire compound, Tire age, Number of stops
+- **Driver alias team colors** (ALO, VER, LEC, etc.):
+  - Red Bull Racing: #3671C6 (Blue)
+  - Ferrari: #E8002D (Red)
+  - Mercedes: #27F4D2 (Cyan)
+  - McLaren: #FF8000 (Orange)
+  - Aston Martin: #229971 (Green)
+  - Alpine: #FF87BC (Pink)
+  - Williams: #64C4FF (Light Blue)
+  - RB: #6692FF (Blue)
+  - Kick Sauber: #52E252 (Green)
+  - Haas F1 Team: #B6BABD (Gray)
+- Simplified header showing meeting name and session name only
+- Automatic updates every 5 seconds in Live mode
+- Team color coding implemented using hidden TeamName column with CSS filter_query
+- Responsive layout occupying 65% of dashboard area (first column)
+
+**Availability**: ✅ Live | ✅ Simulation
+
+**Priority**: 🔴 MVP - CRITICAL
+
+---
+
+### 3. Weather & Meteorological Conditions 🌦️
 
 **Mission**: Climate conditions monitoring with satellite rain radar and strategy impact prediction.
 

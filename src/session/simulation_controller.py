@@ -7,6 +7,7 @@ Handles simulation playback controls and time progression.
 import logging
 from datetime import datetime, timedelta
 from typing import Callable, Optional
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,8 @@ class SimulationController:
         self,
         start_time: datetime,
         end_time: datetime,
-        on_time_update: Optional[Callable[[datetime], None]] = None
+        on_time_update: Optional[Callable[[datetime], None]] = None,
+        lap_data: Optional[pd.DataFrame] = None
     ):
         """
         Initialize simulation controller.
@@ -35,11 +37,14 @@ class SimulationController:
             start_time: Session start time
             end_time: Session end time
             on_time_update: Callback when time updates
+            lap_data: DataFrame with LapNumber and LapStartTime columns for accurate lap tracking
         """
         self.start_time = start_time
         self.end_time = end_time
         self.current_time = start_time
         self.on_time_update = on_time_update
+        self.lap_data = lap_data
+        self.current_lap = 1
         
         self.is_playing = False
         self.speed_multiplier = 1.0
@@ -236,3 +241,93 @@ class SimulationController:
     def is_at_end(self) -> bool:
         """Check if at session end."""
         return self.current_time >= self.end_time
+    
+    def get_current_lap(self) -> int:
+        """
+        Get current lap number based on actual lap start times.
+        Uses leader's laps to determine race lap count.
+        
+        Returns:
+            Current lap number (exact, not estimated)
+        """
+        if self.lap_data is None or self.lap_data.empty:
+            logger.warning("No lap data available for lap calculation")
+            return 1
+        
+        if 'LapStartTime' not in self.lap_data.columns or 'LapNumber' not in self.lap_data.columns:
+            logger.warning("Lap data missing required columns")
+            return 1
+        
+        try:
+            # Ensure current_time is timezone-aware datetime (not timedelta)
+            current_time = self.current_time
+            if isinstance(current_time, pd.Timedelta):
+                logger.error(f"current_time is Timedelta: {current_time}, converting to datetime")
+                current_time = self.start_time + current_time
+            
+            # Use leader's laps (DriverNumber=1) for race lap count
+            leader_laps = self.lap_data[self.lap_data['DriverNumber'] == 1].copy()
+            
+            if leader_laps.empty:
+                logger.warning("No laps found for leader (DriverNumber=1)")
+                return 1
+            
+            # Filter out formation lap (lap 1 has NaT)
+            valid_laps = leader_laps[leader_laps['LapStartTime'].notna()].copy()
+            
+            if valid_laps.empty:
+                return 1
+            
+            logger.info(f"[SimController] current_time: {current_time}")
+            logger.info(f"[SimController] valid_laps count: {len(valid_laps)}")
+            logger.info(f"[SimController] First lap start: {valid_laps['LapStartTime'].min()}")
+            
+            # At start of race (before any lap has started)
+            if current_time <= valid_laps['LapStartTime'].min():
+                self.current_lap = int(valid_laps['LapNumber'].min())
+                logger.info(f"[SimController] Before race start, returning lap {self.current_lap}")
+                return self.current_lap
+            
+            # Filter laps that have started
+            started_laps = valid_laps[valid_laps['LapStartTime'] <= current_time]
+            
+            if started_laps.empty:
+                self.current_lap = int(valid_laps['LapNumber'].min())
+                logger.info(f"[SimController] No started laps, returning lap {self.current_lap}")
+                return self.current_lap
+            
+            logger.info(f"[SimController] started_laps count: {len(started_laps)}")
+            
+            # Sort by start time descending to check most recent laps first
+            started_laps_sorted = started_laps.sort_values('LapStartTime', ascending=False)
+            
+            # Find the lap currently in progress
+            current_lap = int(started_laps_sorted.iloc[0]['LapNumber'])
+            logger.info(f"[SimController] Initial current_lap (most recent): {current_lap}")
+            
+            # Check if this lap has ended
+            for _, lap_row in started_laps_sorted.iterrows():
+                lap_num = int(lap_row['LapNumber'])
+                lap_start = lap_row['LapStartTime']
+                lap_end = lap_row.get('LapEndTime', pd.NaT)
+                
+                logger.info(f"[SimController] Checking lap {lap_num}: start={lap_start}, end={lap_end}, current={current_time}")
+                
+                # If lap hasn't ended yet, or ended after current time -> in progress
+                if pd.isna(lap_end) or lap_end > current_time:
+                    current_lap = lap_num
+                    logger.info(f"[SimController] ✅ Lap {lap_num} is IN PROGRESS (end={lap_end})")
+                    break
+                else:
+                    logger.info(f"[SimController] ❌ Lap {lap_num} has ENDED (end={lap_end} <= current={current_time})")
+            
+            logger.info(f"[SimController] FINAL current_lap: {current_lap}")
+            self.current_lap = current_lap
+            return self.current_lap
+            
+        except Exception as e:
+            logger.error(f"Error in get_current_lap: {e}")
+            logger.error(f"current_time type: {type(self.current_time)}, value: {self.current_time}")
+            logger.error(f"LapStartTime dtype: {self.lap_data['LapStartTime'].dtype}")
+            logger.error(f"LapStartTime sample: {self.lap_data['LapStartTime'].iloc[0]}")
+            raise
