@@ -788,20 +788,7 @@ class RaceOverviewDashboard:
             # Build dashboard
             return dbc.Container(
                 [
-                    # Header
-                    dbc.Row(
-                        [
-                            dbc.Col(
-                                html.H4(
-                                    f"{meeting_name} - {session_name}",
-                                    className="mb-3",
-                                    style={"color": "#e10600"},
-                                ),
-                                width=12,
-                            ),
-                        ],
-                    ),
-                    # Leaderboard
+                    # Leaderboard (header removed to save space)
                     dbc.Row(
                         [
                             dbc.Col(
@@ -809,10 +796,12 @@ class RaceOverviewDashboard:
                                 width=12,
                             ),
                         ],
+                        style={"margin": "0"},
                     ),
                 ],
                 fluid=True,
                 className="p-0",
+                style={"overflow": "hidden", "height": "100%"},
             )
 
         except Exception as e:
@@ -958,7 +947,7 @@ class RaceOverviewDashboard:
             style_table={
                 "overflowX": "auto",
                 "backgroundColor": "#1e1e1e",
-                "maxHeight": "450px",
+                "maxHeight": "420px",
                 "overflowY": "auto"
             },
             style_header={
@@ -967,18 +956,22 @@ class RaceOverviewDashboard:
                 "fontWeight": "bold",
                 "textAlign": "center",
                 "border": "1px solid #444",
-                "padding": "4px 8px",
-                "fontSize": "12px",
+                "padding": "1px 4px",
+                "fontSize": "11px",
+                "height": "14px",
+                "lineHeight": "12px",
             },
             style_cell={
                 "backgroundColor": "#2d2d2d",
                 "color": "white",
                 "border": "1px solid #444",
                 "textAlign": "center",
-                "fontSize": "12px",
-                "padding": "4px 6px",
+                "fontSize": "11px",
+                "padding": "1px 2px",
                 "minWidth": "40px",
                 "maxWidth": "100px",
+                "height": "12px",
+                "lineHeight": "10px",
             },
             css=[
                 # Hide TeamName column

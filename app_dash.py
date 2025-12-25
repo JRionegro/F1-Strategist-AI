@@ -33,6 +33,7 @@ from src.session.live_detector import check_for_live_session
 # Dash dashboards
 from src.dashboards_dash.ai_assistant_dashboard import AIAssistantDashboard
 from src.dashboards_dash.race_overview_dashboard import RaceOverviewDashboard
+from src.dashboards_dash import weather_dashboard
 
 # Configure logging
 logging.basicConfig(
@@ -276,7 +277,7 @@ def create_sidebar():
                             # {"label": " Lap Analysis", "value": "laps"},
                             # {"label": " Qualifying", "value": "qualifying"},
                         ],
-                        value=["ai", "race_overview"],
+                        value=["ai", "race_overview", "weather"],
                         className="mb-2"
                     )
                 ], title="📊 Dashboards", className="mb-3")
@@ -517,6 +518,7 @@ app.layout = dbc.Container([
     dcc.Store(id='cache-buster-store', data={'timestamp': 0}),
     dcc.Store(id='sidebar-visible-store', data=True),
     dcc.Store(id='simulation-time-store', data={'time': 0.0, 'timestamp': 0}),
+    dcc.Store(id='weather-last-update-store', data={'timestamp': 0, 'state': None}),
     
     # Help Modal
     dbc.Modal([
@@ -1064,7 +1066,7 @@ def update_dashboards(
                 logger.info("Race overview requested but session not yet loaded, showing placeholder")
                 dashboards.append(
                     dbc.Card([
-                        dbc.CardHeader(html.H5("🏁 Race Overview - Leaderboard & Circuit Map")),
+                        dbc.CardHeader(html.H5("🏁 Race Overview", style={"fontSize": "0.9rem"})),
                         dbc.CardBody([
                             dcc.Loading(
                                 html.Div([
@@ -1088,7 +1090,7 @@ def update_dashboards(
                     logger.warning("Race overview requested but no session loaded")
                     dashboards.append(
                         dbc.Card([
-                            dbc.CardHeader(html.H5("🏁 Race Overview - Leaderboard & Circuit Map")),
+                            dbc.CardHeader(html.H5("🏁 Race Overview", style={"fontSize": "0.9rem"})),
                             dbc.CardBody([
                                 html.P("No session loaded. Please select a race session from the sidebar.", 
                                        className="text-muted text-center p-5")
@@ -1128,7 +1130,7 @@ def update_dashboards(
                     )
                     dashboards.append(
                         dbc.Card([
-                            dbc.CardHeader(html.H5("🏁 Race Overview - Live Leaderboard")),
+                            dbc.CardHeader(html.H5("🏁 Race Overview", style={"fontSize": "0.9rem"})),
                             dbc.CardBody(children=[overview_content])
                         ], className="mb-3")
                     )
@@ -1138,12 +1140,67 @@ def update_dashboards(
                 logger.error(f"Error creating race overview dashboard: {e}", exc_info=True)
                 dashboards.append(
                     dbc.Card([
-                        dbc.CardHeader(html.H5("🏁 Race Overview - Leaderboard & Circuit Map")),
+                        dbc.CardHeader(html.H5("🏁 Race Overview", style={"fontSize": "0.9rem"})),
                         dbc.CardBody([
                             html.P(f"Error loading race overview: {str(e)}", className="text-danger")
                         ])
                     ], className="mb-3")
                 )
+        
+        elif dashboard_id == "weather":
+            # Weather Dashboard (Phase 1 MVP) - Compact 33% width
+            if not session_loaded:
+                logger.info("Weather dashboard requested but session not yet loaded")
+                dashboards.append(
+                    dbc.Col([
+                        dbc.Card([
+                            dbc.CardHeader(html.H5("🌤️ Weather", className="mb-0"), className="py-1"),
+                            dbc.CardBody([
+                                dcc.Loading(
+                                    html.Div([
+                                        html.P("Loading...", className="text-center p-3 text-muted", style={"fontSize": "0.8rem"}),
+                                    ]),
+                                    type="circle",
+                                    color="#e10600"
+                                )
+                            ], className="p-2")
+                        ], className="mb-3 h-100")
+                    ], width=4, className="d-flex")
+                )
+            else:
+                logger.info("Rendering weather dashboard...")
+                try:
+                    # Get simulation time
+                    simulation_time = None
+                    if simulation_time_data and 'time' in simulation_time_data:
+                        simulation_time = simulation_time_data.get('time', 0.0)
+                    elif simulation_controller is not None:
+                        try:
+                            simulation_time = simulation_controller.get_elapsed_seconds()
+                        except Exception:
+                            simulation_time = 0.0
+                    
+                    # Generate weather content
+                    weather_content = weather_dashboard.render_weather_content(
+                        session_key=current_session_obj.session_key if current_session_obj else None,
+                        simulation_time=simulation_time
+                    )
+                    
+                    dashboards.append(
+                        dbc.Col([weather_content], width=4)
+                    )
+                except Exception as e:
+                    logger.error(f"Error rendering weather dashboard: {e}", exc_info=True)
+                    dashboards.append(
+                        dbc.Col([
+                            dbc.Card([
+                                dbc.CardHeader(html.H5("🌤️ Weather", className="mb-0")),
+                                dbc.CardBody([
+                                    html.P(f"Error: {str(e)}", className="text-danger text-center")
+                                ])
+                            ])
+                        ], width=4)
+                    )
         
         elif dashboard_id == "telemetry":
             # Telemetry placeholder
@@ -1175,29 +1232,55 @@ def update_dashboards(
                 ], className="mb-3")
             )
     
-    # Layout dashboards in 2 columns if multiple selected, otherwise full width
-    if len(dashboards) == 1:
-        return dashboards[0]
-    else:
-        # Create 2-column layout (65% / 35%)
-        dashboard_rows = []
-        for i in range(0, len(dashboards), 2):
-            if i + 1 < len(dashboards):
-                # Two dashboards in this row
-                dashboard_rows.append(
-                    dbc.Row([
-                        dbc.Col(dashboards[i], width=8, className="mb-3"),
-                        dbc.Col(dashboards[i+1], width=4, className="mb-3")
-                    ], className="g-2")
+    # Layout dashboards:
+    # Grid layout: 2 rows x 3 columns (33% width each, 50vh height each row)
+    # No vertical scroll - all dashboards fit in viewport
+    if len(dashboards) == 0:
+        return html.Div("No dashboards selected", className="text-center text-muted p-5")
+    
+    # Wrap all dashboards in standardized columns with fixed height
+    wrapped_dashboards = []
+    for dash in dashboards:
+        if isinstance(dash, dbc.Col):
+            # Already wrapped (e.g., weather) - recreate with height constraint
+            wrapped_dashboards.append(
+                dbc.Col(
+                    dash.children,
+                    width=4,
+                    style={"height": "50vh", "overflow": "hidden", "maxWidth": "31.5%"},
+                    className="mb-2"
                 )
-            else:
-                # Only one dashboard in this row
-                dashboard_rows.append(
-                    dbc.Row([
-                        dbc.Col(dashboards[i], width=12, className="mb-3")
-                    ], className="g-2")
+            )
+        else:
+            # Wrap in 4-column (31.5% to avoid horizontal scroll) with fixed height
+            wrapped_dashboards.append(
+                dbc.Col(
+                    dash, 
+                    width=4, 
+                    style={"height": "50vh", "overflow": "hidden", "maxWidth": "31.5%"},
+                    className="mb-2"
                 )
-        return html.Div(dashboard_rows)
+            )
+    
+    # Create grid: 3 dashboards per row
+    rows = []
+    for i in range(0, len(wrapped_dashboards), 3):
+        row_dashboards = wrapped_dashboards[i:i+3]
+        rows.append(
+            dbc.Row(
+                row_dashboards, 
+                className="g-0",
+                style={"height": "50vh"}
+            )
+        )
+    
+    return html.Div(
+        rows,
+        style={
+            "height": "100%",
+            "overflowY": "hidden"
+        }
+    )
 
 
 # Callback: Hide/Show Playback based on Mode

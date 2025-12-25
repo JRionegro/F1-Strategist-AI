@@ -45,7 +45,7 @@ class CircuitMapDashboard:
         """
         if session_obj is None:
             return dbc.Card([
-                dbc.CardHeader(html.H5("🗺️ Circuit Map & Positions")),
+                dbc.CardHeader(html.H5("🗺️ Circuit Map", style={"fontSize": "0.9rem"})),
                 dbc.CardBody([
                     html.P(
                         "Select a session to view circuit map",
@@ -59,7 +59,7 @@ class CircuitMapDashboard:
         
         return dbc.Card([
             dbc.CardHeader([
-                html.H5("🗺️ Circuit Map & Positions", className="d-inline"),
+                html.H5("🗺️ Circuit Map", className="d-inline", style={"fontSize": "0.9rem"}),
                 html.Span(
                     f" - {session_obj.event['EventName']} ({session_obj.event.year})",
                     className="text-muted small"

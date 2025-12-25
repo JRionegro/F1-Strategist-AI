@@ -42,17 +42,16 @@ class AIAssistantDashboard:
                 html.H4([
                     html.I(className="bi bi-robot me-2"),
                     "💬 AI Assistant"
-                ], className="mb-0")
+                ], className="mb-0", style={"fontSize": "0.9rem"})
             ]),
             dbc.CardBody([
-                # Welcome message - compact version
+                # Welcome message - ultra-compact version
                 dbc.Alert([
                     html.P([
-                        html.Strong("F1 Strategist AI 🏎️"),
-                        " - Ask about strategy, weather, tire performance, or race positions. ",
-                        html.Small("(5 specialized agents available)", className="text-muted")
-                    ], className="mb-0", style={'fontSize': '0.9rem'})
-                ], color="info", className="mb-2", style={'padding': '0.5rem 1rem'}),
+                        html.Strong("F1 Strategist AI"),
+                        html.Small(" - Ask about strategy, weather, performance, or positions", className="text-muted")
+                    ], className="mb-0", style={'fontSize': '0.85rem'})
+                ], color="info", className="mb-1", style={'padding': '0.35rem 0.75rem'}),
                 
                 # Context info
                 dbc.Row([
@@ -82,12 +81,12 @@ class AIAssistantDashboard:
                         id='chat-messages-container',
                         children=[],
                         style={
-                            'height': '280px',
+                            'height': '200px',
                             'overflow-y': 'auto',
-                            'padding': '8px',
+                            'padding': '6px',
                             'background-color': '#1a1a1a',
                             'border-radius': '5px',
-                            'margin-bottom': '10px'
+                            'margin-bottom': '8px'
                         }
                     ),
                     
@@ -96,56 +95,51 @@ class AIAssistantDashboard:
                         dbc.Textarea(
                             id='chat-input',
                             placeholder="Ask a strategy question...",
-                            style={'resize': 'none', 'fontSize': '0.9rem'},
+                            style={'resize': 'none', 'fontSize': '0.85rem'},
                             rows=2
                         ),
                         dbc.Button(
                             [html.I(className="bi bi-send")],
                             id='chat-send-btn',
                             color="primary",
-                            n_clicks=0
+                            n_clicks=0,
+                            style={'padding': '0.25rem 0.5rem'}
                         )
-                    ], className="mb-2"),
+                    ], className="mb-1", size="sm"),
                     
                     # Quick action buttons
                     html.Div([
-                        html.Small("Quick questions:", className="text-muted me-2"),
                         dbc.ButtonGroup([
                             dbc.Button(
-                                "Pit Strategy",
+                                "Pit",
                                 id='quick-pit-btn',
                                 size="sm",
                                 outline=True,
-                                color="secondary",
-                                className="me-1"
+                                color="secondary"
                             ),
                             dbc.Button(
                                 "Weather",
                                 id='quick-weather-btn',
                                 size="sm",
                                 outline=True,
-                                color="secondary",
-                                className="me-1"
+                                color="secondary"
                             ),
                             dbc.Button(
-                                "Gap Analysis",
+                                "Gaps",
                                 id='quick-gap-btn',
                                 size="sm",
                                 outline=True,
                                 color="secondary"
+                            ),
+                            dbc.Button(
+                                [html.I(className="bi bi-trash me-1"), "Clear"],
+                                id='clear-chat-btn',
+                                color="danger",
+                                size="sm",
+                                n_clicks=0
                             )
                         ], size="sm")
-                    ], className="mb-3"),
-                    
-                    # Clear history button
-                    dbc.Button(
-                        [html.I(className="bi bi-trash me-1"), "Clear History"],
-                        id='clear-chat-btn',
-                        color="danger",
-                        outline=True,
-                        size="sm",
-                        n_clicks=0
-                    )
+                    ], className="d-flex justify-content-between", style={'fontSize': '0.8rem'})
                 ])
             ])
         ], className="mb-3")
