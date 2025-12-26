@@ -36,7 +36,8 @@ class RaceControlDashboard:
         session_key: Optional[int] = None,
         simulation_time: Optional[float] = None,
         session_start_time: Optional[pd.Timestamp] = None,
-        focused_driver: Optional[str] = None
+        focused_driver: Optional[str] = None,
+        current_lap: Optional[int] = None
     ):
         """
         Render the Race Control Dashboard with real-time messages.
@@ -46,6 +47,7 @@ class RaceControlDashboard:
             simulation_time: Current simulation time in seconds from session start
             session_start_time: Session start timestamp
             focused_driver: Driver number being tracked (for highlighting)
+            current_lap: Current lap number (from simulation or real-time calculation)
 
         Returns:
             Dash Card component with race control information
@@ -114,7 +116,14 @@ class RaceControlDashboard:
                     filtered_messages = messages
 
             # Extract current status
-            current_lap = self._extract_current_lap(filtered_messages)
+            if current_lap is None:
+                # Fallback: Calculate lap from available data
+                current_lap = self._calculate_current_lap_from_data(
+                    session_key,
+                    simulation_time,
+                    session_start_time,
+                    filtered_messages
+                )
             current_flag, sc_status = self._extract_current_status(filtered_messages)
 
             # Build UI components
@@ -254,20 +263,24 @@ class RaceControlDashboard:
                 search_value = driver_code if driver_code else focused_driver
                 search_number = driver_number if driver_number else focused_driver
                 
+                # Validate search values to avoid None errors
+                search_value_upper = search_value.upper() if search_value else ""
+                search_number_str = str(search_number) if search_number else ""
+                
                 if has_driver_number and has_abbreviation:
                     number_col = 'DriverNumber' if 'DriverNumber' in drivers.columns else 'driver_number'
                     abbr_col = 'Abbreviation' if 'Abbreviation' in drivers.columns else 'name_acronym'
                     
                     driver_match = drivers[
-                        (drivers[number_col].astype(str) == str(search_number)) |
-                        (drivers[abbr_col] == search_value.upper())
+                        (drivers[number_col].astype(str) == search_number_str) |
+                        (drivers[abbr_col] == search_value_upper)
                     ]
                 elif has_driver_number:
                     number_col = 'DriverNumber' if 'DriverNumber' in drivers.columns else 'driver_number'
-                    driver_match = drivers[drivers[number_col].astype(str) == str(search_number)]
+                    driver_match = drivers[drivers[number_col].astype(str) == search_number_str]
                 elif has_abbreviation:
                     abbr_col = 'Abbreviation' if 'Abbreviation' in drivers.columns else 'name_acronym'
-                    driver_match = drivers[drivers[abbr_col] == search_value.upper()]
+                    driver_match = drivers[drivers[abbr_col] == search_value_upper]
                 
                 if driver_match is not None and not driver_match.empty:
                     driver_info = driver_match.iloc[0]
@@ -311,58 +324,48 @@ class RaceControlDashboard:
             # Check if message mentions focused driver
             is_focused_driver = False
             if focused_driver and message_text:
+                import re
                 message_upper = message_text.upper()
-                focused_upper = focused_driver.upper()
                 
-                # SIMPLIFIED DETECTION: Just check if the focused value appears anywhere
-                # This catches codes like "HAM", "COL", etc.
-                if focused_upper in message_upper:
-                    is_focused_driver = True
-                    logger.info(f"[SIMPLE] Match found for '{focused_driver}' in: {message_text}")
+                # Build comprehensive search with word boundaries to avoid false positives
+                # like "COL" matching "COLLISION"
+                search_patterns = []
                 
-                # Also check specific patterns with driver number and code
-                if not is_focused_driver:
-                    search_patterns = []
-                    
-                    if driver_number:
-                        # Number-based patterns
-                        search_patterns.extend([
-                            f" {driver_number} ",
-                            f"({driver_number})",
-                            f"{driver_number})",
-                            f"CAR {driver_number}",
-                            f"CARS {driver_number}",
-                            f"NO {driver_number}",
-                            f"NO. {driver_number}",
-                            f"#{driver_number}"
-                        ])
-                    
-                    if driver_code:
-                        code_upper = driver_code.upper()
-                        # Code-based patterns
-                        search_patterns.extend([
-                            code_upper,
-                            f" {code_upper} ",
-                            f"({code_upper})",
-                            f"{code_upper})"
-                        ])
-                    
-                    if driver_last_name:
-                        last_upper = driver_last_name.upper()
-                        search_patterns.extend([
-                            last_upper,
-                            f" {last_upper} "
-                        ])
-                    
-                    if driver_full_name:
-                        search_patterns.append(driver_full_name.upper())
-                    
-                    # Check if any pattern matches
-                    for pattern in search_patterns:
-                        if pattern in message_upper:
-                            is_focused_driver = True
-                            logger.info(f"[PATTERN] Match found for '{pattern}' in: {message_text}")
-                            break
+                if driver_number:
+                    # Number-based patterns with word boundaries
+                    search_patterns.extend([
+                        rf"\b{re.escape(driver_number)}\b",  # Standalone number
+                        rf"\({re.escape(driver_number)}\)",  # (43)
+                        rf"CAR\s+{re.escape(driver_number)}\b",
+                        rf"CARS\s+{re.escape(driver_number)}\b",
+                        rf"NO\.?\s+{re.escape(driver_number)}\b",
+                        rf"#{re.escape(driver_number)}\b"
+                    ])
+                
+                if driver_code:
+                    code_upper = driver_code.upper()
+                    # Code-based patterns with strict boundaries
+                    # Only match if followed by: ), space, -, or end of string
+                    # This prevents "COL" from matching "COLLISION"
+                    search_patterns.extend([
+                        rf"\({re.escape(code_upper)}\)",  # (COL)
+                        rf"\b{re.escape(code_upper)}[\)\s\-]",  # COL) or COL or COL-
+                        rf"\b{re.escape(code_upper)}$"  # COL at end of message
+                    ])
+                
+                if driver_last_name:
+                    last_upper = driver_last_name.upper()
+                    search_patterns.append(rf"\b{re.escape(last_upper)}\b")
+                
+                if driver_full_name:
+                    search_patterns.append(rf"\b{re.escape(driver_full_name.upper())}\b")
+                
+                # Check if any pattern matches
+                for pattern in search_patterns:
+                    if re.search(pattern, message_upper):
+                        is_focused_driver = True
+                        logger.info(f"[REGEX] Match found for pattern '{pattern}' in: {message_text}")
+                        break
 
             # Color coding
             text_color = {
@@ -459,6 +462,113 @@ class RaceControlDashboard:
             return 'green_flag', 'success'
         else:
             return 'other', 'secondary'
+
+    def _calculate_current_lap_from_data(
+        self,
+        session_key: Optional[int],
+        simulation_time: Optional[float],
+        session_start_time: Optional[pd.Timestamp],
+        messages: pd.DataFrame
+    ) -> int:
+        """
+        Calculate current lap from available data sources.
+        
+        Priority order:
+        1. From simulation_time + lap timing data (for real-time/live)
+        2. From messages (last resort fallback)
+        3. Return 0 if no data available
+        
+        Args:
+            session_key: OpenF1 session key
+            simulation_time: Simulation time in seconds
+            session_start_time: Session start timestamp
+            messages: Filtered race control messages
+            
+        Returns:
+            Current lap number
+        """
+        # Strategy 1: Calculate from timing data (works for both simulation and real-time)
+        if session_key and simulation_time is not None and session_start_time:
+            try:
+                # Get lap timing data from OpenF1
+                laps = self.provider.get_laps(session_key=session_key)
+                
+                if not laps.empty and 'LapStartTime' in laps.columns:
+                    # Calculate current timestamp
+                    current_time = session_start_time + timedelta(seconds=simulation_time)
+                    
+                    # Find which lap we're in by comparing timestamps
+                    # Use leader's laps (DriverNumber=1) for consistency
+                    leader_laps = laps[laps['DriverNumber'] == 1].copy()
+                    
+                    if not leader_laps.empty:
+                        # Sort by lap number
+                        leader_laps = leader_laps.sort_values('LapNumber')
+                        
+                        # Find current lap
+                        for idx, row in leader_laps.iterrows():
+                            lap_start = row.get('LapStartTime')
+                            lap_end = row.get('LapEndTime')
+                            lap_num = row.get('LapNumber')
+                            
+                            if pd.notna(lap_start):
+                                # Convert timedelta to absolute time
+                                if isinstance(lap_start, timedelta):
+                                    lap_start_abs = session_start_time + lap_start
+                                else:
+                                    lap_start_abs = lap_start
+                                
+                                # Check if we're in this lap
+                                if pd.notna(lap_end):
+                                    if isinstance(lap_end, timedelta):
+                                        lap_end_abs = session_start_time + lap_end
+                                    else:
+                                        lap_end_abs = lap_end
+                                    
+                                    if lap_start_abs <= current_time <= lap_end_abs:
+                                        # Convert OpenF1 lap (includes formation) to racing lap
+                                        racing_lap = max(1, int(lap_num) - 2) if lap_num > 2 else 1
+                                        logger.debug(
+                                            f"Calculated lap from timing: OpenF1 lap {lap_num} = "
+                                            f"Racing lap {racing_lap}"
+                                        )
+                                        return racing_lap
+                                else:
+                                    # Lap not finished yet, check if we've started it
+                                    if current_time >= lap_start_abs:
+                                        racing_lap = max(1, int(lap_num) - 2) if lap_num > 2 else 1
+                                        logger.debug(
+                                            f"In progress lap: OpenF1 lap {lap_num} = "
+                                            f"Racing lap {racing_lap}"
+                                        )
+                                        return racing_lap
+                        
+                        # If no exact match, determine pre-race or post-race
+                        first_lap_start = leader_laps.iloc[0].get('LapStartTime')
+                        if pd.notna(first_lap_start):
+                            if isinstance(first_lap_start, timedelta):
+                                first_lap_start_abs = session_start_time + first_lap_start
+                            else:
+                                first_lap_start_abs = first_lap_start
+                            
+                            if current_time < first_lap_start_abs:
+                                return 0  # Pre-race
+                        
+                        # Post-race or in last lap
+                        last_lap = int(leader_laps.iloc[-1]['LapNumber'])
+                        return max(1, last_lap - 2) if last_lap > 2 else 1
+                        
+            except Exception as e:
+                logger.warning(f"Could not calculate lap from timing data: {e}")
+        
+        # Strategy 2: Extract from messages (old fallback method)
+        lap_from_messages = self._extract_current_lap(messages)
+        if lap_from_messages > 0:
+            logger.debug(f"Using lap from messages: {lap_from_messages}")
+            return lap_from_messages
+        
+        # No data available
+        return 0
 
     def _extract_current_lap(self, messages: pd.DataFrame) -> int:
         """Extract current lap from most recent message mentioning lap number."""

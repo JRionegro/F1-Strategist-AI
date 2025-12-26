@@ -224,25 +224,31 @@ def create_sidebar():
     """Create sidebar with all controls."""
     return dbc.Col([
         html.Div([
-            html.H4("🏎️ F1 Strategist", className="text-center mb-3"),
+            html.H4([
+                html.Span("🏎️", style={'fontSize': '3rem'}),
+                " F1 Strategist"
+            ], className="text-center mb-3"),
             
             html.Hr(),
             
-            # Mode selector
-            html.H6("🎮 Mode", className="mb-2"),
-            dbc.RadioItems(
-                id="mode-selector",
-                options=[
-                    {"label": " 🏁 Live", "value": "live"},
-                    {"label": " ⏯️ Simulation", "value": "sim"}
-                ],
-                value="sim",
-                className="mb-3"
-            ),
+            # Mode selector (collapsed)
+            dbc.Accordion([
+                dbc.AccordionItem([
+                    dbc.RadioItems(
+                        id="mode-selector",
+                        options=[
+                            {"label": " 🏁 Live", "value": "live"},
+                            {"label": " ⏯️ Simulation", "value": "sim"}
+                        ],
+                        value="sim",
+                        className="mb-2"
+                    )
+                ], title="🎮 Mode", className="mb-3")
+            ], start_collapsed=True),
             
             html.Hr(),
             
-            # Context selector (collapsed)
+            # Context selector (expanded by default)
             dbc.Accordion([
                 dbc.AccordionItem([
                     dbc.Label("Year", className="fw-bold"),
@@ -291,7 +297,7 @@ def create_sidebar():
                         )
                     ])
                 ], title="🗺️ Context", className="mb-3")
-            ], start_collapsed=True),
+            ], start_collapsed=False),
             
             html.Hr(),
             
@@ -315,7 +321,7 @@ def create_sidebar():
                         className="mb-2"
                     )
                 ], title="📊 Dashboards", className="mb-3")
-            ], start_collapsed=False),
+            ], start_collapsed=True),
             
             html.Hr(),
             
@@ -1235,11 +1241,25 @@ def update_dashboards(
                     if simulation_controller is not None:
                         session_start_time = pd.Timestamp(simulation_controller.start_time)
                     
+                    # Calculate current lap
+                    current_lap = None
+                    if simulation_controller is not None:
+                        try:
+                            # Get OpenF1 internal lap
+                            openf1_lap = simulation_controller.get_current_lap()
+                            # Convert to visual racing lap (OpenF1 lap 3 = racing lap 1)
+                            current_lap = max(1, openf1_lap - 2) if openf1_lap > 2 else 1
+                            logger.info(f"Current lap from controller: OpenF1 {openf1_lap} → Racing {current_lap}")
+                        except Exception as e:
+                            logger.warning(f"Could not get lap from controller: {e}")
+                            current_lap = None
+                    
                     control_content = race_control_dashboard.render(
                         session_key=session_key,
                         simulation_time=simulation_time,
                         session_start_time=session_start_time,
-                        focused_driver=focused_driver if focused_driver != 'none' else None
+                        focused_driver=focused_driver if focused_driver != 'none' else None,
+                        current_lap=current_lap
                     )
                     dashboards.append(control_content)
                     logger.info("Race control dashboard rendered successfully")
