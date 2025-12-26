@@ -63,6 +63,7 @@ for pattern in ['**/*.pyc', '**/__pycache__']:
 # NOW import dashboards (fresh, no cache)
 from src.dashboards_dash.ai_assistant_dashboard import AIAssistantDashboard
 from src.dashboards_dash.race_overview_dashboard import RaceOverviewDashboard
+from src.dashboards_dash.race_control_dashboard import RaceControlDashboard
 from src.dashboards_dash import weather_dashboard
 
 # Configure logging
@@ -77,6 +78,9 @@ openf1_provider = OpenF1DataProvider(verify_ssl=False)
 
 # Initialize Race Overview Dashboard
 race_overview_dashboard = RaceOverviewDashboard(openf1_provider)
+
+# Initialize Race Control Dashboard
+race_control_dashboard = RaceControlDashboard(openf1_provider)
 
 # Initialize Dash app with F1 theme
 app = Dash(
@@ -299,15 +303,15 @@ def create_sidebar():
                         options=[
                             {"label": " AI Assistant", "value": "ai"},
                             {"label": " Race Overview", "value": "race_overview"},
+                            {"label": " Race Control", "value": "race_control"},
                             {"label": " Weather", "value": "weather"},
                             {"label": " Telemetry", "value": "telemetry"},
-                            {"label": " Race Control", "value": "control"},
                             # Phase 2 Dashboards (Coming Soon)
                             # {"label": " Tire Strategy", "value": "tires"},
                             # {"label": " Lap Analysis", "value": "laps"},
                             # {"label": " Qualifying", "value": "qualifying"},
                         ],
-                        value=["ai", "race_overview", "weather"],
+                        value=["ai", "race_overview", "race_control", "weather"],
                         className="mb-2"
                     )
                 ], title="📊 Dashboards", className="mb-3")
@@ -1064,6 +1068,8 @@ def update_dashboards(
     focused_driver
 ):
     """Update visible dashboards based on selection."""
+    global current_session_obj  # Declare at function start
+    
     if not selected_dashboards:
         return html.Div([
             html.H4("No dashboards selected", className="text-center mt-5"),
@@ -1111,9 +1117,6 @@ def update_dashboards(
                 continue
                 
             try:
-                # Use globally stored session object
-                global current_session_obj
-                
                 if current_session_obj is None:
                     logger.warning("Race overview requested but no session loaded")
                     dashboards.append(
@@ -1171,6 +1174,83 @@ def update_dashboards(
                         dbc.CardHeader(html.H5("🏁 Race Overview", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
                         dbc.CardBody([
                             html.P(f"Error loading race overview: {str(e)}", className="text-danger")
+                        ], className="p-2")
+                    ], className="mb-3", style={"height": "620px"})
+                )
+        
+        elif dashboard_id == "race_control":
+            # Race Control Dashboard (Flags, SC/VSC, Penalties)
+            if not session_loaded:
+                logger.info("Race control requested but session not yet loaded")
+                dashboards.append(
+                    dbc.Card([
+                        dbc.CardHeader(html.H5(" Race Control", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
+                        dbc.CardBody([
+                            dcc.Loading(
+                                html.Div([
+                                    html.P("Loading session data...", className="text-center p-5 text-muted"),
+                                    html.P("Please wait while we load the race control information.",
+                                           className="text-center text-muted small")
+                                ]),
+                                type="circle",
+                                color="#e10600"
+                            )
+                        ], className="p-2")
+                    ], className="mb-3", style={"height": "620px"})
+                )
+                continue
+            
+            try:
+                if current_session_obj is None:
+                    logger.warning("Race control requested but no session loaded")
+                    dashboards.append(
+                        dbc.Card([
+                            dbc.CardHeader(html.H5(" Race Control", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
+                            dbc.CardBody([
+                                html.P("No session loaded. Please select a race session from the sidebar.",
+                                       className="text-muted text-center p-5")
+                            ], className="p-2")
+                        ], className="mb-3", style={"height": "620px"})
+                    )
+                else:
+                    logger.info("Rendering race control dashboard...")
+                    session_key = None
+                    simulation_time = None
+                    
+                    if current_session_obj and hasattr(current_session_obj, 'session_key'):
+                        session_key = current_session_obj.session_key
+                    
+                    if simulation_time_data and 'time' in simulation_time_data:
+                        simulation_time = simulation_time_data.get('time', 0.0)
+                        logger.info(f"Using simulation time from store: {simulation_time:.1f}s")
+                    elif simulation_controller is not None:
+                        try:
+                            simulation_time = simulation_controller.get_elapsed_seconds()
+                            logger.info(f"Using simulation time from controller: {simulation_time:.1f}s")
+                        except Exception as e:
+                            logger.warning(f"Could not get simulation time: {e}")
+                            simulation_time = 0.0
+                    
+                    session_start_time = None
+                    if simulation_controller is not None:
+                        session_start_time = pd.Timestamp(simulation_controller.start_time)
+                    
+                    control_content = race_control_dashboard.render(
+                        session_key=session_key,
+                        simulation_time=simulation_time,
+                        session_start_time=session_start_time,
+                        focused_driver=focused_driver if focused_driver != 'none' else None
+                    )
+                    dashboards.append(control_content)
+                    logger.info("Race control dashboard rendered successfully")
+                    
+            except Exception as e:
+                logger.error(f"Error creating race control dashboard: {e}", exc_info=True)
+                dashboards.append(
+                    dbc.Card([
+                        dbc.CardHeader(html.H5(" Race Control", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
+                        dbc.CardBody([
+                            html.P(f"Error loading race control: {str(e)}", className="text-danger")
                         ], className="p-2")
                     ], className="mb-3", style={"height": "620px"})
                 )
