@@ -29,16 +29,22 @@ class OpenF1DataProvider:
 
     BASE_URL = "https://api.openf1.org/v1"
     
-    def __init__(self, rate_limit_delay: float = 0.5):
+    def __init__(self, rate_limit_delay: float = 0.5, verify_ssl: bool = False):
         """
         Initialize OpenF1 provider.
         
         Args:
             rate_limit_delay: Seconds to wait between API calls
+            verify_ssl: Whether to verify SSL certificates (False for corporate proxies)
         """
         self.rate_limit_delay = rate_limit_delay
+        self.verify_ssl = verify_ssl
         self._last_request_time = None
         logger.info("OpenF1DataProvider initialized")
+        if not verify_ssl:
+            # Suppress InsecureRequestWarning when SSL verification is disabled
+            import urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     def _rate_limit(self) -> None:
         """Enforce rate limiting between requests."""
@@ -73,7 +79,7 @@ class OpenF1DataProvider:
             self._rate_limit()
             
             try:
-                response = requests.get(url, params=params, timeout=30)
+                response = requests.get(url, params=params, timeout=30, verify=self.verify_ssl)
                 response.raise_for_status()
                 data = response.json()
                 logger.debug(

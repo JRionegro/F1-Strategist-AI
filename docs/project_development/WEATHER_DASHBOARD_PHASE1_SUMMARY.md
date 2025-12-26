@@ -7,9 +7,8 @@
 **Implementation Time**: ~3 hours  
 **Phase**: 1 of 3 (MVP)
 
----
-
-## What Was Implemented
+---quiero añadir una cuenta emprtesa
+I have 
 
 ### Core Features
 

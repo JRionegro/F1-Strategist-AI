@@ -37,12 +37,12 @@ def create_weather_dashboard() -> html.Div:
     """
     return html.Div(
         [
-            # Dashboard Title
-            html.H5("☁️ Weather", style={"fontSize": "0.9rem", "marginBottom": "8px"}),
-            
             # Current Conditions Panel (compact)
             dbc.Card(
                 [
+                    dbc.CardHeader([
+                        html.H5("☁️ Weather", className="mb-0", style={"fontSize": "1.2rem"})
+                    ], className="py-1"),
                     dbc.CardHeader(
                         id="weather-conditions-header",
                         className="text-white py-1",
@@ -528,7 +528,7 @@ def render_weather_content(session_key: Optional[int] = None, simulation_time: O
                     html.P("No weather data available for this session", 
                            className="text-muted text-center p-3")
                 ])
-            ], className="mb-3")
+            ], className="mb-3", style={"height": "650px"})
         
         # Filter data by simulation time if provided
         filtered_weather_df = weather_df
@@ -587,10 +587,12 @@ def render_weather_content(session_key: Optional[int] = None, simulation_time: O
         # Return complete layout with proper title structure (similar to AI Assistant)
         return dbc.Card([
             dbc.CardHeader([
-                html.H4([
-                    "☁️ Weather"
-                ], className="mb-0", style={"fontSize": "0.9rem"})
-            ]),
+                html.H5(
+                    "☁️ Weather",
+                    className="mb-0",
+                    style={"fontSize": "1.2rem"}
+                )
+            ], className="py-1"),
             dbc.CardBody([
                 # Current Conditions Panel
                 dbc.Card([
@@ -636,7 +638,7 @@ def render_weather_content(session_key: Optional[int] = None, simulation_time: O
                     ),
                 ], className="mb-2 border border-secondary", style={"backgroundColor": "#1e1e1e"}),
             ])
-        ], className="mb-3")
+        ], className="mb-3", style={"height": "620px", "overflow": "auto"})
         
     except Exception as e:
         logger.error(f"Error rendering weather content: {e}", exc_info=True)
@@ -649,4 +651,4 @@ def render_weather_content(session_key: Optional[int] = None, simulation_time: O
             dbc.CardBody([
                 html.P(f"Error loading weather: {str(e)}", className="text-danger text-center p-3")
             ])
-        ], className="mb-3")
+        ], className="mb-3", style={"height": "650px"})

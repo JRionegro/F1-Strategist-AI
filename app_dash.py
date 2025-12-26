@@ -7,6 +7,8 @@ Migrated from Streamlit to Dash for better layout control.
 
 import logging
 import os
+import sys
+import importlib
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
@@ -30,7 +32,35 @@ from src.session.global_session import (
 from src.session.simulation_controller import SimulationController
 from src.session.live_detector import check_for_live_session
 
-# Dash dashboards
+# FORCE RELOAD: Remove modules from cache BEFORE importing
+modules_to_reload = [
+    'src.dashboards_dash.weather_dashboard',
+    'src.dashboards_dash.ai_assistant_dashboard', 
+    'src.dashboards_dash.race_overview_dashboard'
+]
+for module_name in modules_to_reload:
+    if module_name in sys.modules:
+        del sys.modules[module_name]
+
+# Clear Python's import cache
+importlib.invalidate_caches()
+
+# Remove compiled Python files
+import os
+import glob
+project_root = os.path.dirname(os.path.abspath(__file__))
+for pattern in ['**/*.pyc', '**/__pycache__']:
+    for item in glob.glob(os.path.join(project_root, 'src', 'dashboards_dash', pattern), recursive=True):
+        try:
+            if os.path.isfile(item):
+                os.remove(item)
+            elif os.path.isdir(item):
+                import shutil
+                shutil.rmtree(item)
+        except:
+            pass
+
+# NOW import dashboards (fresh, no cache)
 from src.dashboards_dash.ai_assistant_dashboard import AIAssistantDashboard
 from src.dashboards_dash.race_overview_dashboard import RaceOverviewDashboard
 from src.dashboards_dash import weather_dashboard
@@ -42,8 +72,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize OpenF1 provider (replaces FastF1)
-openf1_provider = OpenF1DataProvider()
+# Initialize OpenF1 provider with SSL verification disabled for corporate proxies
+openf1_provider = OpenF1DataProvider(verify_ssl=False)
 
 # Initialize Race Overview Dashboard
 race_overview_dashboard = RaceOverviewDashboard(openf1_provider)
@@ -375,8 +405,6 @@ def create_sidebar():
                 dbc.AccordionItem([
                     # Config option
                     html.Div([
-                        html.H6("⚙️ Configuration", className="mb-3"),
-                        
                         # API Keys
                         html.Div([
                             html.P("🔑 API Keys", className="fw-bold mb-2"),
@@ -442,7 +470,7 @@ def create_sidebar():
                             html.Small(f"Vector Store: ChromaDB", className="text-muted d-block")
                         ])
                     ])
-                ], title="⚙️ Menu", className="mb-2")
+                ], title="⚙️ Configuration", className="mb-2")
             ], start_collapsed=True),
             
             # Help button
@@ -1066,7 +1094,7 @@ def update_dashboards(
                 logger.info("Race overview requested but session not yet loaded, showing placeholder")
                 dashboards.append(
                     dbc.Card([
-                        dbc.CardHeader(html.H5("🏁 Race Overview", style={"fontSize": "0.9rem"})),
+                        dbc.CardHeader(html.H5("🏁 Race Overview", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
                         dbc.CardBody([
                             dcc.Loading(
                                 html.Div([
@@ -1077,8 +1105,8 @@ def update_dashboards(
                                 type="circle",
                                 color="#e10600"
                             )
-                        ])
-                    ], className="mb-3")
+                        ], className="p-2")
+                    ], className="mb-3", style={"height": "620px"})
                 )
                 continue
                 
@@ -1090,12 +1118,12 @@ def update_dashboards(
                     logger.warning("Race overview requested but no session loaded")
                     dashboards.append(
                         dbc.Card([
-                            dbc.CardHeader(html.H5("🏁 Race Overview", style={"fontSize": "0.9rem"})),
+                            dbc.CardHeader(html.H5("🏁 Race Overview", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
                             dbc.CardBody([
                                 html.P("No session loaded. Please select a race session from the sidebar.", 
                                        className="text-muted text-center p-5")
-                            ])
-                        ], className="mb-3")
+                            ], className="p-2")
+                        ], className="mb-3", style={"height": "620px"})
                     )
                 else:
                     logger.info("Rendering race overview dashboard...")
@@ -1130,9 +1158,9 @@ def update_dashboards(
                     )
                     dashboards.append(
                         dbc.Card([
-                            dbc.CardHeader(html.H5("🏁 Race Overview", style={"fontSize": "0.9rem"})),
-                            dbc.CardBody(children=[overview_content])
-                        ], className="mb-3")
+                            dbc.CardHeader(html.H5("🏁 Race Overview", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
+                            dbc.CardBody(children=[overview_content], className="p-2")
+                        ], className="mb-3", style={"height": "620px", "overflow": "auto"})
                     )
                     logger.info("Race overview dashboard rendered successfully")
                     
@@ -1140,11 +1168,11 @@ def update_dashboards(
                 logger.error(f"Error creating race overview dashboard: {e}", exc_info=True)
                 dashboards.append(
                     dbc.Card([
-                        dbc.CardHeader(html.H5("🏁 Race Overview", style={"fontSize": "0.9rem"})),
+                        dbc.CardHeader(html.H5("🏁 Race Overview", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
                         dbc.CardBody([
                             html.P(f"Error loading race overview: {str(e)}", className="text-danger")
-                        ])
-                    ], className="mb-3")
+                        ], className="p-2")
+                    ], className="mb-3", style={"height": "620px"})
                 )
         
         elif dashboard_id == "weather":
@@ -1240,14 +1268,17 @@ def update_dashboards(
     
     # Wrap all dashboards in standardized columns with fixed height
     wrapped_dashboards = []
-    for dash in dashboards:
+    for idx, dash in enumerate(dashboards):
+        # Add border-right to all columns except every 3rd one (for visual separation)
+        border_style = {} if (idx + 1) % 3 == 0 else {"borderRight": "1px solid #000"}
+        
         if isinstance(dash, dbc.Col):
             # Already wrapped (e.g., weather) - recreate with height constraint
             wrapped_dashboards.append(
                 dbc.Col(
                     dash.children,
                     width=4,
-                    style={"height": "50vh", "overflow": "hidden", "maxWidth": "31.5%"},
+                    style={"height": "50vh", "overflow": "hidden", "maxWidth": "31.5%", **border_style},
                     className="mb-2"
                 )
             )
@@ -1257,7 +1288,7 @@ def update_dashboards(
                 dbc.Col(
                     dash, 
                     width=4, 
-                    style={"height": "50vh", "overflow": "hidden", "maxWidth": "31.5%"},
+                    style={"height": "50vh", "overflow": "hidden", "maxWidth": "31.5%", **border_style},
                     className="mb-2"
                 )
             )
@@ -1706,4 +1737,4 @@ if __name__ == '__main__':
     session.race_context = last_race
     logger.info(f"Initialized with {last_race.country} GP (Round {last_race.round_number}, {last_race.year})")
     
-    app.run(debug=True, port=8501)
+    app.run(debug=False, port=8501)

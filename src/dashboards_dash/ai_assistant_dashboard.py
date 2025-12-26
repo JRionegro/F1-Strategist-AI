@@ -42,8 +42,8 @@ class AIAssistantDashboard:
                 html.H4([
                     html.I(className="bi bi-robot me-2"),
                     "💬 AI Assistant"
-                ], className="mb-0", style={"fontSize": "0.9rem"})
-            ]),
+                ], className="mb-0", style={"fontSize": "1.2rem"})
+            ], className="py-1"),
             dbc.CardBody([
                 # Welcome message - ultra-compact version
                 dbc.Alert([
@@ -75,74 +75,72 @@ class AIAssistantDashboard:
                     ], width="auto")
                 ], className="mb-2"),
                 
-                # Chat container
-                html.Div([
-                    html.Div(
-                        id='chat-messages-container',
-                        children=[],
-                        style={
-                            'height': '200px',
-                            'overflow-y': 'auto',
-                            'padding': '6px',
-                            'background-color': '#1a1a1a',
-                            'border-radius': '5px',
-                            'margin-bottom': '8px'
-                        }
+                # Chat messages area (flex-grow to fill space)
+                html.Div(
+                    id='chat-messages-container',
+                    children=[],
+                    style={
+                        'overflow-y': 'auto',
+                        'padding': '6px',
+                        'background-color': '#1a1a1a',
+                        'border-radius': '5px',
+                        'margin-bottom': '8px',
+                        'height': '290px'
+                    }
+                ),
+                
+                # Input area (fixed at bottom)
+                dbc.InputGroup([
+                    dbc.Textarea(
+                        id='chat-input',
+                        placeholder="Ask a strategy question...",
+                        style={'resize': 'none', 'fontSize': '0.85rem'},
+                        rows=2
                     ),
-                    
-                    # Input area
-                    dbc.InputGroup([
-                        dbc.Textarea(
-                            id='chat-input',
-                            placeholder="Ask a strategy question...",
-                            style={'resize': 'none', 'fontSize': '0.85rem'},
-                            rows=2
+                    dbc.Button(
+                        [html.I(className="bi bi-send")],
+                        id='chat-send-btn',
+                        color="primary",
+                        n_clicks=0,
+                        style={'padding': '0.25rem 0.5rem'}
+                    )
+                ], className="mb-1", size="sm", style={'flex-shrink': '0'}),
+                
+                # Quick action buttons (fixed at bottom)
+                html.Div([
+                    dbc.ButtonGroup([
+                        dbc.Button(
+                            "Pit",
+                            id='quick-pit-btn',
+                            size="sm",
+                            outline=True,
+                            color="secondary"
                         ),
                         dbc.Button(
-                            [html.I(className="bi bi-send")],
-                            id='chat-send-btn',
-                            color="primary",
-                            n_clicks=0,
-                            style={'padding': '0.25rem 0.5rem'}
+                            "Weather",
+                            id='quick-weather-btn',
+                            size="sm",
+                            outline=True,
+                            color="secondary"
+                        ),
+                        dbc.Button(
+                            "Gaps",
+                            id='quick-gap-btn',
+                            size="sm",
+                            outline=True,
+                            color="secondary"
+                        ),
+                        dbc.Button(
+                            [html.I(className="bi bi-trash me-1"), "Clear"],
+                            id='clear-chat-btn',
+                            color="danger",
+                            size="sm",
+                            n_clicks=0
                         )
-                    ], className="mb-1", size="sm"),
-                    
-                    # Quick action buttons
-                    html.Div([
-                        dbc.ButtonGroup([
-                            dbc.Button(
-                                "Pit",
-                                id='quick-pit-btn',
-                                size="sm",
-                                outline=True,
-                                color="secondary"
-                            ),
-                            dbc.Button(
-                                "Weather",
-                                id='quick-weather-btn',
-                                size="sm",
-                                outline=True,
-                                color="secondary"
-                            ),
-                            dbc.Button(
-                                "Gaps",
-                                id='quick-gap-btn',
-                                size="sm",
-                                outline=True,
-                                color="secondary"
-                            ),
-                            dbc.Button(
-                                [html.I(className="bi bi-trash me-1"), "Clear"],
-                                id='clear-chat-btn',
-                                color="danger",
-                                size="sm",
-                                n_clicks=0
-                            )
-                        ], size="sm")
-                    ], className="d-flex justify-content-between", style={'fontSize': '0.8rem'})
-                ])
+                    ], size="sm")
+                ], className="d-flex justify-content-between", style={'fontSize': '0.8rem', 'flex-shrink': '0'})
             ])
-        ], className="mb-3")
+        ], className="mb-3", style={"height": "620px", "overflow": "hidden"})
     
     @staticmethod
     def create_user_message(content: str) -> html.Div:

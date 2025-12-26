@@ -944,10 +944,11 @@ class RaceOverviewDashboard:
                 {"name": "", "id": "TeamName"},  # Hidden via CSS
             ],
             data=table_rows,
+            fixed_rows={'headers': True},
             style_table={
                 "overflowX": "auto",
                 "backgroundColor": "#1e1e1e",
-                "maxHeight": "420px",
+                "height": "450px",
                 "overflowY": "auto"
             },
             style_header={
