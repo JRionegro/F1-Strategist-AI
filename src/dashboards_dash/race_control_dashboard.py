@@ -200,6 +200,11 @@ class RaceControlDashboard:
         drivers: Optional[pd.DataFrame] = None
     ):
         """Create scrollable timeline of race control messages."""
+        
+        # Log focused driver to track changes
+        if focused_driver:
+            logger.info(f"🎯 Creating timeline with focused_driver: {focused_driver} (total messages: {len(messages)})")
+        
         if messages.empty:
             return html.Div(
                 "No race control messages yet",
@@ -217,7 +222,24 @@ class RaceControlDashboard:
         driver_full_name = None
         driver_last_name = None
         
-        if focused_driver and drivers is not None and not drivers.empty:
+        # Parse focused_driver if it's in format "CODE_YEAR_NUMBER" (e.g., "HAM_2025_44")
+        if focused_driver:
+            parts = focused_driver.split('_')
+            if len(parts) >= 3:
+                # Format: CODE_YEAR_NUMBER
+                driver_code_from_id = parts[0]
+                driver_number_from_id = parts[2]
+                logger.info(f"Parsed focused_driver '{focused_driver}': code={driver_code_from_id}, number={driver_number_from_id}")
+                
+                # Use parsed values
+                driver_code = driver_code_from_id
+                driver_number = driver_number_from_id
+            else:
+                # Simple format (just code or number)
+                driver_code = focused_driver
+        
+        # Try to enrich with full driver info from drivers DataFrame
+        if drivers is not None and not drivers.empty:
             try:
                 # Column names after normalization in openf1_data_provider
                 # DriverNumber, Abbreviation, DriverName, TeamName, TeamColor
@@ -229,27 +251,30 @@ class RaceControlDashboard:
                 has_driver_number = 'DriverNumber' in drivers.columns or 'driver_number' in drivers.columns
                 has_abbreviation = 'Abbreviation' in drivers.columns or 'name_acronym' in drivers.columns
                 
+                search_value = driver_code if driver_code else focused_driver
+                search_number = driver_number if driver_number else focused_driver
+                
                 if has_driver_number and has_abbreviation:
                     number_col = 'DriverNumber' if 'DriverNumber' in drivers.columns else 'driver_number'
                     abbr_col = 'Abbreviation' if 'Abbreviation' in drivers.columns else 'name_acronym'
                     
                     driver_match = drivers[
-                        (drivers[number_col].astype(str) == str(focused_driver)) |
-                        (drivers[abbr_col] == focused_driver.upper())
+                        (drivers[number_col].astype(str) == str(search_number)) |
+                        (drivers[abbr_col] == search_value.upper())
                     ]
                 elif has_driver_number:
                     number_col = 'DriverNumber' if 'DriverNumber' in drivers.columns else 'driver_number'
-                    driver_match = drivers[drivers[number_col].astype(str) == str(focused_driver)]
+                    driver_match = drivers[drivers[number_col].astype(str) == str(search_number)]
                 elif has_abbreviation:
                     abbr_col = 'Abbreviation' if 'Abbreviation' in drivers.columns else 'name_acronym'
-                    driver_match = drivers[drivers[abbr_col] == focused_driver.upper()]
+                    driver_match = drivers[drivers[abbr_col] == search_value.upper()]
                 
                 if driver_match is not None and not driver_match.empty:
                     driver_info = driver_match.iloc[0]
                     
-                    # Get driver details with fallbacks
-                    driver_number = str(driver_info.get('DriverNumber', driver_info.get('driver_number', '')))
-                    driver_code = driver_info.get('Abbreviation', driver_info.get('name_acronym', ''))
+                    # Get driver details with fallbacks (override with DataFrame values if available)
+                    driver_number = str(driver_info.get('DriverNumber', driver_info.get('driver_number', driver_number)))
+                    driver_code = driver_info.get('Abbreviation', driver_info.get('name_acronym', driver_code))
                     driver_full_name = driver_info.get('DriverName', driver_info.get('full_name', ''))
                     
                     # Extract last name from full name if available
@@ -261,11 +286,16 @@ class RaceControlDashboard:
                     logger.info(
                         f"Focused driver detected: {driver_code} (#{driver_number}) - {driver_full_name}"
                     )
+                else:
+                    logger.info(f"Using parsed driver info: {driver_code} (#{driver_number})")
             except Exception as e:
                 logger.warning(f"Error processing focused driver info: {e}")
+                # Keep parsed values from focused_driver string
 
         # Classify and format messages
         message_rows = []
+        highlighted_count = 0
+        
         for idx, (_, row) in enumerate(messages_display.iterrows()):
             msg_type, color = self._classify_message(row)
 
@@ -282,47 +312,57 @@ class RaceControlDashboard:
             is_focused_driver = False
             if focused_driver and message_text:
                 message_upper = message_text.upper()
+                focused_upper = focused_driver.upper()
                 
-                # Build comprehensive list of search patterns (all uppercase)
-                search_patterns = []
+                # SIMPLIFIED DETECTION: Just check if the focused value appears anywhere
+                # This catches codes like "HAM", "COL", etc.
+                if focused_upper in message_upper:
+                    is_focused_driver = True
+                    logger.info(f"[SIMPLE] Match found for '{focused_driver}' in: {message_text}")
                 
-                if driver_number:
-                    search_patterns.extend([
-                        f"CAR {driver_number}",
-                        f"NO {driver_number}",
-                        f"NO. {driver_number}",
-                        f"#{driver_number}",
-                        f" {driver_number} ",
-                        f"({driver_number})"
-                    ])
-                
-                if driver_code:
-                    search_patterns.extend([
-                        driver_code.upper(),
-                        f" {driver_code.upper()} ",
-                        f"({driver_code.upper()})"
-                    ])
-                
-                if driver_last_name:
-                    search_patterns.extend([
-                        driver_last_name.upper(),
-                        f" {driver_last_name.upper()} "
-                    ])
-                
-                if driver_full_name:
-                    search_patterns.append(driver_full_name.upper())
-                
-                # Log patterns for debugging
-                logger.debug(f"Searching for patterns: {search_patterns} in message: {message_text}")
-                
-                # Check if any pattern matches
-                is_focused_driver = any(
-                    pattern in message_upper
-                    for pattern in search_patterns
-                )
-                
-                if is_focused_driver:
-                    logger.info(f"Message matches focused driver: {message_text}")
+                # Also check specific patterns with driver number and code
+                if not is_focused_driver:
+                    search_patterns = []
+                    
+                    if driver_number:
+                        # Number-based patterns
+                        search_patterns.extend([
+                            f" {driver_number} ",
+                            f"({driver_number})",
+                            f"{driver_number})",
+                            f"CAR {driver_number}",
+                            f"CARS {driver_number}",
+                            f"NO {driver_number}",
+                            f"NO. {driver_number}",
+                            f"#{driver_number}"
+                        ])
+                    
+                    if driver_code:
+                        code_upper = driver_code.upper()
+                        # Code-based patterns
+                        search_patterns.extend([
+                            code_upper,
+                            f" {code_upper} ",
+                            f"({code_upper})",
+                            f"{code_upper})"
+                        ])
+                    
+                    if driver_last_name:
+                        last_upper = driver_last_name.upper()
+                        search_patterns.extend([
+                            last_upper,
+                            f" {last_upper} "
+                        ])
+                    
+                    if driver_full_name:
+                        search_patterns.append(driver_full_name.upper())
+                    
+                    # Check if any pattern matches
+                    for pattern in search_patterns:
+                        if pattern in message_upper:
+                            is_focused_driver = True
+                            logger.info(f"[PATTERN] Match found for '{pattern}' in: {message_text}")
+                            break
 
             # Color coding
             text_color = {
@@ -346,6 +386,7 @@ class RaceControlDashboard:
                     "boxShadow": "0 0 10px rgba(255, 193, 7, 0.5)"
                 })
                 text_color = "#000000"  # Black text for better contrast on yellow
+                highlighted_count += 1
 
             message_rows.append(
                 html.Div([
