@@ -21,9 +21,14 @@ Optimized technology stack for **F1 Strategist AI** focusing on:
 
 | Component | Technology | Usage | Cost |
 |------------|-----------|-----|-------|
-| **Primary LLM** | Claude 3.5 Sonnet | Complex queries (~30%) | $3/1M in, $15/1M out |
+| **Primary LLM** | Claude (Opus/Sonnet/Haiku) | Complex queries (~30%) | $3-$75/1M tokens |
 | **Secondary LLM** | Gemini 2.0 Flash Thinking | Simple/moderate queries (~70%) | $0.01875/1M in, $0.075/1M out |
 | **Gemini Model** | `gemini-2.0-flash-thinking-exp-1219` | With reasoning mode | +5% overhead |
+
+**Claude Model Selection**:
+- **Opus** (`claude-3-opus-20240229`): Most capable, $15/$75 per 1M - for critical strategic analysis
+- **Sonnet** (`claude-3-5-sonnet-20241022`): Balanced, $3/$15 per 1M - default for complex queries
+- **Haiku** (`claude-3-haiku-20240307`): Fast, $0.25/$1.25 per 1M - for simple Claude needs
 
 **Routing by Complexity**:
 ```python
@@ -34,11 +39,11 @@ elif complexity_score < 0.7:
     # Gemini 2.0 Flash Thinking (moderate with thinking)
     llm = gemini_provider.with_thinking_mode()
 else:
-    # Claude 3.5 Sonnet (complex)
+    # Claude (Sonnet or Opus based on criticality)
     llm = claude_provider
 ```
 
-**Estimated Savings**: 68% vs Claude only
+**Estimated Savings**: 68% vs Claude Sonnet only, 85% vs Claude Opus only
 
 ---
 

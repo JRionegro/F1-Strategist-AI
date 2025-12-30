@@ -1,0 +1,46 @@
+{
+    // Cline (Claude Dev) Settings for Claude Opus
+    "cline.apiProvider": "anthropic",
+    "cline.apiModelId": "claude-3-opus-20240229",
+    // Alternative: Use different models for different tasks
+    // "cline.apiModelId": "claude-3-5-sonnet-20241022", // Default (balanced)
+    // "cline.apiModelId": "claude-3-haiku-20240307",    // Fast & cheap
+    // API Configuration
+    // Note: NEVER commit your API key to git
+    // Set via: Cline Settings UI or environment variable ANTHROPIC_API_KEY
+    // Cline Auto-Approval Settings (Optional)
+    "cline.autoApproveWrite": false, // Require approval for file writes
+    "cline.autoApproveCommand": false, // Require approval for terminal commands
+    "cline.autoApproveRequest": false, // Require approval for web requests
+    // Python Configuration for this Project
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+    "python.analysis.typeCheckingMode": "basic",
+    "python.linting.enabled": true,
+    "python.linting.flake8Enabled": true,
+    "python.formatting.provider": "black",
+    // File Associations
+    "files.associations": {
+        "*.env*": "properties",
+        "*.md": "markdown"
+    },
+    // Exclude patterns (don't let Cline modify these)
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/*.pyc": true,
+        "**/.pytest_cache": true,
+        "**/cache/**": true,
+        "**/test_cache/**": true
+    },
+    // Editor Settings
+    "editor.formatOnSave": true,
+    "editor.rulers": [
+        79,
+        120
+    ],
+    // Markdown Linting
+    "markdownlint.config": {
+        "MD013": false, // Line length
+        "MD033": false, // Inline HTML
+        "MD041": false // First line heading
+    }
+}

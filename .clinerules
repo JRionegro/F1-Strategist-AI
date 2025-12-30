@@ -1,0 +1,269 @@
+# Cline Rules for F1 Strategist AI Project
+
+## 🎯 Project Context
+
+This is an AI-powered F1 race strategy assistant with:
+- Multi-agent architecture (5 specialized agents)
+- Hybrid LLM system (Claude Opus/Sonnet/Haiku + Gemini)
+- OpenF1 API integration for race data
+- Real-time and historical analysis capabilities
+
+## 📝 Language Standards
+
+**CRITICAL**: All code, docs, and comments MUST be in English
+- ✅ Variable names: English
+- ✅ Function names: English
+- ✅ Comments: English
+- ✅ Docstrings: English
+- ✅ Documentation: English
+- ⚠️ Exception: User-facing UI messages may be Spanish if needed
+
+## 🐍 Python Code Standards
+
+### Style Guide (PEP8 Compliant)
+
+```python
+# Use snake_case for variables and functions
+def calculate_tire_degradation(lap_time: float, tire_age: int) -> float:
+    """Calculate tire degradation rate."""
+    pass
+
+# Use PascalCase for classes
+class StrategyAgent:
+    """F1 strategy analysis agent."""
+    pass
+
+# Line length: 79 characters for code, 72 for comments
+# Use 4 spaces for indentation (never tabs)
+```
+
+### Required Practices
+
+1. **Type Hints**: Always use type hints
+   ```python
+   def get_lap_times(driver: str, session_key: int) -> List[float]:
+   ```
+
+2. **Docstrings**: Use Google-style docstrings
+   ```python
+   def analyze_strategy(race_data: dict) -> dict:
+       """
+       Analyze optimal race strategy.
+       
+       Args:
+           race_data: Dictionary containing race information
+           
+       Returns:
+           Dictionary with strategy recommendations
+       """
+   ```
+
+3. **F-Strings**: Use f-strings properly (avoid F541 error)
+   ```python
+   # ✅ Good: f-string with placeholder
+   message = f"Driver {driver_name} finished P{position}"
+   
+   # ✅ Good: no placeholder, use regular string
+   message = "Race complete"
+   
+   # ❌ Bad: f-string without placeholder (F541 error)
+   message = f"Race complete"
+   ```
+
+4. **Logging**: Use logging module, not print
+   ```python
+   import logging
+   logger = logging.getLogger(__name__)
+   
+   logger.info(f"Processing lap {lap_number}")
+   logger.warning("Tire degradation high")
+   logger.error(f"Failed to fetch data: {error}")
+   ```
+
+5. **Error Handling**: Always catch specific exceptions
+   ```python
+   # ✅ Good
+   try:
+       data = fetch_race_data(session_key)
+   except ConnectionError as e:
+       logger.error(f"Connection failed: {e}")
+       return None
+   
+   # ❌ Bad: bare except
+   try:
+       data = fetch_race_data(session_key)
+   except:
+       pass
+   ```
+
+## 🏗️ Project Architecture
+
+### Agent System
+
+All agents inherit from `BaseAgent` in `src/agents/base_agent.py`:
+- StrategyAgent: Race strategy and pit stop optimization
+- WeatherAgent: Weather analysis and predictions
+- PerformanceAgent: Car/driver performance metrics
+- RaceControlAgent: Race control events (flags, SC, VSC)
+- RacePositionAgent: Track position and overtaking analysis
+
+### LLM Configuration
+
+Use helper functions from `src/llm/config.py`:
+```python
+from src.llm.config import get_claude_opus_config, get_claude_config
+
+# Use Opus for complex analysis
+config = get_claude_opus_config()
+
+# Use default (Sonnet) for standard tasks
+config = get_claude_config()
+
+# Override model at runtime
+config = get_claude_config(model_override="claude-3-haiku-20240307")
+```
+
+### Data Layer
+
+- Use OpenF1 API through `src/data/openf1_client.py`
+- Cache system in `src/data/cache/`
+- Historical data: `cache/` directory
+- Test data: `test_cache/` directory
+
+## 📁 File Organization
+
+```
+src/
+├── agents/          # Multi-agent system
+├── llm/            # LLM providers and routing
+├── data/           # Data fetching and caching
+├── rag/            # Vector store and embeddings
+├── mcp_server/     # Model Context Protocol tools
+├── ui/             # Streamlit/Dash components
+└── visualizations/ # Plotly charts
+
+tests/              # Pytest test files
+docs/               # Documentation
+examples/           # Usage examples
+scripts/            # Utility scripts
+```
+
+## 🧪 Testing
+
+### Test Requirements
+
+1. **Location**: All tests in `tests/` directory
+2. **Naming**: Test files must start with `test_`
+3. **Framework**: Use pytest
+4. **Coverage**: Write tests for new features
+
+```python
+# tests/test_strategy_agent.py
+import pytest
+from src.agents.strategy_agent import StrategyAgent
+
+def test_strategy_agent_initialization():
+    """Test that StrategyAgent initializes correctly."""
+    # Implementation
+    pass
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run specific test file
+pytest tests/test_strategy_agent.py
+
+# Run with coverage
+pytest --cov=src tests/
+```
+
+## 🔒 Security & Best Practices
+
+1. **API Keys**: NEVER commit API keys
+   - Use environment variables
+   - Keep in `config/.env` (gitignored)
+   - Use `python-dotenv` to load
+
+2. **Sensitive Data**: Don't commit
+   - API keys
+   - Personal data
+   - Large datasets (use cache)
+
+3. **Git Workflow**
+   - Don't commit to `main` directly
+   - Create feature branches: `feature/claude-opus-integration`
+   - Write clear commit messages
+
+## 🎨 Markdown Standards
+
+Follow `.markdownlint.json` rules:
+- Use proper heading hierarchy
+- Keep lines under 120 characters (when possible)
+- Avoid unnecessary HTML
+- Use consistent list formatting
+
+## 🚫 What NOT to Modify
+
+- **Cache directories**: `cache/`, `test_cache/`
+- **Generated files**: `__pycache__/`, `*.pyc`
+- **Environment files**: `.env` (only `.env.example`)
+- **Dependencies**: Only modify `requirements.txt` if adding new packages
+
+## ✅ Pre-commit Checklist
+
+Before committing code, ensure:
+1. ✅ No linting errors: `flake8 src/`
+2. ✅ Tests pass: `pytest`
+3. ✅ Type hints added
+4. ✅ Docstrings written
+5. ✅ No F541 errors (empty f-strings)
+6. ✅ All text in English
+7. ✅ API keys not committed
+
+## 📚 Documentation
+
+When creating or modifying features:
+1. Update relevant docs in `docs/`
+2. Add examples in `examples/`
+3. Update README.md if needed
+4. Keep docs in English
+
+## 🔧 IDE Configuration
+
+Already configured in `.vscode/settings.json`:
+- Python interpreter: `.venv/Scripts/python.exe`
+- Linting: flake8 enabled
+- Formatting: black
+- Max line length: 79 characters
+
+## 💡 When Using Claude Opus
+
+Use Opus for:
+- Complex agent refactoring
+- Architectural decisions
+- Multi-file changes
+- Strategic analysis logic
+- Performance optimization
+
+Use Sonnet for:
+- Standard feature implementation
+- Bug fixes
+- Documentation
+- Tests
+
+Use Haiku for:
+- Simple edits
+- Formatting
+- Quick fixes
+
+## 📞 Need Help?
+
+- Architecture: See `docs/AGENTS_ARCHITECTURE.md`
+- Tech Stack: See `docs/TECH_STACK_FINAL.md`
+- Quick Start: See `docs/QUICK_START.md`
+- LLM Usage: See `docs/CLAUDE_OPUS_GUIDE.md`
+- VS Code Setup: See `docs/VSCODE_CLAUDE_OPUS_SETUP.md`

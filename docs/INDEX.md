@@ -1,6 +1,6 @@
 # F1 Strategist AI - Documentation Index
 
-**Last Updated**: December 21, 2025  
+**Last Updated**: December 30, 2025  
 **Project Status**: Phase 3B Complete ✅ | Phase 3C Integration Testing 🔄
 
 ---
@@ -17,10 +17,17 @@
 | Document | Description | Last Updated |
 |----------|-------------|-------------|
 | [PROJECT_SPECIFICATIONS.md](./PROJECT_SPECIFICATIONS.md) | Complete project specifications | 12/20/2025 ✅ |
-| [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) | Technology stack and architecture | 12/20/2025 ✅ |
+| [TECH_STACK_FINAL.md](./TECH_STACK_FINAL.md) | Technology stack and architecture | 12/30/2025 ✅ |
 | [AGENTS_ARCHITECTURE.md](./AGENTS_ARCHITECTURE.md) | Multi-agent system architecture | 12/21/2025 ✅ |
 | [MCP_API_REFERENCE.md](./MCP_API_REFERENCE.md) | MCP Server API reference (13 tools) | 12/20/2025 ✅ |
 | [UI_UX_SPECIFICATION.md](./UI_UX_SPECIFICATION.md) | User interface specifications | 12/20/2025 ✅ |
+
+### LLM Configuration Guides
+| Document | Description | Last Updated |
+|----------|-------------|-------------|
+| [CLAUDE_OPUS_GUIDE.md](./CLAUDE_OPUS_GUIDE.md) | Complete guide to using Claude Opus | 12/30/2025 ✨ NEW |
+| [CLAUDE_MODELS_REFERENCE.md](./CLAUDE_MODELS_REFERENCE.md) | Quick reference for all Claude models | 12/30/2025 ✨ NEW |
+| [CLAUDE_OPUS_INTEGRATION_SUMMARY.md](./CLAUDE_OPUS_INTEGRATION_SUMMARY.md) | Integration summary | 12/30/2025 ✨ NEW |
 
 ---
 

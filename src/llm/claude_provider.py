@@ -16,14 +16,26 @@ logger = logging.getLogger(__name__)
 
 class ClaudeProvider(LLMProvider):
     """
-    Claude 3.5 Sonnet provider for complex strategic queries.
+    Claude provider supporting multiple models (Opus, Sonnet, Haiku).
 
-    Cost: $3/1M input tokens, $15/1M output tokens
-    Context: 128K tokens
-    Best for: Complex multi-step reasoning, strategic analysis
+    Models:
+    - claude-3-opus-20240229: Most capable, $15/$75 per 1M tokens
+    - claude-3-5-sonnet-20241022: Balanced, $3/$15 per 1M tokens
+    - claude-3-haiku-20240307: Fast & cheap, $0.25/$1.25 per 1M tokens
+
+    Context: 200K tokens (Opus/Sonnet), 128K tokens (Haiku)
+    Best for: Complex reasoning, strategic analysis, code generation
     """
 
-    # Pricing per million tokens (USD)
+    # Pricing per million tokens (USD) by model
+    MODEL_PRICING = {
+        "claude-3-opus-20240229": {"input": 15.00, "output": 75.00},
+        "claude-3-5-sonnet-20241022": {"input": 3.00, "output": 15.00},
+        "claude-3-5-sonnet-20240620": {"input": 3.00, "output": 15.00},
+        "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
+    }
+    
+    # Default pricing (fallback)
     COST_PER_1M_INPUT = 3.00
     COST_PER_1M_OUTPUT = 15.00
 
@@ -32,7 +44,25 @@ class ClaudeProvider(LLMProvider):
         super().__init__(config)
         self.client = AsyncAnthropic(api_key=config.api_key)
         self.model = config.model_name or "claude-3-5-sonnet-20241022"
-        logger.info(f"Initialized ClaudeProvider with model: {self.model}")
+        
+        # Validate model and set pricing
+        if self.model not in self.MODEL_PRICING:
+            logger.warning(
+                f"Unknown Claude model: {self.model}. "
+                "Using Sonnet 3.5 pricing as fallback."
+            )
+            self.COST_PER_1M_INPUT = 3.00
+            self.COST_PER_1M_OUTPUT = 15.00
+        else:
+            pricing = self.MODEL_PRICING[self.model]
+            self.COST_PER_1M_INPUT = pricing["input"]
+            self.COST_PER_1M_OUTPUT = pricing["output"]
+        
+        logger.info(
+            f"Initialized ClaudeProvider with model: {self.model} "
+            f"(${self.COST_PER_1M_INPUT}/${self.COST_PER_1M_OUTPUT} "
+            "per 1M tokens)"
+        )
 
     async def generate(
         self,

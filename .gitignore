@@ -33,7 +33,10 @@ env.bak/
 venv.bak/
 
 # IDE
-.vscode/
+# .vscode/ - Keeping workspace settings for team consistency
+.vscode/*.log
+.vscode/launch.json
+.vscode/tasks.json
 .idea/
 *.swp
 *.swo

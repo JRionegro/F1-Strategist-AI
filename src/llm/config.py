@@ -13,7 +13,7 @@ config_dir = Path(__file__).parent.parent.parent / "config"
 load_dotenv(config_dir / ".env")
 
 
-def get_claude_config() -> LLMConfig:
+def get_claude_config(model_override: Optional[str] = None) -> LLMConfig:
     """
     Load Claude configuration from environment.
 
@@ -21,9 +21,16 @@ def get_claude_config() -> LLMConfig:
     - ANTHROPIC_API_KEY
 
     Optional:
-    - CLAUDE_MODEL
+    - CLAUDE_MODEL (default: claude-3-5-sonnet-20241022)
+      Available models:
+        - claude-3-opus-20240229 (most capable)
+        - claude-3-5-sonnet-20241022 (balanced)
+        - claude-3-haiku-20240307 (fast & cheap)
     - CLAUDE_MAX_TOKENS
     - CLAUDE_TEMPERATURE
+
+    Args:
+        model_override: Optional model name to override env/default
 
     Returns:
         LLMConfig for Claude
@@ -38,11 +45,13 @@ def get_claude_config() -> LLMConfig:
             "Get key from: https://console.anthropic.com/"
         )
 
+    model_name = (
+        model_override or
+        os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20241022")
+    )
+
     return LLMConfig(
-        model_name=os.getenv(
-            "CLAUDE_MODEL",
-            "claude-3-5-sonnet-20241022"
-        ),
+        model_name=model_name,
         api_key=api_key,
         max_tokens=int(os.getenv("CLAUDE_MAX_TOKENS", "4096")),
         temperature=float(os.getenv("CLAUDE_TEMPERATURE", "0.7")),
@@ -115,3 +124,20 @@ def get_hybrid_router_config() -> dict:
             os.getenv("COMPLEXITY_THRESHOLD_HIGH", "0.7")
         )
     }
+
+
+def get_claude_opus_config() -> LLMConfig:
+    """
+    Get Claude Opus configuration specifically.
+    
+    Claude Opus is the most capable model, best for:
+    - Complex strategic analysis
+    - Multi-step reasoning
+    - High-stakes decision making
+    
+    Cost: $15/$75 per 1M tokens (5x more than Sonnet)
+    
+    Returns:
+        LLMConfig configured for Claude Opus
+    """
+    return get_claude_config(model_override="claude-3-opus-20240229")

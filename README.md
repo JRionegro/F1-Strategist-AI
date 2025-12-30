@@ -15,10 +15,11 @@ An AI-powered Formula 1 race strategy assistant with unified OpenF1 data source 
 ### ✅ Phase 2D: Architecture & Tech Stack (FINALIZED)
 
 - **5-Agent Architecture**: Strategy, Weather, Performance, Race Control, Race Position
-- **LLM Hybrid**: Claude 3.5 Sonnet + Gemini 2.0 Flash Thinking (68% cost savings)
+- **LLM Hybrid**: Claude (Opus/Sonnet/Haiku) + Gemini 2.0 Flash Thinking (68% cost savings)
 - **Vector Store**: ChromaDB (MVP) + Pinecone option (production)
 - **Embeddings**: all-MiniLM-L6-v2 (384 dims, local, free)
 - **Cost Projection**: $8.50/mo MVP, $294/mo production
+- **Claude Models**: Full support for Opus (complex), Sonnet (balanced), Haiku (fast)
 
 ### ✅ Phase 3A: LangChain Foundation (COMPLETED)
 
