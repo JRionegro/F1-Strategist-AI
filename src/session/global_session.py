@@ -42,11 +42,15 @@ class RaceContext:
     session_date: datetime
     total_laps: int
     current_lap: int = 1
-    
+
+    # OpenF1 specific fields
+    meeting_key: Optional[int] = None
+    session_key: Optional[int] = None
+
     # Driver/Team focus
     focused_driver: Optional[str] = None  # Driver code (e.g., "VER")
     focused_team: Optional[str] = None    # Team name (e.g., "Red Bull Racing")
-    
+
     # Additional context
     weather_conditions: Optional[str] = None
     track_status: str = "Unknown"

@@ -20,6 +20,10 @@ import pandas as pd
 # OpenF1 data provider (replaces FastF1)
 from src.data.openf1_adapter import get_session as get_openf1_session, SessionAdapter
 from src.data.openf1_data_provider import OpenF1DataProvider
+from src.data.last_race_finder import (
+    get_last_completed_race,
+    get_last_completed_meeting_key
+)
 
 # Core infrastructure (reused from Streamlit version)
 from src.agents.orchestrator import AgentOrchestrator
@@ -107,19 +111,37 @@ simulation_controller: Optional[SimulationController] = None
 current_session_obj = None
 
 
-def get_last_completed_race() -> RaceContext:
+def get_last_completed_race_context() -> RaceContext:
     """
-    Get the most recent completed race.
-    Returns Abu Dhabi GP 2025 (last race of season).
+    Get the most recent completed race from OpenF1.
+
+    Falls back to a default if OpenF1 is unavailable.
+
+    Returns:
+        RaceContext with the last completed race information.
     """
+    # Try to get from OpenF1
+    race_context = get_last_completed_race(openf1_provider)
+
+    if race_context:
+        logger.info(
+            f"Found last completed race: {race_context.country} GP "
+            f"(Round {race_context.round_number}, {race_context.year})"
+        )
+        return race_context
+
+    # Fallback: return a sensible default (last known race)
+    logger.warning(
+        "Could not find last race from OpenF1, using fallback"
+    )
     return RaceContext(
-        year=2025,
-        round_number=24,
-        circuit_name="Yas Marina Circuit",
-        circuit_key="abu_dhabi",
-        country="United Arab Emirates",
+        year=datetime.now().year,
+        round_number=1,
+        circuit_name="Unknown Circuit",
+        circuit_key="unknown",
+        country="Unknown",
         session_type=SessionType.RACE,
-        session_date=datetime(2025, 12, 8, 15, 0),
+        session_date=datetime.now(),
         total_laps=57,
         current_lap=1
     )
@@ -724,12 +746,25 @@ def update_circuits(year, current_circuit):
             'value': meeting_key
         })
     
-    # Keep current selection if it exists in new options, otherwise select last race (2025) or first
+    # Keep current selection if it exists in new options
     if current_circuit and current_circuit in circuit_keys:
         default_value = current_circuit
     else:
-        default_value = circuit_options[-1]['value'] if year == 2025 else circuit_options[0]['value']
-    
+        # Try to get last completed race from OpenF1
+        last_meeting_key = get_last_completed_meeting_key(openf1_provider)
+
+        if last_meeting_key and last_meeting_key in circuit_keys:
+            default_value = last_meeting_key
+            logger.info(
+                f"Auto-selected last completed race: meeting_key={last_meeting_key}"
+            )
+        elif circuit_options:
+            # Fallback: select last race in list for current year, first otherwise
+            default_value = circuit_options[-1]['value']
+            logger.info("Using last circuit in calendar as default")
+        else:
+            default_value = None
+
     return circuit_options, default_value
 
 
@@ -1831,10 +1866,13 @@ if __name__ == '__main__':
     logger.info("Starting application...")
     logger.info("Open: http://localhost:8501")
     logger.info("="*60)
-    
-    # Initialize session with last completed race
-    last_race = get_last_completed_race()
+
+    # Initialize session with last completed race (dynamic from OpenF1)
+    last_race = get_last_completed_race_context()
     session.race_context = last_race
-    logger.info(f"Initialized with {last_race.country} GP (Round {last_race.round_number}, {last_race.year})")
-    
+    logger.info(
+        f"Initialized with {last_race.country} GP "
+        f"(Round {last_race.round_number}, {last_race.year})"
+    )
+
     app.run(debug=False, port=8501)
