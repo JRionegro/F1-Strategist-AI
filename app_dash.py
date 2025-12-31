@@ -1195,10 +1195,23 @@ def update_dashboards(
                     if simulation_controller is not None:
                         session_start_time = pd.Timestamp(simulation_controller.start_time)
                     
+                    # Get current lap from simulation controller
+                    # This is the GLOBAL lap (OpenF1 format) from the leader
+                    overview_current_lap = None
+                    if simulation_controller is not None:
+                        try:
+                            overview_current_lap = simulation_controller.get_current_lap()
+                            logger.info(
+                                f"Passing current_lap to overview: {overview_current_lap}"
+                            )
+                        except Exception as e:
+                            logger.warning(f"Could not get lap for overview: {e}")
+                    
                     overview_content = race_overview_dashboard.render(
                         session_key=session_key,
                         simulation_time=simulation_time,
-                        session_start_time=session_start_time
+                        session_start_time=session_start_time,
+                        current_lap=overview_current_lap
                     )
                     dashboards.append(
                         dbc.Card([
@@ -1543,11 +1556,12 @@ def toggle_play_pause(n_clicks):
     
     # Toggle play/pause state (simulation always starts from 0)
     is_playing = simulation_controller.toggle_play_pause()
+    logger.info(f"Play/Pause toggled: is_playing={is_playing}")
     
     if is_playing:
-        return "⏸️", "warning", False, "Pause simulation"  # Enable interval, change tooltip
+        return "⏸️", "warning", False, "Pause simulation"
     else:
-        return "▶️", "success", True, "Play simulation"  # Disable interval, change tooltip
+        return "▶️", "success", True, "Play simulation"
 
 
 # Callback: Restart simulation
@@ -1588,38 +1602,44 @@ def change_speed(speed):
     return speed
 
 
-# Callback: Jump backward (previous lap)
+# Callback: Handle lap jump buttons (forward/backward)
+# These MUST update simulation-time-store to trigger dashboard refresh
 @callback(
-    Output('back-btn', 'n_clicks'),
+    Output('simulation-time-store', 'data', allow_duplicate=True),
     Input('back-btn', 'n_clicks'),
+    Input('forward-btn', 'n_clicks'),
+    State('simulation-time-store', 'data'),
     prevent_initial_call=True
 )
-def jump_backward(n_clicks):
-    """Jump to previous lap."""
+def handle_lap_jumps(back_clicks, forward_clicks, current_time_data):
+    """Handle lap jump buttons and update simulation time store."""
     global simulation_controller
     
-    if simulation_controller:
+    if simulation_controller is None:
+        raise PreventUpdate
+    
+    triggered = ctx.triggered_id
+    old_lap = simulation_controller.get_current_lap()
+    
+    if triggered == 'back-btn':
         simulation_controller.jump_backward(90)  # ~90 seconds per lap
         logger.info("Jumped to previous lap")
-    
-    raise PreventUpdate
-
-
-# Callback: Jump forward (next lap)
-@callback(
-    Output('forward-btn', 'n_clicks'),
-    Input('forward-btn', 'n_clicks'),
-    prevent_initial_call=True
-)
-def jump_forward(n_clicks):
-    """Jump to next lap."""
-    global simulation_controller
-    
-    if simulation_controller:
+    elif triggered == 'forward-btn':
         simulation_controller.jump_forward(90)  # ~90 seconds per lap
         logger.info("Jumped to next lap")
+    else:
+        raise PreventUpdate
     
-    raise PreventUpdate
+    # Return updated time to trigger dashboard refresh
+    new_time = simulation_controller.get_elapsed_seconds()
+    new_lap = simulation_controller.get_current_lap()
+    
+    logger.info(f"Lap jump: {old_lap} -> {new_lap} (time={new_time:.1f}s)")
+    
+    return {
+        'time': new_time,
+        'timestamp': datetime.now().timestamp()
+    }
 
 
 # Callback: Update simulation progress display every second

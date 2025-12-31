@@ -147,6 +147,14 @@ class SimulationController:
         self.current_time = target_time
         self.last_update = datetime.now()
         
+        # Update simulation_offset so get_elapsed_seconds() returns correct value
+        self.simulation_offset = (target_time - self.start_time).total_seconds()
+        
+        # Reset play tracking if currently playing
+        if self.is_playing:
+            self.play_start_time = datetime.now()
+            self.play_start_session_time = target_time
+        
         if self.on_time_update:
             self.on_time_update(self.current_time)
         

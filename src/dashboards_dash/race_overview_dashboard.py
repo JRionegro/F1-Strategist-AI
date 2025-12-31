@@ -60,7 +60,8 @@ class RaceOverviewDashboard:
         self,
         session_key: Optional[int] = None,
         simulation_time: Optional[float] = None,
-        session_start_time: Optional[pd.Timestamp] = None
+        session_start_time: Optional[pd.Timestamp] = None,
+        current_lap: Optional[int] = None
     ):
         """
         Render the Race Overview Dashboard with real-time leaderboard.
@@ -69,6 +70,7 @@ class RaceOverviewDashboard:
             session_key: OpenF1 session key
             simulation_time: Current simulation time in seconds from session start
             session_start_time: Session start timestamp from SimulationController
+            current_lap: Current lap from SimulationController (OpenF1 format)
 
         Returns:
             Dash component tree for the dashboard
@@ -450,6 +452,12 @@ class RaceOverviewDashboard:
                     f"drivers with {len(stints)} stints"
                 )
                 
+                # Use global current_lap from controller if provided
+                # This ensures tire age is synced with the lap counter shown in UI
+                global_lap = current_lap  # From render() parameter
+                if global_lap is not None:
+                    logger.debug(f"Using global current_lap: {global_lap}")
+                
                 # Build lists for tire data
                 tire_ages = []
                 compounds = []
@@ -466,7 +474,8 @@ class RaceOverviewDashboard:
                     
                     tire_age = 0
                     compound = 'UNKNOWN'
-                    current_lap = 1
+                    # Use global lap if provided, otherwise fallback to calculating per-driver
+                    driver_current_lap = global_lap if global_lap is not None else 1
                     driver_laps = pd.DataFrame()  # Initialize to fix Pylance error
                     
                     # Get driver's actual current lap from lap data PER DRIVER
@@ -491,7 +500,9 @@ class RaceOverviewDashboard:
                             if len(driver_laps) > 0:
                                 logger.info(f"ALO lap numbers: {sorted(driver_laps['LapNumber'].unique())}")
                         
-                        if not driver_laps.empty:
+                        # Calculate per-driver lap ONLY if no global lap provided
+                        # This ensures tire age stays in sync with the UI lap counter
+                        if global_lap is None and not driver_laps.empty:
                             if (
                                 simulation_time is not None
                                 and session_start_time is not None
@@ -517,11 +528,11 @@ class RaceOverviewDashboard:
                                 ].copy()
                                 
                                 if valid_laps.empty:
-                                    current_lap = int(valid_laps['LapNumber'].min()) if not valid_laps.empty else 2
+                                    driver_current_lap = int(valid_laps['LapNumber'].min()) if not valid_laps.empty else 2
                                 elif simulation_time == 0:
                                     # At simulation start, use the FIRST valid lap from OpenF1
                                     # (typically lap 2, which is the first racing lap after formation)
-                                    current_lap = int(valid_laps['LapNumber'].min())
+                                    driver_current_lap = int(valid_laps['LapNumber'].min())
                                 else:
                                     # Find the lap currently IN PROGRESS
                                     # This is the lap that started MOST RECENTLY before sim_timestamp
@@ -546,17 +557,17 @@ class RaceOverviewDashboard:
                                             
                                             # If lap has no end time, it's the current lap
                                             if pd.isna(lap_end):
-                                                current_lap = int(lap_row['LapNumber'])
+                                                driver_current_lap = int(lap_row['LapNumber'])
                                                 break
                                             # If lap ended after sim_timestamp, it's still in progress
                                             elif lap_end > sim_timestamp:
-                                                current_lap = int(lap_row['LapNumber'])
+                                                driver_current_lap = int(lap_row['LapNumber'])
                                                 break
                                         else:
                                             # If no lap found, use the first one that started
-                                            current_lap = int(started_laps_sorted.iloc[0]['LapNumber'])
+                                            driver_current_lap = int(started_laps_sorted.iloc[0]['LapNumber'])
                                     else:
-                                        current_lap = 1
+                                        driver_current_lap = 1
                                 
                                 # DETAILED LOGGING FOR ALONSO
                                 if is_alonso:
@@ -574,7 +585,7 @@ class RaceOverviewDashboard:
                                     logger.info(f"Last Lap Start: {last_lap_start}")
                                     logger.info(f"Total Laps in Data: {len(driver_laps_sorted)}")
                                     logger.info(f"Started Laps Count: {len(started_laps)}")
-                                    logger.info(f"CALCULATED CURRENT LAP: {current_lap}")
+                                    logger.info(f"CALCULATED CURRENT LAP: {driver_current_lap}")
                                     logger.info(f"Time since first lap: {(sim_timestamp - first_lap_start).total_seconds()}s")
                                     if not started_laps.empty:
                                         logger.info(f"Last started lap number: {started_laps['LapNumber'].max()}")
@@ -582,9 +593,9 @@ class RaceOverviewDashboard:
                             else:
                                 # If no simulation time, use latest lap
                                 if 'LapNumber' in driver_laps.columns:
-                                    current_lap = int(driver_laps['LapNumber'].max())
+                                    driver_current_lap = int(driver_laps['LapNumber'].max())
                                 else:
-                                    current_lap = 1
+                                    driver_current_lap = 1
                     
                     # Get driver's stints sorted by stint number
                     driver_stints = stints[
@@ -602,8 +613,8 @@ class RaceOverviewDashboard:
                                 f"Compound={s.get('Compound', 'N/A')}, "
                                 f"TyreAge={s.get('TyreAge', 'N/A')}"
                             )
-                        logger.info(f"Current lap for pit stop calculation: {current_lap}")
-                        logger.info(f"⚠️ CRITICAL: Is this the REAL lap number we're on?")
+                        logger.info(f"Current lap for pit stop calculation: {driver_current_lap}")
+                        logger.info(f"Using GLOBAL lap: {global_lap is not None}")
                     
                     # Calculate number of pit stops COMPLETED up to current lap
                     # A pit stop is COMPLETED when driver STARTS a new stint (not stint 1)
@@ -616,13 +627,13 @@ class RaceOverviewDashboard:
                         if is_alonso:
                             logger.info(
                                 f"  Checking stint {stint_number}: "
-                                f"start={stint_start}, current_lap={current_lap}, "
-                                f"started={stint_start <= current_lap if pd.notna(stint_start) else False}"
+                                f"start={stint_start}, driver_current_lap={driver_current_lap}, "
+                                f"started={stint_start <= driver_current_lap if pd.notna(stint_start) else False}"
                             )
                         
                         # Pit stop completed = STARTED a new stint (not stint 1)
                         # BUT: only if current lap > stint start (already in that stint)
-                        if pd.notna(stint_start) and current_lap > stint_start and stint_number > 1:
+                        if pd.notna(stint_start) and driver_current_lap > stint_start and stint_number > 1:
                             num_pit_stops += 1
                             if is_alonso:
                                 logger.info(f"    -> Pit stop counted! Total now: {num_pit_stops}")
@@ -634,8 +645,8 @@ class RaceOverviewDashboard:
                             stint_start = stint.get('StintStart', 0)
                             stint_end = stint.get('StintEnd', 999)
                             
-                            if pd.notna(stint_start) and stint_start <= current_lap:
-                                if pd.isna(stint_end) or current_lap <= stint_end:
+                            if pd.notna(stint_start) and stint_start <= driver_current_lap:
+                                if pd.isna(stint_end) or driver_current_lap <= stint_end:
                                     current_stint = stint
                                     break
                         
@@ -667,7 +678,7 @@ class RaceOverviewDashboard:
                                 seconds=float(simulation_time)
                             )
                         
-                            for lap_num in range(stint_start_lap, current_lap + 1):
+                            for lap_num in range(stint_start_lap, driver_current_lap + 1):
                                 lap_row = driver_laps[
                                     driver_laps['LapNumber'] == lap_num
                                 ]
@@ -693,9 +704,8 @@ class RaceOverviewDashboard:
                         # DETAILED LOGGING FOR ALONSO
                         if is_alonso:
                             logger.info(f"\n--- ALO TIRE AGE CALCULATION (DRIVER #14) ---")
-                            logger.info(f"✅ INTERNAL Current lap (OpenF1): {current_lap}")
-                            logger.info(f"📊 VISUAL Current lap (Racing): {current_lap - 1}")
-                            logger.info(f"⚠️  THIS IS CALCULATED FROM DRIVER #14 LAPS ONLY")
+                            logger.info(f"✅ Current lap (global from controller): {driver_current_lap}")
+                            logger.info(f"📊 Using global_lap: {global_lap is not None}")
                             logger.info(f"Total Stints: {len(driver_stints)}")
                             logger.info(f"🔧 Pit Stops CALCULATED: {num_pit_stops}")
                             logger.info(f"Current Stint Number: {stint_number}")
@@ -726,7 +736,7 @@ class RaceOverviewDashboard:
                         # Debug logging for first driver
                         elif idx == 0:
                             logger.info(
-                                f"Driver #{driver_num}: REAL lap={current_lap}, "
+                                f"Driver #{driver_num}: REAL lap={driver_current_lap}, "
                                 f"stint_start={stint_start_lap}, "
                                 f"tyre_age_at_start={tyre_age_at_start}, "
                                 f"calculated_age={tire_age}, compound={compound}"
