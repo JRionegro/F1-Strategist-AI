@@ -26,6 +26,11 @@ langchain-openai>=0.0.2
 chromadb>=0.4.22
 sentence-transformers>=2.2.2
 
+# RAG Document Processing
+pymupdf4llm>=0.2.7
+python-docx>=1.2.0
+langchain-text-splitters>=1.1.0
+
 # Visualizations
 plotly>=5.18.0
 dash>=2.14.0

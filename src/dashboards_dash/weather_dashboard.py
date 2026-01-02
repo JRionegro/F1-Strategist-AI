@@ -28,6 +28,22 @@ from plotly.subplots import make_subplots
 logger = logging.getLogger(__name__)
 
 
+def _degrees_to_cardinal(degrees: float) -> str:
+    """Convert wind direction in degrees to cardinal direction."""
+    directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+    index = round(degrees / 45) % 8
+    return directions[index]
+
+
+def _degrees_to_arrow(degrees: float) -> str:
+    """Convert wind direction in degrees to arrow character."""
+    # Arrows point in the direction the wind is GOING TO
+    # Wind from N (0°) blows south, so arrow points down
+    arrows = ['↓', '↙', '←', '↖', '↑', '↗', '→', '↘']
+    index = round(degrees / 45) % 8
+    return arrows[index]
+
+
 def create_weather_dashboard() -> html.Div:
     """
     Create compact Weather dashboard layout (Phase 1 MVP).
@@ -140,12 +156,17 @@ def create_weather_conditions_panel(
     # Get latest weather reading
     latest = weather_df.iloc[-1]
 
+    # Get wind direction and convert to cardinal + arrow
+    wind_dir = latest.get('WindDirection', 0) or 0
+    cardinal = _degrees_to_cardinal(wind_dir)
+    arrow = _degrees_to_arrow(wind_dir)
+
     # Create ultra-compact weather metrics for single line
     metrics = [
         ("🌡️", f"{latest['AirTemp']:.0f}°C", "Air"),
         ("🛣️", f"{latest['TrackTemp']:.0f}°C", "Track"),
         ("💧", f"{latest['Humidity']:.0f}%", "Hum"),
-        ("🌪️", f"{latest['WindSpeed']:.0f}", "Wind"),
+        ("🌪️", f"{latest['WindSpeed']:.0f} {arrow}{cardinal}", "Wind"),
         ("🌧️", "Y" if latest['Rainfall'] else "N", "Rain"),
     ]
 
@@ -272,7 +293,7 @@ def create_temperature_graph(
         except Exception as e:
             logger.warning(f"Could not add current time marker: {e}")
     
-    # Update layout (compact)
+    # Update layout (compact) - legend above graph area
     fig.update_layout(
         template="plotly_dark",
         paper_bgcolor="#0d1117",
@@ -281,11 +302,12 @@ def create_temperature_graph(
         showlegend=True,
         legend={
             "orientation": "h",
-            "yanchor": "top",
-            "y": 0.98,
-            "xanchor": "left",
-            "x": 0.01,
-            "font": {"size": 9}
+            "yanchor": "bottom",
+            "y": 1.02,
+            "xanchor": "right",
+            "x": 1,
+            "font": {"size": 8},
+            "bgcolor": "rgba(0,0,0,0)"
         },
         xaxis={
             "title": None,
@@ -300,7 +322,7 @@ def create_temperature_graph(
             "tickfont": {"size": 8}
         },
         height=200,
-        margin={"l": 30, "r": 5, "t": 5, "b": 25}
+        margin={"l": 30, "r": 5, "t": 25, "b": 25}
     )
 
     return fig

@@ -12,7 +12,8 @@ import importlib
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
-from dash import Dash, html, dcc, Input, Output, State, callback, ctx, Patch
+import dash
+from dash import Dash, html, dcc, Input, Output, State, callback, ctx, Patch, ALL
 from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
 import pandas as pd
@@ -69,6 +70,10 @@ from src.dashboards_dash.ai_assistant_dashboard import AIAssistantDashboard
 from src.dashboards_dash.race_overview_dashboard import RaceOverviewDashboard
 from src.dashboards_dash.race_control_dashboard import RaceControlDashboard
 from src.dashboards_dash import weather_dashboard
+
+# RAG Manager for document loading
+from src.rag.rag_manager import get_rag_manager, reset_rag_manager
+from src.rag.template_generator import get_template_generator
 
 # Configure logging
 logging.basicConfig(
@@ -432,6 +437,142 @@ def create_sidebar():
             
             html.Hr(),
             
+            # RAG Documents Section
+            dbc.Accordion([
+                dbc.AccordionItem([
+                    # RAG Status indicator
+                    html.Div([
+                        html.Span(id="rag-status", children="⚪ Not loaded"),
+                        html.Small(
+                            id="rag-doc-count",
+                            className="text-muted ms-2"
+                        )
+                    ], className="mb-3"),
+                    
+                    # Document list by category
+                    html.Div([
+                        # Global Documents
+                        html.Div([
+                            html.H6(
+                                "🌐 Global",
+                                className="text-info mb-1",
+                                style={'fontSize': '0.85rem'}
+                            ),
+                            html.Div(
+                                id="rag-global-docs",
+                                className="ps-2 small text-muted"
+                            )
+                        ], className="mb-2"),
+                        
+                        # Strategy Documents
+                        html.Div([
+                            html.H6(
+                                "📋 Strategy",
+                                className="text-info mb-1",
+                                style={'fontSize': '0.85rem'}
+                            ),
+                            html.Div(
+                                id="rag-strategy-docs",
+                                className="ps-2 small text-muted"
+                            )
+                        ], className="mb-2"),
+                        
+                        # Weather Documents
+                        html.Div([
+                            html.H6(
+                                "🌦️ Weather",
+                                className="text-info mb-1",
+                                style={'fontSize': '0.85rem'}
+                            ),
+                            html.Div(
+                                id="rag-weather-docs",
+                                className="ps-2 small text-muted"
+                            )
+                        ], className="mb-2"),
+                        
+                        # Performance Documents
+                        html.Div([
+                            html.H6(
+                                "📊 Performance",
+                                className="text-info mb-1",
+                                style={'fontSize': '0.85rem'}
+                            ),
+                            html.Div(
+                                id="rag-performance-docs",
+                                className="ps-2 small text-muted"
+                            )
+                        ], className="mb-2"),
+                        
+                        # Race Control Documents
+                        html.Div([
+                            html.H6(
+                                "🚦 Race Control",
+                                className="text-info mb-1",
+                                style={'fontSize': '0.85rem'}
+                            ),
+                            html.Div(
+                                id="rag-race-control-docs",
+                                className="ps-2 small text-muted"
+                            )
+                        ], className="mb-2"),
+                        
+                        # Race Position Documents
+                        html.Div([
+                            html.H6(
+                                "🏁 Positions",
+                                className="text-info mb-1",
+                                style={'fontSize': '0.85rem'}
+                            ),
+                            html.Div(
+                                id="rag-race-position-docs",
+                                className="ps-2 small text-muted"
+                            )
+                        ], className="mb-2"),
+                        
+                        # FIA Regulations
+                        html.Div([
+                            html.H6(
+                                "📖 FIA Regs",
+                                className="text-info mb-1",
+                                style={'fontSize': '0.85rem'}
+                            ),
+                            html.Div(
+                                id="rag-fia-docs",
+                                className="ps-2 small text-muted"
+                            )
+                        ], className="mb-2"),
+                    ]),
+                    
+                    # Action buttons
+                    html.Div([
+                        dbc.Button(
+                            "🔄 Reload",
+                            id="rag-reload-btn",
+                            size="sm",
+                            color="secondary",
+                            outline=True,
+                            className="me-2"
+                        ),
+                        dbc.Button(
+                            "📝 Generate",
+                            id="rag-generate-btn",
+                            size="sm",
+                            color="info",
+                            outline=True,
+                            title="Generate circuit templates from historical data"
+                        ),
+                    ], className="mt-3 d-flex"),
+                    
+                    # RAG reload status message
+                    html.Div(
+                        id="rag-reload-status",
+                        className="small text-muted mt-2"
+                    )
+                ], title="📚 RAG Documents", className="mb-3")
+            ], start_collapsed=True, id="rag-accordion"),
+            
+            html.Hr(),
+            
             # Menu (collapsed)
             dbc.Accordion([
                 dbc.AccordionItem([
@@ -612,6 +753,82 @@ app.layout = dbc.Container([
             dbc.Button("Close", id="close-help-modal", className="ms-auto", n_clicks=0)
         )
     ], id="help-modal", is_open=False, size="lg"),
+    
+    # Document Editor Modal (for RAG documents)
+    dbc.Modal([
+        dbc.ModalHeader([
+            dbc.ModalTitle(id="doc-editor-title", children="📝 Edit Document"),
+        ]),
+        dbc.ModalBody([
+            # Document path info
+            html.Div([
+                html.Small(id="doc-editor-path", className="text-muted")
+            ], className="mb-2"),
+            # Textarea for editing
+            dcc.Textarea(
+                id="doc-editor-textarea",
+                style={
+                    "width": "100%",
+                    "height": "450px",
+                    "fontFamily": "'Consolas', 'Monaco', monospace",
+                    "fontSize": "13px",
+                    "lineHeight": "1.5",
+                    "padding": "10px",
+                    "border": "1px solid #444",
+                    "borderRadius": "4px",
+                    "backgroundColor": "#1e1e1e",
+                    "color": "#d4d4d4"
+                },
+                placeholder="Document content will appear here..."
+            ),
+            # Status message
+            html.Div(id="doc-editor-status", className="mt-2 small")
+        ]),
+        dbc.ModalFooter([
+            html.Div([
+                dbc.Button(
+                    "💾 Save",
+                    id="doc-editor-save-btn",
+                    color="primary",
+                    className="me-2"
+                ),
+                dbc.Button(
+                    "Cancel",
+                    id="doc-editor-cancel-btn",
+                    color="secondary",
+                    outline=True
+                )
+            ])
+        ])
+    ], id="doc-editor-modal", is_open=False, size="xl", centered=True),
+    
+    # Hidden store for current document being edited
+    dcc.Store(id="doc-editor-store", data={"filepath": None, "category": None}),
+    
+    # Template Generation Confirmation Modal
+    dbc.Modal([
+        dbc.ModalHeader(dbc.ModalTitle("⚠️ Confirm Template Generation")),
+        dbc.ModalBody([
+            html.P(id="rag-generate-confirm-message"),
+            html.Div(id="rag-generate-existing-files", className="small text-warning")
+        ]),
+        dbc.ModalFooter([
+            dbc.Button(
+                "Cancel",
+                id="rag-generate-cancel-btn",
+                color="secondary",
+                className="me-2"
+            ),
+            dbc.Button(
+                "Generate & Overwrite",
+                id="rag-generate-confirm-btn",
+                color="danger"
+            ),
+        ])
+    ], id="rag-generate-confirm-modal", is_open=False, centered=True),
+    
+    # Store for tracking template generation state
+    dcc.Store(id="rag-generate-store", data={"year": None, "circuit": None}),
     
     # Main layout
     dbc.Row([
@@ -1092,6 +1309,563 @@ def update_drivers(session, circuit_key, year):
             type="circle",
             color="#e10600"
         ), {'loaded': False}, {'loaded': False}
+
+
+# ============================================================================
+# RAG DOCUMENT CALLBACKS
+# ============================================================================
+
+def _format_doc_list(docs: list, category: str = "unknown") -> list:
+    """
+    Format document list for display in sidebar with edit buttons.
+    
+    Args:
+        docs: List of document dicts or strings
+        category: Document category (global, strategy, weather, tire, fia)
+    
+    Returns:
+        List of html components with clickable document names
+    """
+    if not docs:
+        return [html.Small("No documents", className="text-muted fst-italic")]
+    
+    items = []
+    for idx, doc in enumerate(docs):
+        if isinstance(doc, dict):
+            filename = doc.get('filename', 'Unknown')
+            filepath = doc.get('filepath', '')
+        else:
+            filename = str(doc)
+            filepath = ""
+        
+        # Use Button with filepath encoded in the index
+        # Format: category|idx|filepath (base64 encoded to avoid special chars)
+        import base64
+        encoded_path = base64.b64encode(filepath.encode()).decode() if filepath else ""
+        btn_index = f"{category}|{idx}|{encoded_path}"
+        
+        items.append(
+            html.Div([
+                html.I(className="bi bi-file-earmark-text me-1"),
+                dbc.Button(
+                    filename,
+                    id={"type": "doc-edit-btn", "index": btn_index},
+                    color="link",
+                    size="sm",
+                    className="p-0 text-start",
+                    style={
+                        "textDecoration": "underline dotted",
+                        "color": "#6ea8fe",
+                        "fontSize": "inherit"
+                    }
+                ),
+            ], className="small d-flex align-items-center mb-1")
+        )
+    return items
+
+
+def _get_circuit_name_for_rag(meeting_key: int, year: int) -> str:
+    """
+    Convert meeting_key to circuit name for RAG folder lookup.
+    
+    Args:
+        meeting_key: OpenF1 meeting key
+        year: Season year
+        
+    Returns:
+        Circuit name in snake_case (e.g., 'abu_dhabi')
+    """
+    try:
+        # Get meeting info from OpenF1
+        meetings = openf1_provider._request(
+            "meetings",
+            {"year": year, "meeting_key": meeting_key}
+        )
+        if meetings:
+            # Extract circuit name and convert to folder format
+            meeting_name = meetings[0].get('meeting_name', '')
+            # Remove "Grand Prix" and convert to snake_case
+            circuit = meeting_name.lower()
+            circuit = circuit.replace(' grand prix', '')
+            circuit = circuit.replace(' ', '_')
+            circuit = circuit.replace('-', '_')
+            return circuit
+    except Exception as e:
+        logger.warning(f"Could not get circuit name for meeting_key={meeting_key}: {e}")
+    return ""
+
+
+@callback(
+    Output('rag-status', 'children'),
+    Output('rag-doc-count', 'children'),
+    Output('rag-global-docs', 'children'),
+    Output('rag-strategy-docs', 'children'),
+    Output('rag-weather-docs', 'children'),
+    Output('rag-performance-docs', 'children'),
+    Output('rag-race-control-docs', 'children'),
+    Output('rag-race-position-docs', 'children'),
+    Output('rag-fia-docs', 'children'),
+    Input('year-selector', 'value'),
+    Input('circuit-selector', 'value'),
+    prevent_initial_call=False
+)
+def update_rag_on_context_change(year, meeting_key):
+    """
+    Load RAG documents when year/circuit context changes.
+    
+    This callback:
+    1. Loads global documents (always)
+    2. Loads year-level documents
+    3. Loads circuit-specific documents if available
+    4. Updates the sidebar display with document lists
+    """
+    if not year:
+        return (
+            "⚪ Not loaded",
+            "",
+            [html.Small("Select year first", className="text-muted fst-italic")],
+            [], [], [], [], [], [], []
+        )
+    
+    try:
+        rag_manager = get_rag_manager()
+        
+        # Convert meeting_key to circuit name
+        circuit = None
+        if meeting_key:
+            circuit = _get_circuit_name_for_rag(meeting_key, year)
+        
+        # Load context into ChromaDB
+        chunk_count = rag_manager.load_context(year=year, circuit=circuit)
+        
+        # Get document lists by category
+        docs = rag_manager.list_documents()
+        
+        # Debug: Log what documents are found per category
+        logger.info(f"RAG docs by category: {[(k, len(v)) for k, v in docs.items()]}")
+        
+        # Determine status icon
+        if chunk_count > 0:
+            status = "🟢 Loaded"
+        else:
+            status = "🟡 No docs"
+        
+        doc_count_text = f"({chunk_count} chunks)"
+        
+        # Format lists for display (with category for clickable editing)
+        global_list = _format_doc_list(docs.get("global", []), "global")
+        strategy_list = _format_doc_list(docs.get("strategy", []), "strategy")
+        weather_list = _format_doc_list(docs.get("weather", []), "weather")
+        performance_list = _format_doc_list(
+            docs.get("performance", []), "performance"
+        )
+        race_control_list = _format_doc_list(
+            docs.get("race_control", []), "race_control"
+        )
+        race_position_list = _format_doc_list(
+            docs.get("race_position", []), "race_position"
+        )
+        fia_list = _format_doc_list(docs.get("fia", []), "fia")
+        
+        return (
+            status,
+            doc_count_text,
+            global_list,
+            strategy_list,
+            weather_list,
+            performance_list,
+            race_control_list,
+            race_position_list,
+            fia_list
+        )
+        
+    except Exception as e:
+        logger.error(f"Error loading RAG context: {e}")
+        return (
+            "🔴 Error",
+            "",
+            [html.Small(f"Error: {str(e)[:50]}", className="text-danger")],
+            [], [], [], [], [], [], []
+        )
+
+
+@callback(
+    Output('rag-reload-status', 'children'),
+    Output('rag-status', 'children', allow_duplicate=True),
+    Output('rag-doc-count', 'children', allow_duplicate=True),
+    Input('rag-reload-btn', 'n_clicks'),
+    State('year-selector', 'value'),
+    State('circuit-selector', 'value'),
+    prevent_initial_call=True
+)
+def reload_rag_documents(n_clicks, year, meeting_key):
+    """Manually reload RAG documents."""
+    if not n_clicks:
+        raise PreventUpdate
+    
+    try:
+        rag_manager = get_rag_manager()
+        
+        # Convert meeting_key to circuit name
+        circuit = None
+        if meeting_key and year:
+            circuit = _get_circuit_name_for_rag(meeting_key, year)
+        
+        # Force reload
+        chunk_count = rag_manager.reload()
+        
+        status_msg = f"✅ Reloaded {chunk_count} chunks"
+        return (
+            status_msg,
+            "🟢 Loaded" if chunk_count > 0 else "🟡 No docs",
+            f"({chunk_count} chunks)"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error reloading RAG: {e}")
+        return f"❌ Error: {str(e)[:50]}", "🔴 Error", ""
+
+
+# ============================================================================
+# TEMPLATE GENERATION CALLBACKS
+# ============================================================================
+
+@callback(
+    Output('rag-generate-confirm-modal', 'is_open'),
+    Output('rag-generate-confirm-message', 'children'),
+    Output('rag-generate-existing-files', 'children'),
+    Output('rag-generate-store', 'data'),
+    Output('rag-reload-status', 'children', allow_duplicate=True),
+    Output('rag-status', 'children', allow_duplicate=True),
+    Output('rag-doc-count', 'children', allow_duplicate=True),
+    Output('rag-global-docs', 'children', allow_duplicate=True),
+    Output('rag-strategy-docs', 'children', allow_duplicate=True),
+    Output('rag-weather-docs', 'children', allow_duplicate=True),
+    Output('rag-performance-docs', 'children', allow_duplicate=True),
+    Output('rag-race-control-docs', 'children', allow_duplicate=True),
+    Output('rag-race-position-docs', 'children', allow_duplicate=True),
+    Output('rag-fia-docs', 'children', allow_duplicate=True),
+    Input('rag-generate-btn', 'n_clicks'),
+    Input('rag-generate-cancel-btn', 'n_clicks'),
+    Input('rag-generate-confirm-btn', 'n_clicks'),
+    State('year-selector', 'value'),
+    State('circuit-selector', 'value'),
+    State('rag-generate-store', 'data'),
+    prevent_initial_call=True
+)
+def handle_template_generation(
+    gen_clicks, cancel_clicks, confirm_clicks,
+    year, meeting_key, store_data
+):
+    """Handle template generation with confirmation for overwrites."""
+    from pathlib import Path
+    from dash.exceptions import PreventUpdate
+    
+    triggered_id = ctx.triggered_id
+    
+    # Default empty doc lists for early returns (7 categories)
+    no_update_lists = (
+        dash.no_update, dash.no_update, dash.no_update, dash.no_update,
+        dash.no_update, dash.no_update, dash.no_update
+    )
+    
+    # Cancel button - close modal
+    if triggered_id == 'rag-generate-cancel-btn':
+        return (
+            False, "", "", {"year": None, "circuit": None}, "",
+            dash.no_update, dash.no_update,
+            *no_update_lists
+        )
+    
+    # Generate button clicked - check for existing files
+    if triggered_id == 'rag-generate-btn':
+        if not year or not meeting_key:
+            return (
+                False, "", "", store_data, "⚠️ Select year and circuit first",
+                dash.no_update, dash.no_update,
+                *no_update_lists
+            )
+        
+        # Get circuit name
+        circuit = _get_circuit_name_for_rag(meeting_key, year)
+        if not circuit:
+            return (
+                False, "", "", store_data, "⚠️ Could not determine circuit",
+                dash.no_update, dash.no_update,
+                *no_update_lists
+            )
+        
+        # Check for existing files
+        rag_path = Path("data/rag") / str(year) / "circuits" / circuit
+        existing_files = []
+        if rag_path.exists():
+            existing_files = [f.name for f in rag_path.glob("*.md")]
+        
+        circuit_display = circuit.replace('_', ' ').title()
+        
+        if existing_files:
+            # Show confirmation modal
+            message = f"Generate templates for {circuit_display} ({year})?"
+            files_msg = f"⚠️ Will overwrite: {', '.join(existing_files)}"
+            return (
+                True,
+                message,
+                files_msg,
+                {"year": year, "circuit": circuit},
+                "",
+                dash.no_update, dash.no_update,
+                *no_update_lists
+            )
+        else:
+            # No existing files - generate directly
+            return _do_generate_templates(year, circuit, circuit_display)
+    
+    # Confirm button - actually generate
+    if triggered_id == 'rag-generate-confirm-btn':
+        if store_data and store_data.get('year') and store_data.get('circuit'):
+            circuit_display = store_data['circuit'].replace('_', ' ').title()
+            return _do_generate_templates(
+                store_data['year'],
+                store_data['circuit'],
+                circuit_display
+            )
+    
+    raise PreventUpdate
+
+
+def _do_generate_templates(year: int, circuit: str, circuit_display: str):
+    """
+    Execute template generation and return callback outputs.
+    
+    Args:
+        year: Target year
+        circuit: Circuit name in snake_case
+        circuit_display: Circuit name for display
+    
+    Returns:
+        Tuple of callback outputs (15 values for new category structure)
+    """
+    try:
+        generator = get_template_generator()
+        
+        # Generate with save_to_disk=True
+        logger.info(f"Generating templates for {circuit} ({year})...")
+        docs = generator.generate_for_circuit(
+            year=year,
+            circuit=circuit,
+            use_historical=True,
+            save_to_disk=True
+        )
+        
+        # Reload RAG context to include new docs
+        rag_manager = get_rag_manager()
+        chunk_count = rag_manager.reload()
+        
+        # Get updated document lists
+        all_docs = rag_manager.list_documents()
+        
+        # Format lists for display
+        global_list = _format_doc_list(all_docs.get("global", []), "global")
+        strategy_list = _format_doc_list(
+            all_docs.get("strategy", []), "strategy"
+        )
+        weather_list = _format_doc_list(all_docs.get("weather", []), "weather")
+        performance_list = _format_doc_list(
+            all_docs.get("performance", []), "performance"
+        )
+        race_control_list = _format_doc_list(
+            all_docs.get("race_control", []), "race_control"
+        )
+        race_position_list = _format_doc_list(
+            all_docs.get("race_position", []), "race_position"
+        )
+        fia_list = _format_doc_list(all_docs.get("fia", []), "fia")
+        
+        files_generated = list(docs.keys())
+        status_msg = (
+            f"✅ Generated {len(files_generated)} templates for "
+            f"{circuit_display}: {', '.join(files_generated)}"
+        )
+        logger.info(status_msg)
+        
+        return (
+            False,  # Close modal
+            "",
+            "",
+            {"year": None, "circuit": None},
+            status_msg,
+            "🟢 Loaded",
+            f"({chunk_count} chunks)",
+            global_list,
+            strategy_list,
+            weather_list,
+            performance_list,
+            race_control_list,
+            race_position_list,
+            fia_list
+        )
+        
+    except Exception as e:
+        logger.error(f"Error generating templates: {e}")
+        return (
+            False,
+            "",
+            "",
+            {"year": None, "circuit": None},
+            f"❌ Error: {str(e)[:80]}",
+            dash.no_update, dash.no_update,
+            dash.no_update, dash.no_update, dash.no_update,
+            dash.no_update, dash.no_update, dash.no_update,
+            dash.no_update, dash.no_update
+        )
+
+
+# ============================================================================
+# DOCUMENT EDITOR MODAL CALLBACKS
+# ============================================================================
+
+@callback(
+    Output('doc-editor-modal', 'is_open'),
+    Output('doc-editor-title', 'children'),
+    Output('doc-editor-path', 'children'),
+    Output('doc-editor-textarea', 'value'),
+    Output('doc-editor-store', 'data'),
+    Output('doc-editor-status', 'children'),
+    Input({'type': 'doc-edit-btn', 'index': ALL}, 'n_clicks'),
+    Input('doc-editor-cancel-btn', 'n_clicks'),
+    Input('doc-editor-save-btn', 'n_clicks'),
+    State('doc-editor-textarea', 'value'),
+    State('doc-editor-store', 'data'),
+    prevent_initial_call=True
+)
+def handle_document_editor(
+    btn_clicks, cancel_clicks, save_clicks,
+    textarea_content, store_data
+):
+    """
+    Handle document editor modal: open, save, cancel.
+    
+    This callback manages:
+    - Opening modal when a document is clicked
+    - Loading document content into textarea
+    - Saving edited content back to file
+    - Closing modal on cancel or after save
+    """
+    import base64
+    import json
+    from pathlib import Path
+    
+    # Debug: log what triggered the callback
+    triggered = ctx.triggered
+    triggered_id = ctx.triggered_id
+    logger.debug(f"DOC EDITOR - triggered: {triggered}")
+    logger.debug(f"DOC EDITOR - triggered_id: {triggered_id}")
+    logger.debug(f"DOC EDITOR - btn_clicks: {btn_clicks}")
+    
+    # If no trigger info, prevent update
+    if not triggered or triggered[0]['value'] is None:
+        raise PreventUpdate
+    
+    # Cancel button - close modal
+    if triggered_id == 'doc-editor-cancel-btn':
+        return False, "", "", "", {"filepath": None}, ""
+    
+    # Save button - save content and close
+    if triggered_id == 'doc-editor-save-btn':
+        if store_data and store_data.get('filepath'):
+            try:
+                filepath = Path(store_data['filepath'])
+                if filepath.exists() and filepath.suffix == '.md':
+                    filepath.write_text(textarea_content, encoding='utf-8')
+                    logger.info(f"Document saved: {filepath}")
+                    return (
+                        False, "", "", "",
+                        {"filepath": None},
+                        ""
+                    )
+                else:
+                    return (
+                        True,
+                        f"📝 {store_data.get('filename', 'Document')}",
+                        f"📁 {store_data.get('filepath', '')}",
+                        textarea_content,
+                        store_data,
+                        "❌ Cannot save: invalid file path or not .md file"
+                    )
+            except Exception as e:
+                logger.error(f"Error saving document: {e}")
+                return (
+                    True,
+                    f"📝 {store_data.get('filename', 'Document')}",
+                    f"📁 {store_data.get('filepath', '')}",
+                    textarea_content,
+                    store_data,
+                    f"❌ Error saving: {str(e)[:50]}"
+                )
+        raise PreventUpdate
+    
+    # Document button click - check if any button was actually clicked
+    # With ALL pattern, btn_clicks is a list, check if any is not None
+    if btn_clicks and any(c is not None for c in btn_clicks):
+        # Find which button was clicked from ctx.triggered
+        triggered_prop = triggered[0].get('prop_id', '')
+        logger.debug(f"DOC EDITOR - prop_id: {triggered_prop}")
+        
+        # prop_id format: {"type":"doc-edit-btn","index":"cat|idx|b64"}.n_clicks
+        if 'doc-edit-btn' in triggered_prop:
+            try:
+                # Extract the JSON part before .n_clicks
+                json_part = triggered_prop.rsplit('.', 1)[0]
+                btn_info = json.loads(json_part)
+                click_index = btn_info.get('index', '')
+                
+                logger.debug(f"DOC EDITOR - click_index: {click_index}")
+                
+                parts = click_index.split('|')
+                if len(parts) >= 3:
+                    encoded_path = parts[2]
+                    
+                    if encoded_path:
+                        filepath = base64.b64decode(encoded_path.encode()).decode()
+                        filename = Path(filepath).name if filepath else "Document"
+                        
+                        file_path = Path(filepath)
+                        if file_path.exists():
+                            content = file_path.read_text(encoding='utf-8')
+                            logger.info(f"Opening document for edit: {filepath}")
+                            return (
+                                True,
+                                f"📝 {filename}",
+                                f"📁 {filepath}",
+                                content,
+                                {"filepath": filepath, "filename": filename},
+                                ""
+                            )
+                        else:
+                            return (
+                                True,
+                                f"📝 {filename}",
+                                f"📁 {filepath}",
+                                f"# File not found\n\nPath: {filepath}",
+                                {"filepath": filepath, "filename": filename},
+                                "⚠️ File does not exist"
+                            )
+                    else:
+                        logger.warning(
+                            f"No filepath in button index: {click_index}"
+                        )
+            except Exception as e:
+                logger.error(f"Error parsing document button click: {e}")
+                return (
+                    True,
+                    "📝 Error",
+                    "",
+                    f"# Error loading document\n\n{str(e)}",
+                    {"filepath": None},
+                    f"❌ Error: {str(e)[:50]}"
+                )
+    
+    raise PreventUpdate
 
 
 @callback(
