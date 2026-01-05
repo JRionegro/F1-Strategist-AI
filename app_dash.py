@@ -69,17 +69,28 @@ for pattern in ['**/*.pyc', '**/__pycache__']:
 from src.dashboards_dash.ai_assistant_dashboard import AIAssistantDashboard
 from src.dashboards_dash.race_overview_dashboard import RaceOverviewDashboard
 from src.dashboards_dash.race_control_dashboard import RaceControlDashboard
+from src.dashboards_dash.telemetry_dashboard import TelemetryDashboard
 from src.dashboards_dash import weather_dashboard
 
 # RAG Manager for document loading
 from src.rag.rag_manager import get_rag_manager, reset_rag_manager
 from src.rag.template_generator import get_template_generator
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# Configure logging - force output to console
+import sys
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+# Remove existing handlers
+for handler in root_logger.handlers[:]:
+    root_logger.removeHandler(handler)
+# Add console handler
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(
+    logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 )
+root_logger.addHandler(console_handler)
+
 logger = logging.getLogger(__name__)
 
 # Initialize OpenF1 provider with SSL verification disabled for corporate proxies
@@ -90,6 +101,9 @@ race_overview_dashboard = RaceOverviewDashboard(openf1_provider)
 
 # Initialize Race Control Dashboard
 race_control_dashboard = RaceControlDashboard(openf1_provider)
+
+# Initialize Telemetry Dashboard
+telemetry_dashboard = TelemetryDashboard(openf1_provider)
 
 # Initialize Dash app with F1 theme
 app = Dash(
@@ -344,7 +358,7 @@ def create_sidebar():
                             # {"label": " Lap Analysis", "value": "laps"},
                             # {"label": " Qualifying", "value": "qualifying"},
                         ],
-                        value=["ai", "race_overview", "race_control", "weather"],
+                        value=["ai", "race_overview", "race_control", "weather", "telemetry"],
                         className="mb-2"
                     )
                 ], title="📊 Dashboards", className="mb-3")
@@ -2175,19 +2189,73 @@ def update_dashboards(
                     )
         
         elif dashboard_id == "telemetry":
-            # Telemetry placeholder
-            dashboards.append(
-                dbc.Card([
-                    dbc.CardHeader(html.H5("📊 Telemetry")),
-                    dbc.CardBody([
-                        html.P(f"Showing telemetry for: {focused_driver}", className="text-muted"),
-                        html.Div(
-                            "Speed, throttle, brake, and gear data will be rendered here",
-                            className="text-center p-5 bg-dark rounded"
-                        )
-                    ])
-                ], className="mb-3")
-            )
+            # Telemetry Dashboard - Speed, Throttle, Brake, Gear for focus driver
+            try:
+                logger.info("Rendering telemetry dashboard...")
+                
+                # Get session_key from loaded session
+                session_key = None
+                simulation_time = None
+                
+                if current_session_obj and hasattr(current_session_obj, 'session_key'):
+                    session_key = current_session_obj.session_key
+                
+                # Get simulation time from store or controller
+                if simulation_time_data and 'time' in simulation_time_data:
+                    simulation_time = simulation_time_data.get('time', 0.0)
+                    logger.info(f"Using simulation time from store: {simulation_time:.1f}s")
+                elif simulation_controller is not None:
+                    try:
+                        simulation_time = simulation_controller.get_elapsed_seconds()
+                        logger.info(f"Using simulation time from controller: {simulation_time:.1f}s")
+                    except Exception as e:
+                        logger.warning(f"Could not get simulation time: {e}")
+                        simulation_time = 0.0
+                
+                session_start_time = None
+                if simulation_controller is not None:
+                    session_start_time = pd.Timestamp(simulation_controller.start_time)
+                
+                # Calculate current lap
+                current_lap = None
+                if simulation_controller is not None:
+                    try:
+                        openf1_lap = simulation_controller.get_current_lap()
+                        current_lap = max(1, openf1_lap - 2) if openf1_lap > 2 else 1
+                    except Exception as e:
+                        logger.warning(f"Could not get lap: {e}")
+                        current_lap = None
+                
+                telemetry_content = telemetry_dashboard.render(
+                    session_key=session_key,
+                    simulation_time=simulation_time,
+                    session_start_time=session_start_time,
+                    focused_driver=focused_driver if focused_driver != 'none' else None,
+                    current_lap=current_lap
+                )
+                dashboards.append(telemetry_content)
+                logger.info("Telemetry dashboard rendered successfully")
+                
+            except Exception as e:
+                logger.error(f"Error creating telemetry dashboard: {e}", exc_info=True)
+                dashboards.append(
+                    dbc.Card([
+                        dbc.CardHeader(
+                            html.H5(
+                                "📊 Telemetry",
+                                className="mb-0",
+                                style={"fontSize": "1.2rem"}
+                            ),
+                            className="py-1"
+                        ),
+                        dbc.CardBody([
+                            html.P(
+                                f"Error loading telemetry: {str(e)}",
+                                className="text-danger"
+                            )
+                        ], className="p-2")
+                    ], className="mb-3", style={"height": "620px"})
+                )
         
         else:
             # Generic placeholder for other dashboards
@@ -2691,4 +2759,5 @@ if __name__ == '__main__':
         f"(Round {last_race.round_number}, {last_race.year})"
     )
 
+    # debug=False to ensure logs appear in terminal
     app.run(debug=False, port=8502)

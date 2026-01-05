@@ -16,7 +16,8 @@ Features:
 """
 
 import logging
-from typing import Optional, List, Any
+import time
+from typing import Optional, List, Any, Dict
 from datetime import timedelta
 
 import pandas as pd
@@ -28,6 +29,9 @@ import dash_bootstrap_components as dbc
 import fastf1
 
 logger = logging.getLogger(__name__)
+
+# TTL for failed sessions cache (5 minutes)
+FAILED_SESSION_TTL_SECONDS = 300
 
 # Team colors for driver traces (2025 season)
 TEAM_COLORS = {
@@ -53,8 +57,9 @@ fastf1.Cache.enable_cache('./cache')
 class TelemetryDashboard:
     """Telemetry dashboard for driver comparison."""
 
-    # Cache of sessions where car_data failed to avoid repeated timeouts
-    _failed_car_data_sessions: set = set()
+    # Cache of (session_key, driver_number, lap_number) that failed
+    # Value is timestamp for TTL
+    _failed_lap_requests: Dict[tuple, float] = {}
 
     def __init__(self, openf1_provider):
         """
@@ -65,10 +70,10 @@ class TelemetryDashboard:
         """
         self.provider = openf1_provider
         self._cached_session_key = None
-        self._cached_car_data = None
         self._cached_laps = None
         self._cached_drivers = None
-        self._car_data_load_attempted = False
+        # Cache for lap telemetry: {(session, driver, lap): DataFrame}
+        self._lap_telemetry_cache: Dict[tuple, pd.DataFrame] = {}
 
     def render(
         self,
@@ -102,27 +107,19 @@ class TelemetryDashboard:
             return self._render_no_driver_selected()
 
         try:
-            # Load and cache data
-            logger.info(
-                f"Telemetry render: session_key={session_key}, "
-                f"focused_driver={focused_driver}"
-            )
-            self._load_data(session_key)
-
-            if self._cached_car_data is None or self._cached_car_data.empty:
-                logger.warning(f"No car data available for session {session_key}")
-                return self._render_no_data()
-
-            # Get the last completed lap for focus driver
-            try:
-                focus_driver_num = int(focused_driver)
-            except (ValueError, TypeError) as e:
-                logger.error(
-                    f"Invalid focused_driver format: {focused_driver}, "
-                    f"error: {e}"
-                )
+            # Parse focused_driver - can be "CODE_YEAR_NUMBER" or just number
+            focus_driver_num = self._parse_driver_number(focused_driver)
+            if focus_driver_num is None:
                 return self._render_error(f"Invalid driver: {focused_driver}")
 
+            # Load laps and drivers (lightweight)
+            logger.info(
+                f"Telemetry render: session_key={session_key}, "
+                f"focused_driver={focused_driver} (#{focus_driver_num})"
+            )
+            self._load_session_metadata(session_key)
+
+            # Get the last lap info for the driver
             lap_data = self._get_driver_last_lap(
                 focus_driver_num,
                 simulation_time,
@@ -133,13 +130,14 @@ class TelemetryDashboard:
             if lap_data is None:
                 return self._render_no_lap_data(focused_driver)
 
-            # Get telemetry for focus driver
-            telemetry_data = self._get_lap_telemetry(
+            # Fetch telemetry ONLY for this specific lap (optimized)
+            telemetry_data = self._fetch_lap_telemetry(
+                session_key,
                 focus_driver_num,
                 lap_data
             )
 
-            if telemetry_data.empty:
+            if telemetry_data is None or telemetry_data.empty:
                 return self._render_no_telemetry(focused_driver)
 
             # Build driver list for visualization
@@ -149,7 +147,9 @@ class TelemetryDashboard:
             if comparison_drivers:
                 for comp_driver in comparison_drivers[:2]:
                     if comp_driver and comp_driver != focused_driver:
-                        comp_driver_num = int(comp_driver)
+                        comp_driver_num = self._parse_driver_number(comp_driver)
+                        if comp_driver_num is None:
+                            continue
                         comp_lap = self._get_driver_last_lap(
                             comp_driver_num,
                             simulation_time,
@@ -157,11 +157,15 @@ class TelemetryDashboard:
                             current_lap
                         )
                         if comp_lap is not None:
-                            comp_telemetry = self._get_lap_telemetry(
+                            comp_telemetry = self._fetch_lap_telemetry(
+                                session_key,
                                 comp_driver_num,
                                 comp_lap
                             )
-                            if not comp_telemetry.empty:
+                            if (
+                                comp_telemetry is not None and
+                                not comp_telemetry.empty
+                            ):
                                 drivers_to_plot.append(
                                     (comp_driver_num, comp_telemetry)
                                 )
@@ -172,55 +176,30 @@ class TelemetryDashboard:
             # Get driver info for display
             driver_info = self._get_driver_info(focus_driver_num)
             driver_name = driver_info.get('name', f"Driver {focus_driver_num}")
-            lap_number = lap_data.get('LapNumber', 'N/A')
+            # Convert OpenF1 lap to racing lap (OpenF1 lap 3 = racing lap 1)
+            openf1_lap = lap_data.get('LapNumber', 3)
+            lap_number = max(1, openf1_lap - 2) if openf1_lap else 'N/A'
 
             return dbc.Card(
                 [
                     dbc.CardHeader(
                         [
-                            html.Div(
+                            html.H4(
                                 [
-                                    html.H5(
-                                        "📊 Telemetry",
-                                        className="mb-0 d-inline",
-                                        style={"fontSize": "1.2rem"}
-                                    ),
+                                    "📊 Telemetry",
                                     html.Span(
                                         f" - {driver_name} (Lap {lap_number})",
                                         className="text-muted ms-2",
-                                        style={"fontSize": "0.9rem"}
+                                        style={"fontSize": "0.8rem"}
                                     ),
                                 ],
-                                className="d-flex align-items-center"
+                                className="mb-0",
+                                style={"fontSize": "0.9rem"}
                             )
-                        ],
-                        className="py-1"
+                        ]
                     ),
                     dbc.CardBody(
                         [
-                            # Comparison driver info (dropdowns are in layout)
-                            html.Div(
-                                [
-                                    html.Span(
-                                        "Compare with: ",
-                                        className="text-muted small me-2"
-                                    ),
-                                    html.Span(
-                                        (
-                                            ", ".join([
-                                                d for d in (comparison_drivers or [])
-                                                if d
-                                            ]) or "None"
-                                        ),
-                                        className="small text-info"
-                                    ),
-                                    html.Span(
-                                        " (use sidebar dropdowns)",
-                                        className="text-muted small ms-1"
-                                    ),
-                                ],
-                                className="mb-2 d-flex align-items-center"
-                            ),
                             # Telemetry graph
                             dcc.Graph(
                                 figure=fig,
@@ -228,54 +207,57 @@ class TelemetryDashboard:
                                     "responsive": True,
                                     "displayModeBar": False
                                 },
-                                style={"height": "520px"}
+                                style={"height": "540px"}
                             ),
                         ],
-                        className="p-2",
+                        className="p-0",
                         style={"backgroundColor": "#1e1e1e"}
                     ),
                 ],
-                className="mb-3 border border-secondary",
-                style={"height": "620px", "backgroundColor": "#1e1e1e"}
+                className="mb-2 border border-secondary",
+                style={"height": "575px", "backgroundColor": "#1e1e1e"}
             )
 
         except Exception as e:
             logger.error(f"Error rendering telemetry dashboard: {e}")
             return self._render_error(str(e))
 
-    def _load_data(self, session_key: int) -> None:
-        """Load and cache session data."""
+    def _parse_driver_number(self, focused_driver: str) -> Optional[int]:
+        """
+        Parse driver number from focused_driver string.
+
+        Handles formats:
+        - "CODE_YEAR_NUMBER" (e.g., "RUS_2025_63")
+        - Plain number as string (e.g., "63")
+        """
+        if not focused_driver:
+            return None
+
+        try:
+            # Try format CODE_YEAR_NUMBER
+            parts = focused_driver.split('_')
+            if len(parts) >= 3:
+                return int(parts[2])
+            # Try plain number
+            return int(focused_driver)
+        except (ValueError, TypeError, IndexError) as e:
+            logger.error(
+                f"Invalid focused_driver format: {focused_driver}, error: {e}"
+            )
+            return None
+
+    def _load_session_metadata(self, session_key: int) -> None:
+        """
+        Load and cache lightweight session metadata (laps and drivers only).
+        
+        Car telemetry is loaded on-demand per lap to optimize API calls.
+        """
         if self._cached_session_key != session_key:
-            logger.info(f"Loading telemetry data for session {session_key}")
-            
-            # Check if this session previously failed for car_data
-            if session_key in TelemetryDashboard._failed_car_data_sessions:
-                logger.info(
-                    f"Session {session_key} in failed cache, "
-                    "skipping car_data request"
-                )
-                self._cached_car_data = pd.DataFrame()
-                self._cached_session_key = session_key
-                self._car_data_load_attempted = True
-                # Still try to load laps and drivers (they usually work)
-                try:
-                    self._cached_laps = self.provider.get_laps(
-                        session_key=session_key
-                    )
-                    self._cached_drivers = self.provider.get_drivers(
-                        session_key=session_key
-                    )
-                except Exception as e:
-                    logger.error(f"Error loading laps/drivers: {e}")
-                    self._cached_laps = pd.DataFrame()
-                    self._cached_drivers = pd.DataFrame()
-                return
+            logger.info(f"Loading session metadata for {session_key}")
+            # Clear lap telemetry cache when session changes
+            self._lap_telemetry_cache.clear()
             
             try:
-                # Try to get car_data with shorter timeout
-                self._cached_car_data = self._get_car_data_with_short_timeout(
-                    session_key
-                )
                 self._cached_laps = self.provider.get_laps(
                     session_key=session_key
                 )
@@ -283,94 +265,135 @@ class TelemetryDashboard:
                     session_key=session_key
                 )
                 self._cached_session_key = session_key
-                self._car_data_load_attempted = True
                 
-                if self._cached_car_data is not None:
-                    logger.info(
-                        f"Cached {len(self._cached_car_data)} car data records"
-                    )
-                else:
-                    logger.warning(
-                        f"No car data for session {session_key}"
-                    )
+                logger.info(
+                    f"Loaded {len(self._cached_laps)} laps, "
+                    f"{len(self._cached_drivers)} drivers"
+                )
             except Exception as e:
-                logger.error(f"Error loading telemetry data: {e}")
-                self._cached_car_data = pd.DataFrame()
+                logger.error(f"Error loading session metadata: {e}")
                 self._cached_laps = pd.DataFrame()
                 self._cached_drivers = pd.DataFrame()
 
-    def _get_car_data_with_short_timeout(
+    def _fetch_lap_telemetry(
         self,
-        session_key: int
-    ) -> pd.DataFrame:
+        session_key: int,
+        driver_number: int,
+        lap_data: dict
+    ) -> Optional[pd.DataFrame]:
         """
-        Get car data with a short timeout to avoid blocking UI.
+        Fetch telemetry for a specific lap using time window filtering.
         
-        This uses a reduced timeout (5s) and no retries to prevent
-        UI freezing when the OpenF1 car_data endpoint is unavailable.
+        This is much more efficient than loading all session telemetry.
+        Typical reduction: 32K records -> ~500-1000 records per lap.
         """
-        import requests
+        lap_number = lap_data.get('LapNumber')
+        cache_key = (session_key, driver_number, lap_number)
         
-        url = f"{self.provider.base_url}/car_data"
-        params = {"session_key": session_key}
+        # Check cache first
+        if cache_key in self._lap_telemetry_cache:
+            return self._lap_telemetry_cache[cache_key]
+        
+        # TEMPORARILY DISABLED - Check if this request previously failed
+        # if cache_key in TelemetryDashboard._failed_lap_requests:
+        #     failed_time = TelemetryDashboard._failed_lap_requests[cache_key]
+        #     elapsed = time.time() - failed_time
+        #     if elapsed < FAILED_SESSION_TTL_SECONDS:
+        #         remaining = FAILED_SESSION_TTL_SECONDS - elapsed
+        #         print(
+        #             f"⏳ TELEMETRY DEBUG: {cache_key} in failed cache "
+        #             f"(retry in {remaining:.0f}s)",
+        #             flush=True
+        #         )
+        #         return None
+        #     else:
+        #         print(
+        #             f"🔄 TELEMETRY DEBUG: TTL expired for {cache_key}",
+        #             flush=True
+        #         )
+        #         del TelemetryDashboard._failed_lap_requests[cache_key]
+        
+        # Get lap time window
+        lap_start = lap_data.get('LapStartTime')
+        lap_end = lap_data.get('LapEndTime')
+        
+        print(
+            f"📊 TELEMETRY DEBUG: Lap {lap_number} start={lap_start}, "
+            f"end={lap_end}",
+            flush=True
+        )
+        
+        if pd.isna(lap_start):
+            logger.warning(f"⚠️ No LapStartTime for lap {lap_number}")
+            return None
+        
+        # Convert to ISO format for API (without timezone or milliseconds -
+        # OpenF1 API returns 500 errors with timezone suffix or milliseconds)
+        def to_iso_no_tz(ts: pd.Timestamp) -> str:
+            """Convert timestamp to ISO format without timezone or ms."""
+            # Remove timezone info to get naive datetime, then format
+            if ts.tzinfo is not None:
+                ts = ts.tz_localize(None)
+            # NO milliseconds - OpenF1 API doesn't accept them
+            return ts.strftime('%Y-%m-%dT%H:%M:%S')
+        
+        if isinstance(lap_start, pd.Timestamp):
+            date_start = to_iso_no_tz(lap_start)
+        else:
+            date_start = str(lap_start).replace('+00:00', '')
+        
+        # If lap_end is NaT (lap in progress), use lap_start + 2 minutes
+        if pd.isna(lap_end):
+            # Assume max lap time of 2 minutes
+            estimated_end = lap_start + timedelta(minutes=2)
+            date_end = to_iso_no_tz(estimated_end)
+        else:
+            if isinstance(lap_end, pd.Timestamp):
+                date_end = to_iso_no_tz(lap_end)
+            else:
+                date_end = str(lap_end).replace('+00:00', '')
+        
+        print(
+            f"🌐 TELEMETRY API: Fetching driver {driver_number}, "
+            f"lap {lap_number}: {date_start} to {date_end}",
+            flush=True
+        )
         
         try:
-            response = requests.get(url, params=params, timeout=5)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data:
-                    df = pd.DataFrame(data)
-                    if "date" in df.columns:
-                        df["date"] = pd.to_datetime(df["date"], format='mixed')
-                    
-                    column_mapping = {
-                        "driver_number": "DriverNumber",
-                        "date": "Timestamp",
-                        "speed": "Speed",
-                        "rpm": "RPM",
-                        "n_gear": "Gear",
-                        "throttle": "Throttle",
-                        "brake": "Brake",
-                        "drs": "DRS"
-                    }
-                    df = df.rename(
-                        columns={
-                            k: v for k, v in column_mapping.items()
-                            if k in df.columns
-                        }
-                    )
-                    logger.info(
-                        f"Loaded {len(df)} car data records "
-                        f"for session {session_key}"
-                    )
-                    return df
-                else:
-                    logger.warning(
-                        f"No car data available for session {session_key}"
-                    )
-                    TelemetryDashboard._failed_car_data_sessions.add(
-                        session_key
-                    )
-                    return pd.DataFrame()
-            else:
-                logger.warning(
-                    f"Car data request failed with status "
-                    f"{response.status_code} for session {session_key}"
-                )
-                TelemetryDashboard._failed_car_data_sessions.add(session_key)
-                return pd.DataFrame()
-                
-        except requests.Timeout:
-            logger.warning(
-                f"Car data request timed out for session {session_key}"
+            car_data = self.provider.get_car_data(
+                session_key=session_key,
+                driver_number=driver_number,
+                date_start=date_start,
+                date_end=date_end
             )
-            TelemetryDashboard._failed_car_data_sessions.add(session_key)
-            return pd.DataFrame()
-        except requests.RequestException as e:
-            logger.warning(f"Car data request failed: {e}")
-            TelemetryDashboard._failed_car_data_sessions.add(session_key)
-            return pd.DataFrame()
+            
+            if car_data is None or car_data.empty:
+                print(
+                    f"❌ TELEMETRY API: No data returned for driver "
+                    f"{driver_number} lap {lap_number}",
+                    flush=True
+                )
+                TelemetryDashboard._failed_lap_requests[cache_key] = time.time()
+                return None
+            
+            print(
+                f"✅ TELEMETRY API: Got {len(car_data)} points for "
+                f"lap {lap_number}",
+                flush=True
+            )
+            
+            # Process data: calculate distance and downsample
+            car_data = self._calculate_distance(car_data)
+            car_data = self._downsample(car_data, target_points=500)
+            
+            # Cache the processed result
+            self._lap_telemetry_cache[cache_key] = car_data
+            return car_data
+            
+        except Exception as e:
+            logger.error(f"Error fetching lap telemetry: {e}")
+            TelemetryDashboard._failed_lap_requests[cache_key] = time.time()
+            return None
 
     def _get_driver_last_lap(
         self,
@@ -381,6 +404,7 @@ class TelemetryDashboard:
     ) -> Optional[dict]:
         """Get the last completed lap for a driver."""
         if self._cached_laps is None or self._cached_laps.empty:
+            print(f"🚫 TELEMETRY DEBUG: No cached laps available", flush=True)
             return None
 
         driver_laps = self._cached_laps[
@@ -388,7 +412,17 @@ class TelemetryDashboard:
         ].copy()
 
         if driver_laps.empty:
+            print(
+                f"🚫 TELEMETRY DEBUG: No laps for driver {driver_number}",
+                flush=True
+            )
             return None
+        
+        print(
+            f"📋 TELEMETRY DEBUG: Driver {driver_number} has "
+            f"{len(driver_laps)} laps",
+            flush=True
+        )
 
         # Filter by simulation time if available
         if simulation_time is not None and session_start_time is not None:
@@ -400,6 +434,10 @@ class TelemetryDashboard:
                     pd.notna(driver_laps['LapEndTime']) &
                     (driver_laps['LapEndTime'] <= current_time)
                 ]
+                print(
+                    f"📋 TELEMETRY DEBUG: Completed laps: {len(completed_laps)}",
+                    flush=True
+                )
                 if not completed_laps.empty:
                     driver_laps = completed_laps
 
@@ -408,54 +446,12 @@ class TelemetryDashboard:
             driver_laps = driver_laps.sort_values('LapNumber', ascending=False)
 
         last_lap = driver_laps.iloc[0]
-        return last_lap.to_dict()
-
-    def _get_lap_telemetry(
-        self,
-        driver_number: int,
-        lap_data: dict
-    ) -> pd.DataFrame:
-        """Get telemetry data for a specific lap."""
-        if self._cached_car_data is None or self._cached_car_data.empty:
-            return pd.DataFrame()
-
-        # Filter by driver
-        driver_telemetry = self._cached_car_data[
-            self._cached_car_data['DriverNumber'] == driver_number
-        ].copy()
-
-        if driver_telemetry.empty:
-            return pd.DataFrame()
-
-        # Filter by lap time range
-        lap_start = lap_data.get('LapStartTime')
-        lap_end = lap_data.get('LapEndTime')
-
-        if pd.notna(lap_start) and pd.notna(lap_end):
-            if 'Timestamp' in driver_telemetry.columns:
-                driver_telemetry = driver_telemetry[
-                    (driver_telemetry['Timestamp'] >= lap_start) &
-                    (driver_telemetry['Timestamp'] <= lap_end)
-                ]
-        elif pd.notna(lap_start):
-            # Only start time available, get next ~2 minutes of data
-            if 'Timestamp' in driver_telemetry.columns:
-                lap_end_approx = lap_start + timedelta(minutes=2)
-                driver_telemetry = driver_telemetry[
-                    (driver_telemetry['Timestamp'] >= lap_start) &
-                    (driver_telemetry['Timestamp'] <= lap_end_approx)
-                ]
-
-        if driver_telemetry.empty:
-            return pd.DataFrame()
-
-        # Calculate distance from timestamps (approximate)
-        driver_telemetry = self._calculate_distance(driver_telemetry)
-
-        # Downsample to ~500 points for smooth rendering
-        driver_telemetry = self._downsample(driver_telemetry, target_points=500)
-
-        return driver_telemetry
+        lap_dict = last_lap.to_dict()
+        print(
+            f"✅ TELEMETRY DEBUG: Using lap {lap_dict.get('LapNumber')}",
+            flush=True
+        )
+        return lap_dict
 
     def _calculate_distance(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculate cumulative distance from speed and time."""
@@ -536,7 +532,7 @@ class TelemetryDashboard:
         # Create subplots: Speed, Throttle, Brake, Gear
         fig = make_subplots(
             rows=4, cols=1,
-            shared_xaxis=True,
+            shared_xaxes=True,
             vertical_spacing=0.03,
             row_heights=[0.35, 0.22, 0.22, 0.21],
             subplot_titles=None
@@ -624,14 +620,15 @@ class TelemetryDashboard:
             paper_bgcolor="#1e1e1e",
             plot_bgcolor="#161b22",
             height=500,
-            margin=dict(l=50, r=20, t=30, b=40),
+            margin=dict(l=50, r=20, t=10, b=40),
             legend=dict(
                 orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="center",
-                x=0.5,
-                font=dict(size=10)
+                yanchor="top",
+                y=0.99,
+                xanchor="right",
+                x=0.99,
+                font=dict(size=9),
+                bgcolor="rgba(30,30,30,0.8)"
             ),
             hovermode='x unified'
         )

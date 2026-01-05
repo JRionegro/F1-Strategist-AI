@@ -538,7 +538,9 @@ class OpenF1DataProvider:
     def get_car_data(
         self,
         session_key: int,
-        driver_number: Optional[int] = None
+        driver_number: Optional[int] = None,
+        date_start: Optional[str] = None,
+        date_end: Optional[str] = None
     ) -> pd.DataFrame:
         """
         Get car telemetry data (speed, RPM, gear, throttle, brake, DRS).
@@ -546,6 +548,10 @@ class OpenF1DataProvider:
         Args:
             session_key: OpenF1 session identifier
             driver_number: Filter by specific driver (optional)
+            date_start: ISO format timestamp for start filter (optional)
+                       Example: "2025-11-30T16:10:00"
+            date_end: ISO format timestamp for end filter (optional)
+                     Example: "2025-11-30T16:12:00"
             
         Returns:
             DataFrame with car telemetry data
@@ -553,6 +559,10 @@ class OpenF1DataProvider:
         params = {"session_key": session_key}
         if driver_number:
             params["driver_number"] = driver_number
+        if date_start:
+            params["date>"] = date_start  # OpenF1 uses date> not date>=
+        if date_end:
+            params["date<"] = date_end
             
         car_data = self._request("car_data", params)
         
