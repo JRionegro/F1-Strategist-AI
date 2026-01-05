@@ -103,7 +103,7 @@ app = Dash(
 )
 
 server = app.server
-server.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching
+server.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable Flask caching
 server.config['TEMPLATES_AUTO_RELOAD'] = True
 
 # Global session (singleton pattern maintained)
@@ -915,14 +915,16 @@ def handle_mode_change(mode):
 @callback(
     Output('circuit-selector', 'options'),
     Output('circuit-selector', 'value'),
+    Output('session-selector', 'options', allow_duplicate=True),
+    Output('session-selector', 'value', allow_duplicate=True),
     Input('year-selector', 'value'),
     State('circuit-selector', 'value'),
-    prevent_initial_call=False
+    prevent_initial_call='initial_duplicate'
 )
 def update_circuits(year, current_circuit):
-    """Update circuit dropdown based on selected year."""
+    """Update circuit dropdown based on selected year. Clears session when year changes."""
     if year is None:
-        return [], None
+        return [], None, [], None
     
     schedule = load_f1_calendar(year)
     if schedule.empty:
@@ -963,6 +965,16 @@ def update_circuits(year, current_circuit):
             'value': meeting_key
         })
     
+    # When year changes, always clear circuit selection to force user to choose
+    # This also triggers session dropdown to clear
+    from dash import ctx
+    triggered_id = ctx.triggered_id if ctx.triggered else None
+    
+    if triggered_id == 'year-selector':
+        # Year changed - clear circuit and session, let user select
+        logger.info(f"Year changed to {year}, clearing circuit and session selections")
+        return circuit_options, None, [], None
+    
     # Keep current selection if it exists in new options
     if current_circuit and current_circuit in circuit_keys:
         default_value = current_circuit
@@ -982,21 +994,28 @@ def update_circuits(year, current_circuit):
         else:
             default_value = None
 
-    return circuit_options, default_value
+    # Return empty session options - will be populated by update_sessions callback
+    return circuit_options, default_value, [], None
 
 
 @callback(
-    Output('session-selector', 'options'),
-    Output('session-selector', 'value'),
+    Output('session-selector', 'options', allow_duplicate=True),
+    Output('session-selector', 'value', allow_duplicate=True),
     Input('circuit-selector', 'value'),
     Input('year-selector', 'value'),
     State('session-selector', 'value'),
-    prevent_initial_call=False
+    prevent_initial_call=True
 )
 def update_sessions(circuit_key, year, current_session):
     """Update session dropdown based on selected circuit (meeting_key from OpenF1)."""
+    from dash import ctx
+    
     if not circuit_key or not year:
         return [], None
+    
+    # When circuit changes, always clear session selection
+    triggered_id = ctx.triggered_id if ctx.triggered else None
+    force_clear = triggered_id == 'circuit-selector'
     
     try:
         # meeting_key is now the circuit_key value from dropdown
@@ -1031,12 +1050,15 @@ def update_sessions(circuit_key, year, current_session):
                 'value': session_type
             })
         
-        # Keep current selection if valid, otherwise select last session (Race)
+        # When circuit changes, clear session and let user select
         session_values = [opt['value'] for opt in session_options]
-        if current_session and current_session in session_values:
+        if force_clear:
+            logger.info(f"Circuit changed, clearing session selection. Found {len(session_options)} sessions for meeting_key={meeting_key}")
+            default_value = None
+        elif current_session and current_session in session_values:
             default_value = current_session
         else:
-            default_value = session_options[-1]['value'] if session_options else None
+            default_value = None  # Don't auto-select, let user choose
         
         logger.info(f"Found {len(session_options)} sessions for meeting_key={meeting_key}")
         return session_options, default_value
@@ -2658,7 +2680,7 @@ if __name__ == '__main__':
     logger.info("F1 STRATEGIST AI - DASH VERSION")
     logger.info("="*60)
     logger.info("Starting application...")
-    logger.info("Open: http://localhost:8501")
+    logger.info("Open: http://localhost:8502")
     logger.info("="*60)
 
     # Initialize session with last completed race (dynamic from OpenF1)
@@ -2669,4 +2691,4 @@ if __name__ == '__main__':
         f"(Round {last_race.round_number}, {last_race.year})"
     )
 
-    app.run(debug=False, port=8501)
+    app.run(debug=False, port=8502)

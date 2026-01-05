@@ -59,7 +59,9 @@ class OpenF1DataProvider:
         endpoint: str,
         params: Optional[Dict] = None,
         max_retries: int = 3,
-        base_delay: float = 2.0
+        base_delay: float = 2.0,
+        max_502_retries: int = 5,
+        retry_502_delay: float = 3.0
     ) -> List[Dict]:
         """
         Make API request with rate limiting and exponential backoff retry.
@@ -67,13 +69,16 @@ class OpenF1DataProvider:
         Args:
             endpoint: API endpoint (e.g., 'sessions', 'laps')
             params: Query parameters
-            max_retries: Maximum number of retry attempts
+            max_retries: Maximum number of retry attempts for rate limiting
             base_delay: Base delay in seconds for exponential backoff
+            max_502_retries: Maximum retries for 502 Bad Gateway errors
+            retry_502_delay: Fixed delay between 502 retries (seconds)
             
         Returns:
             List of JSON objects from API response
         """
         url = f"{self.BASE_URL}/{endpoint}"
+        retries_502 = 0
         
         for attempt in range(max_retries + 1):
             self._rate_limit()
@@ -88,7 +93,28 @@ class OpenF1DataProvider:
                 return data
                 
             except requests.HTTPError as e:
-                if e.response.status_code == 429:
+                status_code = e.response.status_code if e.response is not None else None
+                
+                # Handle 502 Bad Gateway with fixed retries
+                if status_code == 502:
+                    retries_502 += 1
+                    if retries_502 <= max_502_retries:
+                        logger.warning(
+                            f"502 Bad Gateway on {endpoint} "
+                            f"(retry {retries_502}/{max_502_retries}). "
+                            f"Waiting {retry_502_delay}s..."
+                        )
+                        sleep(retry_502_delay)
+                        continue
+                    else:
+                        logger.error(
+                            f"502 Bad Gateway on {endpoint} "
+                            f"after {max_502_retries} retries. Giving up."
+                        )
+                        raise
+                
+                # Handle 429 Rate Limit with exponential backoff
+                elif status_code == 429:
                     if attempt < max_retries:
                         wait_time = base_delay * (2 ** attempt)
                         logger.warning(

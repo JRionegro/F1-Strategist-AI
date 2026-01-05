@@ -83,6 +83,7 @@ models/*.pth
 
 # ChromaDB
 chroma_data/
+data/chromadb/
 *.chroma
 
 # Temporary files
