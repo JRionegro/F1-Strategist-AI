@@ -1453,7 +1453,19 @@ def update_drivers(session, circuit_key, year):
             ),
             type="circle",
             color="#e10600"
-        ), {'loaded': True, 'year': year, 'meeting_key': meeting_key, 'session': session}
+        ), {
+            'loaded': True,
+            'year': year,
+            'meeting_key': meeting_key,
+            'session': session,
+            'session_key': session_key,
+            'race_name': session_info.get('meeting_name', 'Race'),
+            'session_type': session_name,
+            'drivers': {
+                opt['value']: opt['label'] for opt in driver_options
+            },
+            'total_laps': session_info.get('total_laps', 57)
+        }
     
     except Exception as e:
         logger.error(f"Error loading drivers for {year} meeting_key={meeting_key} {session}: {e}")
@@ -3261,8 +3273,19 @@ def generate_ai_response(
             finally:
                 loop.close()
             
-            # Format response
+            # Format response with provider prefix
             response_content = llm_response.content
+            
+            # Add provider prefix (Claude: or Gemi:)
+            provider_name = llm_response.provider.lower() if llm_response.provider else ''
+            if 'claude' in provider_name or 'anthropic' in provider_name:
+                provider_prefix = "**Claude:** "
+            elif 'gemini' in provider_name or 'google' in provider_name:
+                provider_prefix = "**Gemi:** "
+            else:
+                provider_prefix = ""
+            
+            response_content = provider_prefix + response_content
             
             # Add source attribution if RAG was used
             if rag_sources:
