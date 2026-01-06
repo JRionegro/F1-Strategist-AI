@@ -863,7 +863,134 @@ class F1RAGRetriever:
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: December 20, 2025  
-**Next Review**: End of Week 5 (Before Phase 3 implementation)  
+## ADR-007: Proactive AI Assistant Dashboard
+
+**Date**: January 5, 2026  
+**Status**: APPROVED  
+**Deciders**: Jorge Rionegro
+
+### Context
+
+The original AI Assistant Dashboard was a static chat interface that:
+
+1. **Showed wrong race context** - Always displayed "Abu Dhabi GP 2025" instead of selected race
+2. **Input blocked during simulation** - Dashboard regenerated every 3 seconds, making typing impossible
+3. **Lost chat history** - Messages disappeared on each refresh
+4. **Purely reactive** - User had to ask questions; no proactive strategy alerts
+
+### Decision
+
+Implement a **Proactive AI Assistant** that:
+
+1. **Sends automatic alerts** during race simulation (pit windows, undercut risk, safety car)
+2. **Allows user questions** at any time without blocking
+3. **Maintains persistent history** using `dcc.Store` with session storage
+4. **Shows correct race context** from `session-store` data
+
+### Critical Constraint: NO FUTURE KNOWLEDGE
+
+**CRITICAL**: In simulation mode, the AI must NEVER use future race data.
+
+- All event detection filters data by `timestamp <= current_simulation_time`
+- Recommendations based only on data available "at that moment"
+- This preserves the integrity of strategy analysis practice
+
+### Implementation Details
+
+#### New Components Created
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| `RaceEventDetector` | `src/session/event_detector.py` | Detects pit windows, safety car, undercuts |
+| `chat-messages-store` | `app_dash.py` | Persistent chat history (session storage) |
+| `proactive-check-interval` | `app_dash.py` | 15-second interval for event detection |
+
+#### Event Detection Thresholds
+
+| Event | Condition | Priority |
+|-------|-----------|----------|
+| Pit Window Open | Stint age within optimal range | 3 |
+| Tires Degraded | Stint age > optimal window | 4 |
+| Undercut Risk | Gap < 2.5s AND car behind on aged tires | 4 |
+| Safety Car | Race control message contains "SAFETY CAR" | 5 |
+| VSC | Race control message contains "VSC" | 4 |
+| Tire Degradation | Lap time increase > 1.0s over 5 laps | 3 |
+
+#### Tire Compound Windows (Laps)
+
+| Compound | Minimum | Optimal | Maximum |
+|----------|---------|---------|---------|
+| SOFT | 8 | 12 | 18 |
+| MEDIUM | 15 | 22 | 30 |
+| HARD | 25 | 35 | 45 |
+| INTERMEDIATE | 10 | 20 | 35 |
+| WET | 15 | 30 | 50 |
+
+#### Undercut Alert Logic
+
+Conservative approach - only alert when:
+
+1. Gap to car behind < 2.5 seconds
+2. Car behind has aged tires (stint > 10 laps)
+3. Both cars haven't pitted recently
+
+This avoids false positives and spam alerts.
+
+#### Message Types and Visual Design
+
+| Type | Color | Use Case |
+|------|-------|----------|
+| User | Blue gradient (#0d6efd) | User questions |
+| Assistant | Gray (#2d2d2d) | AI responses to questions |
+| Alert (P5) | Red gradient | Safety car, critical |
+| Alert (P4) | Orange gradient | Undercut risk, tire overdue |
+| Alert (P3) | Amber/Yellow gradient | Pit window open, degradation |
+
+### Alternatives Considered
+
+#### Option A: Keep AI inside dashboard-container (SELECTED)
+
+- Pros: Simpler architecture, single render callback
+- Cons: Must use store for persistence
+- Decision: Use `chat-messages-store` with `storage_type='session'`
+
+#### Option B: Separate AI container outside dashboard-container
+
+- Pros: Never regenerates, cleaner separation
+- Cons: More complex layout, breaks current structure
+- Decision: Rejected for now, Option A sufficient
+
+#### Option C: Full LLM integration for proactive alerts
+
+- Pros: More natural language alerts
+- Cons: High latency, cost per alert, may fail if LLM unavailable
+- Decision: Use rule-based templates with fallback, LLM optional
+
+### Consequences
+
+#### Positive
+
+- Users receive timely strategy alerts without asking
+- Chat history persists throughout session
+- Correct race context displayed
+- Can still ask questions at any time
+
+#### Negative
+
+- Requires event detection logic maintenance
+- Hardcoded thresholds may need tuning per circuit
+- 15-second check interval may miss rapid events
+
+### Future Improvements
+
+1. **Circuit-specific thresholds** - Some circuits wear tires faster
+2. **Weather-triggered alerts** - Rain probability warnings
+3. **Position battle alerts** - When gap to car ahead/behind changes significantly
+4. **LLM-enhanced alerts** - Use orchestrator for richer context (optional)
+
+---
+
+**Document Version**: 1.1  
+**Last Updated**: January 5, 2026  
+**Next Review**: After testing with live OpenF1 API  
 **Maintained by**: Jorge Rionegro

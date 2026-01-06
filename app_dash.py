@@ -5,12 +5,14 @@ Multi-dashboard F1 strategy platform with live and simulation modes.
 Migrated from Streamlit to Dash for better layout control.
 """
 
+import asyncio
+import json
 import logging
 import os
 import sys
 import importlib
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 import dash
 from dash import Dash, html, dcc, Input, Output, State, callback, ctx, Patch, ALL
@@ -36,6 +38,7 @@ from src.session.global_session import (
 )
 from src.session.simulation_controller import SimulationController
 from src.session.live_detector import check_for_live_session
+from src.session.event_detector import RaceEventDetector, RaceEvent
 
 # FORCE RELOAD: Remove modules from cache BEFORE importing
 modules_to_reload = [
@@ -76,6 +79,17 @@ from src.dashboards_dash import weather_dashboard
 from src.rag.rag_manager import get_rag_manager, reset_rag_manager
 from src.rag.template_generator import get_template_generator
 
+# LLM providers for AI responses
+from dotenv import load_dotenv
+from src.llm.hybrid_router import HybridRouter
+from src.llm.claude_provider import ClaudeProvider
+from src.llm.gemini_provider import GeminiProvider
+from src.llm.provider import LLMProvider
+from src.llm.models import LLMConfig, LLMResponse
+
+# Load environment variables for API keys
+load_dotenv()
+
 # Configure logging - force output to console
 import sys
 root_logger = logging.getLogger()
@@ -105,10 +119,16 @@ race_control_dashboard = RaceControlDashboard(openf1_provider)
 # Initialize Telemetry Dashboard
 telemetry_dashboard = TelemetryDashboard(openf1_provider)
 
+# Initialize Race Event Detector for proactive AI alerts
+event_detector = RaceEventDetector(openf1_provider)
+
+# Bootstrap Icons CDN for icon support
+BOOTSTRAP_ICONS = "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+
 # Initialize Dash app with F1 theme
 app = Dash(
     __name__,
-    external_stylesheets=[dbc.themes.CYBORG],
+    external_stylesheets=[dbc.themes.CYBORG, BOOTSTRAP_ICONS],
     suppress_callback_exceptions=True,
     title="F1 Strategist AI",
     # Development settings to avoid asset loading issues
@@ -128,6 +148,98 @@ simulation_controller: Optional[SimulationController] = None
 
 # Current loaded session object (for circuit map and other dashboards)
 current_session_obj = None
+
+# LLM provider singleton (lazy initialization)
+_llm_provider: Optional[LLMProvider] = None
+_llm_provider_type: Optional[str] = None  # 'hybrid', 'claude', 'gemini'
+
+
+def get_llm_provider() -> Optional[LLMProvider]:
+    """
+    Get or initialize the LLM provider (singleton).
+    
+    Logic:
+    - If both keys configured: Use HybridRouter (balances by complexity)
+    - If only Claude key: Use ClaudeProvider only
+    - If only Gemini key: Use GeminiProvider only
+    - If no keys: Return None (will show error in chatbot)
+    """
+    global _llm_provider, _llm_provider_type
+    
+    if _llm_provider is not None:
+        return _llm_provider
+    
+    # Get API keys from environment
+    claude_api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+    gemini_api_key = os.getenv("GOOGLE_API_KEY", "").strip()
+    
+    # No keys configured
+    if not claude_api_key and not gemini_api_key:
+        logger.warning(
+            "No LLM API keys configured. "
+            "Set ANTHROPIC_API_KEY or GOOGLE_API_KEY in Configuration."
+        )
+        return None
+    
+    try:
+        # Case 1: Both keys - use HybridRouter for smart routing
+        if claude_api_key and gemini_api_key:
+            claude_config = LLMConfig(
+                model_name="claude-3-5-sonnet-20241022",
+                api_key=claude_api_key,
+                max_tokens=2048,
+                temperature=0.7
+            )
+            gemini_config = LLMConfig(
+                model_name="gemini-2.0-flash-thinking-exp-01-21",
+                api_key=gemini_api_key,
+                max_tokens=2048,
+                temperature=0.7
+            )
+            _llm_provider = HybridRouter(
+                claude_config=claude_config,
+                gemini_config=gemini_config
+            )
+            _llm_provider_type = 'hybrid'
+            logger.info(
+                "LLM initialized: HybridRouter (Claude + Gemini, "
+                "routes by complexity)"
+            )
+        
+        # Case 2: Only Claude key
+        elif claude_api_key:
+            claude_config = LLMConfig(
+                model_name="claude-3-5-sonnet-20241022",
+                api_key=claude_api_key,
+                max_tokens=2048,
+                temperature=0.7
+            )
+            _llm_provider = ClaudeProvider(claude_config)
+            _llm_provider_type = 'claude'
+            logger.info("LLM initialized: Claude only")
+        
+        # Case 3: Only Gemini key
+        elif gemini_api_key:
+            gemini_config = LLMConfig(
+                model_name="gemini-2.0-flash-thinking-exp-01-21",
+                api_key=gemini_api_key,
+                max_tokens=2048,
+                temperature=0.7
+            )
+            _llm_provider = GeminiProvider(gemini_config)
+            _llm_provider_type = 'gemini'
+            logger.info("LLM initialized: Gemini only")
+        
+        return _llm_provider
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize LLM provider: {e}")
+        return None
+
+
+def get_llm_provider_type() -> Optional[str]:
+    """Get the type of LLM provider currently in use."""
+    return _llm_provider_type
 
 
 def get_last_completed_race_context() -> RaceContext:
@@ -734,6 +846,19 @@ app.layout = dbc.Container([
     dcc.Store(id='sidebar-visible-store', data=True),
     dcc.Store(id='simulation-time-store', data={'time': 0.0, 'timestamp': 0}),
     dcc.Store(id='weather-last-update-store', data={'timestamp': 0, 'state': None}),
+    
+    # AI Chat stores (memory = cleared on page refresh)
+    dcc.Store(id='chat-messages-store', storage_type='memory', data=[]),
+    dcc.Store(id='chat-pending-query-store', data={'query': None, 'quick': None}),
+    dcc.Store(id='proactive-last-check-store', data={'last_lap': 0}),
+    
+    # Interval for proactive AI alerts (every 15 seconds when simulation running)
+    dcc.Interval(
+        id='proactive-check-interval',
+        interval=15000,  # 15 seconds
+        n_intervals=0,
+        disabled=True  # Enable when simulation is playing
+    ),
     
     # Help Modal
     dbc.Modal([
@@ -1909,6 +2034,7 @@ def handle_document_editor(
     Input('dashboard-selector', 'value'),
     Input('session-store', 'data'),
     Input('simulation-time-store', 'data'),  # Real-time updates
+    Input('chat-messages-store', 'data'),  # Chat messages for AI dashboard
     State('driver-selector', 'value'),
     prevent_initial_call=False
 )
@@ -1916,6 +2042,7 @@ def update_dashboards(
     selected_dashboards,
     session_data,
     simulation_time_data,
+    chat_messages,
     focused_driver
 ):
     """Update visible dashboards based on selection."""
@@ -1938,10 +2065,17 @@ def update_dashboards(
     
     for dashboard_id in selected_dashboards:
         if dashboard_id == "ai":
-            # AI Assistant Dashboard
+            # AI Assistant Dashboard - uses messages from store
+            race_name = session_data.get('race_name', 'Race') if session_data else 'Race'
+            session_type = session_data.get('session_type', 'Race') if session_data else 'Race'
+            driver_code = focused_driver if focused_driver != 'none' else None
+            
             dashboards.append(
                 AIAssistantDashboard.create_layout(
-                    focused_driver=focused_driver if focused_driver != 'none' else None
+                    focused_driver=driver_code,
+                    race_name=race_name,
+                    session_type=session_type,
+                    messages=chat_messages or []
                 )
             )
         
@@ -2391,11 +2525,37 @@ def save_api_keys(n_clicks, claude_key, gemini_key, openf1_key):
             f.writelines(lines)
         
         # Update environment variables in current session
-        os.environ['ANTHROPIC_API_KEY'] = claude_key
-        os.environ['GOOGLE_API_KEY'] = gemini_key
-        os.environ['OPENF1_API_KEY'] = openf1_key
+        os.environ['ANTHROPIC_API_KEY'] = claude_key or ''
+        os.environ['GOOGLE_API_KEY'] = gemini_key or ''
+        os.environ['OPENF1_API_KEY'] = openf1_key or ''
         
-        return dbc.Alert("✅ API keys saved successfully!", color="success", dismissable=True, duration=3000, className="small py-1 mb-0 mt-2")
+        # Reset LLM provider to use new keys
+        global _llm_provider, _llm_provider_type
+        _llm_provider = None
+        _llm_provider_type = None
+        
+        # Determine which provider will be used
+        has_claude = bool(claude_key and claude_key.strip())
+        has_gemini = bool(gemini_key and gemini_key.strip())
+        
+        if has_claude and has_gemini:
+            provider_msg = "HybridRouter (Claude + Gemini)"
+        elif has_claude:
+            provider_msg = "Claude only"
+        elif has_gemini:
+            provider_msg = "Gemini only"
+        else:
+            return dbc.Alert(
+                "⚠️ No API keys provided. At least one is required.",
+                color="warning", dismissable=True, duration=5000,
+                className="small py-1 mb-0 mt-2"
+            )
+        
+        return dbc.Alert(
+            f"✅ Keys saved! Using: {provider_msg}",
+            color="success", dismissable=True, duration=5000,
+            className="small py-1 mb-0 mt-2"
+        )
     
     except Exception as e:
         logger.error(f"Error saving API keys: {e}")
@@ -2741,6 +2901,412 @@ def toggle_sidebar(n_clicks, is_visible):
     else:
         # Hide sidebar
         return {'display': 'none'}, 12, False, '>>', 'Show sidebar'
+
+
+# ============================================================================
+# AI CHAT CALLBACKS
+# ============================================================================
+
+@callback(
+    Output('chat-messages-store', 'data', allow_duplicate=True),
+    Input('chat-send-btn', 'n_clicks'),
+    Input('chat-input', 'n_submit'),
+    Input('quick-pit-btn', 'n_clicks'),
+    Input('quick-weather-btn', 'n_clicks'),
+    Input('quick-gap-btn', 'n_clicks'),
+    State('chat-input', 'value'),
+    State('chat-messages-store', 'data'),
+    State('session-store', 'data'),
+    State('driver-selector', 'value'),
+    State('simulation-time-store', 'data'),
+    prevent_initial_call=True
+)
+def handle_chat_send(
+    send_clicks,
+    input_submit,
+    pit_clicks,
+    weather_clicks,
+    gap_clicks,
+    user_input,
+    current_messages,
+    session_data,
+    focused_driver,
+    sim_time_data
+):
+    """
+    Handle user chat input and quick action buttons.
+    
+    Adds user message and generates AI response.
+    Uses template-based fallback if LLM is not available.
+    """
+    if not ctx.triggered:
+        raise PreventUpdate
+    
+    triggered_id = ctx.triggered_id
+    messages = current_messages or []
+    
+    # Determine the query based on what was triggered
+    if triggered_id in ['chat-send-btn', 'chat-input']:
+        if not user_input or not user_input.strip():
+            raise PreventUpdate
+        query = user_input.strip()
+    elif triggered_id == 'quick-pit-btn':
+        driver = focused_driver if focused_driver != 'none' else 'our driver'
+        query = f"Should {driver} pit now? What's the optimal tire strategy?"
+    elif triggered_id == 'quick-weather-btn':
+        query = "What's the current weather situation? Any rain expected?"
+    elif triggered_id == 'quick-gap-btn':
+        driver = focused_driver if focused_driver != 'none' else 'our driver'
+        query = f"What are the gaps around {driver}? Any overtake opportunities?"
+    else:
+        raise PreventUpdate
+    
+    # Add user message
+    timestamp = datetime.now().isoformat()
+    messages.append({
+        'type': 'user',
+        'content': query,
+        'timestamp': timestamp
+    })
+    
+    # Generate AI response (template-based for now, LLM integration later)
+    try:
+        response = generate_ai_response(
+            query=query,
+            session_data=session_data,
+            focused_driver=focused_driver,
+            sim_time_data=sim_time_data
+        )
+        
+        messages.append({
+            'type': 'assistant',
+            'content': response['content'],
+            'timestamp': datetime.now().isoformat(),
+            'metadata': response.get('metadata', {})
+        })
+    except Exception as e:
+        logger.error(f"AI response generation failed: {e}")
+        messages.append({
+            'type': 'assistant',
+            'content': (
+                "I'm having trouble analyzing the data right now. "
+                "Please try again in a moment."
+            ),
+            'timestamp': datetime.now().isoformat(),
+            'metadata': {'error': str(e)}
+        })
+    
+    return messages
+
+
+@callback(
+    Output('chat-messages-store', 'data', allow_duplicate=True),
+    Input('clear-chat-btn', 'n_clicks'),
+    prevent_initial_call=True
+)
+def clear_chat(n_clicks):
+    """Clear all chat messages."""
+    if not n_clicks:
+        raise PreventUpdate
+    return []
+
+
+@callback(
+    Output('chat-messages-store', 'data', allow_duplicate=True),
+    Input('year-selector', 'value'),
+    Input('circuit-selector', 'value'),
+    Input('session-selector', 'value'),
+    Input('driver-selector', 'value'),
+    prevent_initial_call=True
+)
+def clear_chat_on_context_change(year, circuit, session_type, driver):
+    """Clear chat history when year, circuit, session or driver changes."""
+    # This ensures a fresh conversation for each new context
+    return []
+
+
+@callback(
+    Output('chat-input', 'value'),
+    Input('chat-send-btn', 'n_clicks'),
+    Input('chat-input', 'n_submit'),
+    prevent_initial_call=True
+)
+def clear_input(send_clicks, enter_submit):
+    """Clear input field after sending."""
+    return ""
+
+
+@callback(
+    Output('chat-messages-store', 'data', allow_duplicate=True),
+    Output('proactive-last-check-store', 'data'),
+    Input('proactive-check-interval', 'n_intervals'),
+    State('chat-messages-store', 'data'),
+    State('proactive-last-check-store', 'data'),
+    State('session-store', 'data'),
+    State('driver-selector', 'value'),
+    State('simulation-time-store', 'data'),
+    prevent_initial_call=True
+)
+def check_proactive_alerts(
+    n_intervals,
+    current_messages,
+    last_check_data,
+    session_data,
+    focused_driver,
+    sim_time_data
+):
+    """
+    Periodically check for race events and generate proactive alerts.
+    
+    CRITICAL: Only uses data up to current simulation time (NO FUTURE DATA).
+    """
+    if not session_data or not session_data.get('loaded'):
+        raise PreventUpdate
+    
+    messages = current_messages or []
+    last_lap = last_check_data.get('last_lap', 0) if last_check_data else 0
+    
+    try:
+        # Get current simulation state
+        session_key = session_data.get('session_key')
+        if not session_key:
+            raise PreventUpdate
+        
+        # Parse simulation time
+        sim_time = sim_time_data.get('time', 0) if sim_time_data else 0
+        
+        # Get current lap from simulation controller
+        current_lap = 1
+        if simulation_controller:
+            current_lap = simulation_controller.get_current_lap()
+        
+        # Don't check too frequently
+        if current_lap <= last_lap:
+            raise PreventUpdate
+        
+        # Get current time from simulation
+        current_time = None
+        if simulation_controller:
+            current_time = simulation_controller.current_time
+        
+        if not current_time:
+            raise PreventUpdate
+        
+        # Get focused driver number
+        driver_number = None
+        if focused_driver and focused_driver != 'none':
+            # Try to get driver number from session data
+            drivers = session_data.get('drivers', {})
+            for num, info in drivers.items():
+                if info.get('code') == focused_driver:
+                    driver_number = int(num)
+                    break
+        
+        # Detect events
+        events = event_detector.detect_events(
+            session_key=session_key,
+            current_time=current_time,
+            current_lap=current_lap,
+            focused_driver=driver_number,
+            total_laps=session_data.get('total_laps', 57)
+        )
+        
+        # Add alerts for detected events
+        for event in events:
+            messages.append({
+                'type': 'alert',
+                'content': event.message,
+                'timestamp': datetime.now().isoformat(),
+                'priority': event.priority,
+                'metadata': {
+                    'event_type': event.event_type,
+                    'data': event.data
+                }
+            })
+        
+        return messages, {'last_lap': current_lap}
+        
+    except Exception as e:
+        logger.debug(f"Proactive alert check failed: {e}")
+        raise PreventUpdate
+
+
+@callback(
+    Output('proactive-check-interval', 'disabled'),
+    Input('play-pause-btn', 'n_clicks'),
+    State('proactive-check-interval', 'disabled'),
+    prevent_initial_call=True
+)
+def toggle_proactive_interval(n_clicks, is_disabled):
+    """Enable/disable proactive checking when simulation plays/pauses."""
+    if not n_clicks:
+        raise PreventUpdate
+    # Toggle: if was disabled, enable it (return False)
+    return not is_disabled
+
+
+def generate_ai_response(
+    query: str,
+    session_data: Optional[Dict],
+    focused_driver: Optional[str],
+    sim_time_data: Optional[Dict]
+) -> Dict[str, Any]:
+    """
+    Generate AI response using RAG + LLM.
+    
+    Process:
+    1. Search RAG for relevant context documents
+    2. Build context from RAG results  
+    3. Send to LLM with context for intelligent response
+    4. If no LLM available, return informative message
+    """
+    query_lower = query.lower()
+    
+    # Get context info
+    race_name = (
+        session_data.get('race_name', 'the race') if session_data else 'the race'
+    )
+    driver = (
+        focused_driver if focused_driver and focused_driver != 'none'
+        else 'a driver'
+    )
+    year = session_data.get('year', 2024) if session_data else 2024
+    
+    # Get current lap
+    current_lap = None
+    if simulation_controller and simulation_controller.is_playing:
+        openf1_lap = simulation_controller.get_current_lap()
+        current_lap = max(1, openf1_lap - 2) if openf1_lap > 2 else 1
+    
+    lap_info = f"Lap {current_lap}" if current_lap else "Pre-race"
+    
+    # Search RAG for context
+    rag_manager = get_rag_manager()
+    rag_context = ""
+    rag_sources = []
+    
+    if rag_manager.is_context_loaded():
+        # Determine category based on query
+        category = None
+        if any(w in query_lower for w in ['pit', 'tire', 'tyre', 'stop', 'strategy']):
+            category = 'strategy'
+        elif any(w in query_lower for w in ['weather', 'rain', 'wet', 'dry']):
+            category = 'weather'
+        elif any(w in query_lower for w in ['fia', 'rule', 'regulation', 'penalty']):
+            category = 'fia'
+        
+        # Search RAG
+        rag_results = rag_manager.search(query=query, k=5, category=category)
+        
+        if rag_results:
+            context_parts = []
+            for result in rag_results:
+                source = result.get('metadata', {}).get('source', 'unknown')
+                content = result.get('content', '')
+                if content:
+                    context_parts.append(content)
+                    rag_sources.append(source)
+            rag_context = "\n\n".join(context_parts)
+    
+    # Get LLM provider
+    llm_provider = get_llm_provider()
+    
+    if llm_provider is not None:
+        # Build system prompt for F1 strategy expert
+        system_prompt = (
+            "You are an expert F1 race strategist AI assistant. "
+            "You help race engineers and strategists make optimal decisions "
+            "during Formula 1 races and qualifying sessions.\n\n"
+            f"Current session: {race_name} ({year})\n"
+            f"Current state: {lap_info}\n"
+            f"Focus driver: {driver}\n\n"
+            "Provide concise, actionable insights. "
+            "Use data from the context when available. "
+            "If you don't have specific information, say so clearly."
+        )
+        
+        # Build user prompt with RAG context
+        if rag_context:
+            user_prompt = (
+                f"Based on this context information:\n\n"
+                f"---\n{rag_context}\n---\n\n"
+                f"User question: {query}\n\n"
+                f"Please provide a helpful response based on the context above."
+            )
+        else:
+            user_prompt = (
+                f"User question: {query}\n\n"
+                f"Note: No specific context documents were found. "
+                f"Please provide general F1 strategy guidance or indicate "
+                f"if you need more specific information to answer."
+            )
+        
+        try:
+            # Call LLM asynchronously
+            import asyncio
+            
+            async def get_llm_response():
+                return await llm_provider.generate(
+                    prompt=user_prompt,
+                    system_prompt=system_prompt
+                )
+            
+            # Run async function
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                llm_response: LLMResponse = loop.run_until_complete(
+                    get_llm_response()
+                )
+            finally:
+                loop.close()
+            
+            # Format response
+            response_content = llm_response.content
+            
+            # Add source attribution if RAG was used
+            if rag_sources:
+                unique_sources = list(set(rag_sources))
+                source_text = ", ".join(unique_sources[:3])
+                response_content += (
+                    f"\n\n---\n"
+                    f"_📚 Sources: {source_text}_"
+                )
+            
+            return {
+                'content': response_content,
+                'metadata': {
+                    'confidence': 0.9,
+                    'agents_used': ['LLM', 'RAG'] if rag_context else ['LLM'],
+                    'llm_provider': llm_response.provider,
+                    'llm_model': llm_response.model,
+                    'tokens_used': llm_response.total_tokens,
+                    'rag_sources': len(rag_sources)
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"LLM generation failed: {e}")
+            # Fall through to no-LLM response
+    
+    # No LLM available - show clear error
+    return {
+        'content': (
+            f"❌ **API Key Required**\n\n"
+            f"The AI Assistant needs at least one LLM API key to respond.\n\n"
+            f"**Configure in sidebar → ⚙️ Configuration:**\n"
+            f"• **Claude** (Anthropic): `ANTHROPIC_API_KEY`\n"
+            f"• **Gemini** (Google): `GOOGLE_API_KEY`\n\n"
+            f"After entering your key, click **'💾 Save Keys'**.\n\n"
+            f"---\n"
+            f"_Your question: \"{query}\"_"
+        ),
+        'metadata': {
+            'confidence': 0.0,
+            'agents_used': [],
+            'error': 'No LLM API key configured'
+        }
+    }
 
 
 if __name__ == '__main__':

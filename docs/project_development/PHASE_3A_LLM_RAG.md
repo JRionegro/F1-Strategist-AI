@@ -368,4 +368,71 @@ Total: ~$8.50/month (68% cheaper than Claude-only: $27/mo)
 
 ---
 
+## 🤖 AI Chatbot Integration (Phase 4C) - COMPLETED ✅
+
+**Completion Date**: January 6, 2026  
+**Status**: 100% Complete (Manual testing passed)
+
+### Implementation Details
+
+The AI Chatbot in `app_dash.py` uses the LLM providers defined in Phase 3A:
+
+#### Provider Selection Logic
+
+```python
+def get_llm_provider() -> Optional[LLMProvider]:
+    """
+    Returns appropriate LLM provider based on configured API keys:
+    - No keys: returns None (error shown in chat)
+    - Only Claude key: ClaudeProvider
+    - Only Gemini key: GeminiProvider
+    - Both keys: HybridRouter (smart routing)
+    """
+```
+
+#### RAG Integration
+
+The chatbot searches RAG context before generating responses:
+
+```python
+def generate_ai_response(user_message: str, session_info: dict) -> str:
+    # 1. Search RAG for relevant context
+    rag_context = rag_manager.search(user_message, k=5)
+    
+    # 2. Build system prompt with session context
+    system_prompt = build_session_context(session_info)
+    
+    # 3. Generate response with LLM
+    response = llm_provider.generate(
+        prompt=user_message,
+        system_prompt=system_prompt + rag_context
+    )
+```
+
+#### API Key Configuration
+
+Keys are configured via the sidebar UI and saved to `.env`:
+
+- **Anthropic API Key**: `ANTHROPIC_API_KEY`
+- **Google API Key**: `GOOGLE_API_KEY`
+
+When saved, the LLM provider singleton is reset to pick up new keys.
+
+#### Chat Behavior
+
+- **Storage**: `dcc.Store` with `storage_type='memory'` (clears on refresh)
+- **Auto-clear**: Chat clears when Year, Circuit, Session, or Driver changes
+- **Manual clear**: "🗑️ Clear" button available
+
+### Provider Routing Table
+
+| Keys Available | Provider Used | Routing |
+|----------------|---------------|---------|
+| None | None | Error message in chat |
+| Only Claude | ClaudeProvider | All → Claude |
+| Only Gemini | GeminiProvider | All → Gemini |
+| Both | HybridRouter | Complex → Claude, Simple → Gemini |
+
+---
+
 **Next Document**: [Phase 3B Planning](PHASE_3B_PLANNING.md) (to be created)

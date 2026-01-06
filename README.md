@@ -37,6 +37,13 @@ An AI-powered Formula 1 race strategy assistant with unified OpenF1 data source 
   - ✅ Weather (Priority 3)
   - ✅ Telemetry (Priority 4)
   - ✅ Race Control (Priority 5)
+- **AI Chatbot Features** 🆕:
+  - ✅ Real LLM integration (Claude + Gemini)
+  - ✅ HybridRouter for smart query routing
+  - ✅ RAG-powered context-aware responses
+  - ✅ API key configuration via sidebar UI
+  - ✅ Auto-clear chat on context change
+  - ✅ Proactive alerts during simulation
 - **Live Mode**: 
   - ✅ Automatic availability detection (±3 hours window)
   - ✅ Context controls locking when Live mode active
@@ -197,6 +204,11 @@ F1 Strategist AI/
   - Model: `gemini-2.0-flash-thinking-exp-1219`
   - Reasoning mode for enhanced accuracy
 - **Hybrid Router** - Complexity-based query routing
+- **RAG Integration** - ChromaDB for circuit/strategy knowledge
+- **AI Chatbot Modes**:
+  - Single provider (Claude or Gemini only)
+  - Hybrid mode (both keys, smart routing)
+  - API keys configurable via UI sidebar
 
 ### Data & Storage
 - **FastF1** + **OpenF1** - F1 data providers

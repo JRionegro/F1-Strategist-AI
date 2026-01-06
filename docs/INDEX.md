@@ -1,6 +1,6 @@
 # F1 Strategist AI - Documentation Index
 
-**Last Updated**: January 2, 2026  
+**Last Updated**: January 6, 2026  
 **Project Status**: Production Ready ✅
 
 ---
@@ -98,6 +98,7 @@ are located in the [project_development/](project_development/) folder.
 |-----------|--------|-------------|
 | Multi-Agent System | ✅ | 5 specialized agents + orchestrator |
 | RAG System | ✅ | ChromaDB with auto-generated docs |
+| AI Chatbot | ✅ | Real LLM integration (Claude/Gemini) with RAG |
 | MCP Server | ✅ | 19 tools for F1 data access |
 | Dash UI | ✅ | Live and Simulation modes |
 | Cache System | ✅ | Parquet-based with >90% hit rate |

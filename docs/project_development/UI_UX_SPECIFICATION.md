@@ -367,6 +367,34 @@ Real Time          Simulation Time
 
 **Priority**: 🔴 MVP - CRITICAL
 
+#### LLM Integration (January 2026) 🆕
+
+**Provider Modes**:
+| Configuration | Provider | Behavior |
+|---------------|----------|----------|
+| No API keys | None | Error message with setup instructions |
+| Claude only | ClaudeProvider | All queries → Claude |
+| Gemini only | GeminiProvider | All queries → Gemini |
+| Both keys | HybridRouter | Complex → Claude, Simple → Gemini |
+
+**Key Features**:
+- **Real LLM responses**: No templates, actual AI-generated content
+- **RAG Integration**: Searches ChromaDB for circuit/strategy knowledge
+- **Session Context**: Responses are aware of current Year, Circuit, Session, Driver
+- **API Key Configuration**: Set via sidebar Configuration panel
+- **Auto-clear**: Chat history resets when context changes (Year/Circuit/Session/Driver)
+- **Manual Clear**: "🗑️ Clear" button to reset conversation
+
+**Provider Selection Logic**:
+```python
+# In app_dash.py
+def get_llm_provider():
+    # No keys → None (show error)
+    # Only Claude → ClaudeProvider
+    # Only Gemini → GeminiProvider
+    # Both → HybridRouter (routes by complexity)
+```
+
 #### Wireframe ASCII
 
 ```

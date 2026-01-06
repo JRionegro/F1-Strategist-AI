@@ -23,6 +23,8 @@ The application features:
 - **Mode Selector**: Switch between Live (🔴) and Simulation (🔵) modes
 - **Context Panel**: Select Year, Circuit, Session, and Driver focus
 - **Dashboard Selection**: Toggle multiple dashboards (AI Assistant, Race Overview, Weather, etc.)
+- **Configuration Sidebar**: Configure API keys and settings
+- **AI Chatbot**: Intelligent assistant with RAG-powered responses
 - **Live Mode Features**:
   - Automatically detects active F1 sessions (±3 hours window)
   - Locks Context controls to current session
@@ -31,6 +33,39 @@ The application features:
   - Historical data replay with playback controls
   - Speed adjustment (1x to 3x)
   - Jump to specific laps or time points
+
+### AI Chatbot Configuration 🤖 **NEW!**
+
+The AI Chatbot uses real LLM providers (Claude and/or Gemini) for intelligent F1 strategy responses.
+
+#### Setting Up API Keys via UI
+
+1. **Open Configuration Panel**: Click the ⚙️ gear icon in the sidebar
+2. **Enter API Keys**:
+   - `Anthropic API Key`: For Claude (complex queries)
+   - `Google API Key`: For Gemini (simple/moderate queries)
+3. **Click Save**: Keys are stored securely in `.env` file
+4. **Feedback**: A toast notification shows which provider(s) are active
+
+#### Provider Behavior
+
+| Keys Configured | Provider Used | Routing Behavior |
+|-----------------|---------------|------------------|
+| None | Error | Shows setup instructions in chat |
+| Only Claude | ClaudeProvider | All queries go to Claude |
+| Only Gemini | GeminiProvider | All queries go to Gemini |
+| Both | HybridRouter | Complex → Claude, Simple → Gemini |
+
+**HybridRouter** analyzes query complexity and routes accordingly:
+- **Claude**: Multi-step analysis, strategic recommendations, comparisons
+- **Gemini**: Quick lookups, simple facts, status queries
+
+#### Chat Behavior
+
+- **Auto-clear**: Chat history clears when you change Year, Circuit, Session, or Driver
+- **Manual clear**: Use the "🗑️ Clear" button to reset conversation
+- **Session-aware**: Responses include context from the selected session
+- **RAG-enhanced**: Uses circuit-specific knowledge from the knowledge base
 
 ## Project Structure 📁
 
@@ -106,6 +141,9 @@ notepad config\.env
 - `ANTHROPIC_API_KEY`: For Claude 3.5 Sonnet (complex queries)
 - `GOOGLE_API_KEY`: For Gemini 2.0 Flash Thinking (simple/moderate queries)
 - `LANGSMITH_API_KEY`: For monitoring (optional, has local fallback)
+
+> 💡 **Tip**: You can also configure API keys directly in the application!
+> Open the ⚙️ Configuration panel in the sidebar to set up your keys without editing files.
 
 **Key Configuration Variables**:
 ```env
