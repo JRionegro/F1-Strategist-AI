@@ -119,14 +119,40 @@ class SimulationController:
         Set playback speed multiplier.
         
         Args:
-            speed: Speed multiplier (1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0)
+            speed: Speed multiplier (1.0 to 10.0 in 0.5 increments)
         """
-        allowed_speeds = [1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
+        allowed_speeds = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0]
         
         if speed not in allowed_speeds:
             raise ValueError(
                 f"Invalid speed: {speed}. "
                 f"Allowed: {allowed_speeds}"
+            )
+        
+        # CRITICAL FIX: When changing speed, we need to "lock in" the current simulation progress
+        # to prevent get_elapsed_seconds() from recalculating all elapsed time with new speed.
+        # 
+        # Problem: get_elapsed_seconds() calculates: (now - play_start_time) * speed_multiplier
+        # If we just change speed_multiplier, ALL previously elapsed time gets recalculated
+        # with the new speed, causing huge time jumps.
+        #
+        # Solution: Capture current progress in simulation_offset and reset play_start_time
+        if self.is_playing:
+            # Get current simulation time BEFORE changing speed
+            current_sim_time = self.get_elapsed_seconds()
+            
+            # Lock this time in as the new offset
+            self.simulation_offset = current_sim_time
+            
+            # Reset play_start_time so future calculations start from now
+            self.play_start_time = datetime.now()
+            
+            # Also reset last_update for the update() method
+            self.last_update = datetime.now()
+            
+            logger.info(
+                f"Speed change: locked simulation_offset at {current_sim_time:.1f}s, "
+                f"reset play_start_time"
             )
         
         self.speed_multiplier = speed

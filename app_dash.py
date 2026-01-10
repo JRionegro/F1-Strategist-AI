@@ -382,7 +382,7 @@ def create_sidebar():
             html.H4([
                 html.Span("🏎️", style={'fontSize': '3rem'}),
                 " F1 Strategist"
-            ], className="text-center mb-3"),
+            ], className="text-center mb-1"),
             
             html.Hr(),
             
@@ -396,9 +396,9 @@ def create_sidebar():
                             {"label": " ⏯️ Simulation", "value": "sim"}
                         ],
                         value="sim",
-                        className="mb-2"
+                        className="mb-1"
                     )
-                ], title="🎮 Mode", className="mb-3")
+                ], title="🎮 Mode", className="mb-1")
             ], start_collapsed=True),
             
             html.Hr(),
@@ -414,7 +414,7 @@ def create_sidebar():
                             for y in range(2025, 2017, -1)
                         ],
                         value=2025,
-                        className="mb-3",
+                        className="mb-1",
                         clearable=False
                     ),
                     
@@ -423,7 +423,7 @@ def create_sidebar():
                         id='circuit-selector',
                         options=[],  # Will be populated by callback
                         value=None,
-                        className="mb-3",
+                        className="mb-1",
                         clearable=False
                     ),
                     
@@ -432,7 +432,7 @@ def create_sidebar():
                         id='session-selector',
                         options=[],  # Will be populated by callback
                         value=None,
-                        className="mb-3",
+                        className="mb-1",
                         clearable=False
                     ),
                     
@@ -444,14 +444,14 @@ def create_sidebar():
                                 options=[],
                                 value=None,
                                 placeholder="Loading drivers...",
-                                className="mb-2",
+                                className="mb-1",
                                 clearable=True
                             ),
                             type="circle",
                             color="#e10600"
                         )
                     ])
-                ], title="🗺️ Context", className="mb-3")
+                ], title="🗺️ Context", className="mb-1")
             ], start_collapsed=False),
             
             html.Hr(),
@@ -473,9 +473,9 @@ def create_sidebar():
                             # {"label": " Qualifying", "value": "qualifying"},
                         ],
                         value=["ai", "race_overview", "race_control", "weather", "telemetry"],
-                        className="mb-2"
+                        className="mb-1"
                     )
-                ], title="📊 Dashboards", className="mb-3")
+                ], title="📊 Dashboards", className="mb-1")
             ], start_collapsed=True),
             
             html.Hr(),
@@ -489,7 +489,7 @@ def create_sidebar():
                                 "▶️",
                                 id="play-btn",
                                 color="success",
-                                className="w-100 mb-2"
+                                className="w-100 mb-1"
                             ),
                             dbc.Tooltip(
                                 "Play simulation",
@@ -503,27 +503,28 @@ def create_sidebar():
                                 "⏮️",
                                 id="restart-btn",
                                 color="secondary",
-                                className="w-100 mb-2"
+                                className="w-100 mb-1"
                             ),
                             dbc.Tooltip("Restart simulation", target="restart-btn", placement="top")
                         ], width=6)
                     ]),
                     
-                    dbc.Label("Speed", className="mt-2"),
+                    dbc.Label("Speed", className="mt-1"),
                     dcc.Slider(
                         id='speed-slider',
                         min=1.0,
-                        max=5.0,
-                        step=0.25,
+                        max=10.0,
+                        step=0.5,
                         value=1.0,
                         marks={
                             1.0: '1x',
                             2.0: '2x',
-                            3.0: '3x',
                             4.0: '4x',
-                            5.0: '5x'
+                            6.0: '6x',
+                            8.0: '8x',
+                            10.0: '10x'
                         },
-                        className="mb-3"
+                        className="mb-1"
                     ),
                     
                     dbc.Row([
@@ -550,7 +551,7 @@ def create_sidebar():
                     html.Div(
                         id="simulation-progress",
                         children="⏱️ Not started",
-                        className="text-center mt-3 small text-muted"
+                        className="text-center mt-1 small text-muted"
                     ),
                     
                     # Interval for updating simulation progress (3 seconds)
@@ -560,7 +561,7 @@ def create_sidebar():
                         n_intervals=0,
                         disabled=True  # Start disabled, enable when playing
                     )
-                ], title="⏯️ Playback", className="mb-3", id="playback-accordion-item")
+                ], title="⏯️ Playback", className="mb-1", id="playback-accordion-item")
             ], start_collapsed=True, id="playback-accordion"),
             
             html.Hr(),
@@ -575,7 +576,7 @@ def create_sidebar():
                             id="rag-doc-count",
                             className="text-muted ms-2"
                         )
-                    ], className="mb-3"),
+                    ], className="mb-1"),
                     
                     # Document list by category
                     html.Div([
@@ -590,7 +591,7 @@ def create_sidebar():
                                 id="rag-global-docs",
                                 className="ps-2 small text-muted"
                             )
-                        ], className="mb-2"),
+                        ], className="mb-1"),
                         
                         # Strategy Documents
                         html.Div([
@@ -603,7 +604,7 @@ def create_sidebar():
                                 id="rag-strategy-docs",
                                 className="ps-2 small text-muted"
                             )
-                        ], className="mb-2"),
+                        ], className="mb-1"),
                         
                         # Weather Documents
                         html.Div([
@@ -616,7 +617,7 @@ def create_sidebar():
                                 id="rag-weather-docs",
                                 className="ps-2 small text-muted"
                             )
-                        ], className="mb-2"),
+                        ], className="mb-1"),
                         
                         # Performance Documents
                         html.Div([
@@ -629,7 +630,7 @@ def create_sidebar():
                                 id="rag-performance-docs",
                                 className="ps-2 small text-muted"
                             )
-                        ], className="mb-2"),
+                        ], className="mb-1"),
                         
                         # Race Control Documents
                         html.Div([
@@ -642,7 +643,7 @@ def create_sidebar():
                                 id="rag-race-control-docs",
                                 className="ps-2 small text-muted"
                             )
-                        ], className="mb-2"),
+                        ], className="mb-1"),
                         
                         # Race Position Documents
                         html.Div([
@@ -655,7 +656,7 @@ def create_sidebar():
                                 id="rag-race-position-docs",
                                 className="ps-2 small text-muted"
                             )
-                        ], className="mb-2"),
+                        ], className="mb-1"),
                         
                         # FIA Regulations
                         html.Div([
@@ -668,7 +669,7 @@ def create_sidebar():
                                 id="rag-fia-docs",
                                 className="ps-2 small text-muted"
                             )
-                        ], className="mb-2"),
+                        ], className="mb-1"),
                     ]),
                     
                     # Action buttons
@@ -689,14 +690,14 @@ def create_sidebar():
                             outline=True,
                             title="Generate circuit templates from historical data"
                         ),
-                    ], className="mt-3 d-flex"),
+                    ], className="mt-1 d-flex"),
                     
                     # RAG reload status message
                     html.Div(
                         id="rag-reload-status",
-                        className="small text-muted mt-2"
+                        className="small text-muted mt-1"
                     )
-                ], title="📚 RAG Documents", className="mb-3")
+                ], title="📚 RAG Documents", className="mb-1")
             ], start_collapsed=True, id="rag-accordion"),
             
             html.Hr(),
@@ -708,14 +709,14 @@ def create_sidebar():
                     html.Div([
                         # API Keys
                         html.Div([
-                            html.P("🔑 API Keys", className="fw-bold mb-2"),
+                            html.P("🔑 API Keys", className="fw-bold mb-1"),
                             dbc.Label("Claude API Key", className="small"),
                             dbc.Input(
                                 id='claude-api-key-input',
                                 type="password",
                                 placeholder="Enter Anthropic Claude API Key",
                                 value=os.getenv("ANTHROPIC_API_KEY", ""),
-                                className="mb-2",
+                                className="mb-1",
                                 style={'fontSize': '0.85rem'}
                             ),
                             dbc.Label("Gemini API Key", className="small"),
@@ -724,7 +725,7 @@ def create_sidebar():
                                 type="password",
                                 placeholder="Enter Google Gemini API Key",
                                 value=os.getenv("GOOGLE_API_KEY", ""),
-                                className="mb-2",
+                                className="mb-1",
                                 style={'fontSize': '0.85rem'}
                             ),
                             dbc.Label("OpenF1 API Key", className="small"),
@@ -733,7 +734,7 @@ def create_sidebar():
                                 type="password",
                                 placeholder="Enter OpenF1 API Key",
                                 value=os.getenv("OPENF1_API_KEY", ""),
-                                className="mb-2",
+                                className="mb-1",
                                 style={'fontSize': '0.85rem'}
                             ),
                             dbc.Button(
@@ -741,14 +742,14 @@ def create_sidebar():
                                 id="save-api-keys-btn",
                                 color="primary",
                                 size="sm",
-                                className="w-100 mb-2"
+                                className="w-100 mb-1"
                             ),
                             html.Div(id="api-keys-save-status", className="small text-muted")
-                        ], className="mb-3"),
+                        ], className="mb-1"),
                         
                         # LLM Settings
                         html.Div([
-                            html.P("🤖 LLM Settings", className="fw-bold mb-2"),
+                            html.P("🤖 LLM Settings", className="fw-bold mb-1"),
                             dbc.Label("Provider", className="small"),
                             dcc.Dropdown(
                                 id='llm-provider-selector',
@@ -758,20 +759,20 @@ def create_sidebar():
                                     {'label': 'Gemini Only', 'value': 'gemini'}
                                 ],
                                 value='hybrid',
-                                className="mb-2",
+                                className="mb-1",
                                 clearable=False,
                                 style={'fontSize': '0.85rem'}
                             )
-                        ], className="mb-3"),
+                        ], className="mb-1"),
                         
                         # Data Sources
                         html.Div([
-                            html.P("📂 Data Sources", className="fw-bold mb-2"),
+                            html.P("📂 Data Sources", className="fw-bold mb-1"),
                             html.Small(f"Cache: ./cache", className="text-muted d-block"),
                             html.Small(f"Vector Store: ChromaDB", className="text-muted d-block")
                         ])
                     ])
-                ], title="⚙️ Configuration", className="mb-2")
+                ], title="⚙️ Configuration", className="mb-1")
             ], start_collapsed=True),
             
             # Help button
