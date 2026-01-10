@@ -45,7 +45,7 @@ class GeminiProvider(LLMProvider):
         
         self.client = genai.Client(api_key=config.api_key)
         self.model_name = (
-            config.model_name or "gemini-2.0-flash-thinking-exp-1219"
+            config.model_name or "gemini-2.0-flash-exp"
         )
         self.enable_thinking = config.extra_params.get(
             "enable_thinking",

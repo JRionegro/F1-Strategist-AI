@@ -191,10 +191,11 @@ def get_llm_provider() -> Optional[LLMProvider]:
                 temperature=0.7
             )
             gemini_config = LLMConfig(
-                model_name="gemini-2.0-flash-thinking-exp-01-21",
+                model_name="gemini-2.0-flash-exp",
                 api_key=gemini_api_key,
                 max_tokens=2048,
-                temperature=0.7
+                temperature=0.7,
+                extra_params={"enable_thinking": False}
             )
             _llm_provider = HybridRouter(
                 claude_config=claude_config,
@@ -221,10 +222,11 @@ def get_llm_provider() -> Optional[LLMProvider]:
         # Case 3: Only Gemini key
         elif gemini_api_key:
             gemini_config = LLMConfig(
-                model_name="gemini-2.0-flash-thinking-exp-01-21",
+                model_name="gemini-2.0-flash-exp",
                 api_key=gemini_api_key,
                 max_tokens=2048,
-                temperature=0.7
+                temperature=0.7,
+                extra_params={"enable_thinking": False}
             )
             _llm_provider = GeminiProvider(gemini_config)
             _llm_provider_type = 'gemini'
@@ -847,7 +849,7 @@ app.layout = dbc.Container([
     dcc.Store(id='simulation-time-store', data={'time': 0.0, 'timestamp': 0}),
     dcc.Store(id='weather-last-update-store', data={'timestamp': 0, 'state': None}),
     
-    # AI Chat stores (memory = cleared on page refresh)
+    # AI Chat stores
     dcc.Store(id='chat-messages-store', storage_type='memory', data=[]),
     dcc.Store(id='chat-pending-query-store', data={'query': None, 'quick': None}),
     dcc.Store(id='proactive-last-check-store', data={'last_lap': 0}),
@@ -975,6 +977,13 @@ app.layout = dbc.Container([
         create_main_content()
     ], className="g-0", style={'height': '100vh'})
 ], fluid=True, className="vh-100 p-0")
+
+
+# ============================================================================
+# CLIENTSIDE CALLBACKS
+# ============================================================================
+
+# (Auto-scroll removed - user prefers seeing newest messages at top)
 
 
 # ============================================================================
@@ -2077,17 +2086,23 @@ def update_dashboards(
     
     for dashboard_id in selected_dashboards:
         if dashboard_id == "ai":
-            # AI Assistant Dashboard - uses messages from store
-            race_name = session_data.get('race_name', 'Race') if session_data else 'Race'
+            # AI Assistant Dashboard - messages updated by separate callback
+            circuit_name = session_data.get('circuit_short_name', 'Unknown') if session_data else 'Unknown'
             session_type = session_data.get('session_type', 'Race') if session_data else 'Race'
-            driver_code = focused_driver if focused_driver != 'none' else None
             
+            # Extract driver code from focused_driver (e.g., "RUS_2025_63" -> "RUS")
+            driver_code = None
+            if focused_driver and focused_driver != 'none':
+                parts = focused_driver.split('_')
+                driver_code = parts[0] if parts else focused_driver
+            
+            # Pass chat messages to preserve them during dashboard re-render
             dashboards.append(
                 AIAssistantDashboard.create_layout(
                     focused_driver=driver_code,
-                    race_name=race_name,
+                    race_name=circuit_name,
                     session_type=session_type,
-                    messages=chat_messages or []
+                    messages=chat_messages or []  # Preserve chat history
                 )
             )
         
@@ -2470,6 +2485,21 @@ def update_dashboards(
             "overflowY": "hidden"
         }
     )
+
+
+@callback(
+    Output('chat-messages-container', 'children'),
+    Input('chat-messages-store', 'data'),
+    prevent_initial_call=False
+)
+def update_chat_messages_display(chat_messages):
+    """
+    Update chat messages display independently from dashboard re-rendering.
+    This prevents message loss during rapid simulation updates.
+    """
+    from src.dashboards_dash.ai_assistant_dashboard import AIAssistantDashboard
+    
+    return AIAssistantDashboard.render_messages(chat_messages or [])
 
 
 # Callback: Hide/Show Playback based on Mode
@@ -2949,7 +2979,7 @@ def handle_chat_send(
     Handle user chat input and quick action buttons.
     
     Adds user message and generates AI response.
-    Uses template-based fallback if LLM is not available.
+    Returns updated chat UI to prevent conflicts with main dashboard render.
     """
     if not ctx.triggered:
         raise PreventUpdate
@@ -2981,7 +3011,7 @@ def handle_chat_send(
         'timestamp': timestamp
     })
     
-    # Generate AI response (template-based for now, LLM integration later)
+    # Generate AI response
     try:
         response = generate_ai_response(
             query=query,
@@ -2997,7 +3027,7 @@ def handle_chat_send(
             'metadata': response.get('metadata', {})
         })
     except Exception as e:
-        logger.error(f"AI response generation failed: {e}")
+        logger.error(f"AI response generation failed: {e}", exc_info=True)
         messages.append({
             'type': 'assistant',
             'content': (
@@ -3157,6 +3187,379 @@ def toggle_proactive_interval(n_clicks, is_disabled):
     return not is_disabled
 
 
+# ============================================================================
+# RACE STATE SNAPSHOT AND AI CONTEXT
+# ============================================================================
+
+def get_race_state_snapshot(
+    session_data: Optional[Dict],
+    sim_time_data: Optional[Dict],
+    focused_driver: Optional[str]
+) -> Dict[str, Any]:
+    """
+    Generate comprehensive snapshot of current race state for AI context.
+    
+    Args:
+        session_data: Session store data (race_name, session_key, etc.)
+        sim_time_data: Simulation time store data (time, timestamp)
+        focused_driver: Driver identifier (e.g., "RUS_2025_63")
+        
+    Returns:
+        Dict with race state snapshot including leaderboard, weather, flags, etc.
+    """
+    try:
+        # Check for None values
+        if not session_data or not sim_time_data:
+            return {'error': 'Missing session or simulation data'}
+        
+        session_key = session_data.get('session_key')
+        simulation_time = sim_time_data.get('time', 0)
+        total_laps = session_data.get('total_laps', 57)
+        
+        if not session_key or simulation_controller is None:
+            return {'error': 'No session loaded or controller unavailable'}
+        
+        # Get current lap
+        current_lap = simulation_controller.get_current_lap()
+        session_start_time = simulation_controller.start_time
+        
+        # Convert datetime to pandas Timestamp for compatibility
+        import pandas as pd
+        session_start_timestamp = pd.Timestamp(session_start_time)
+        
+        snapshot = {
+            'lap': current_lap,
+            'total_laps': total_laps,
+            'simulation_time': simulation_time,
+            'race_name': session_data.get('race_name', 'Unknown'),
+            'session_type': session_data.get('session_type', 'Race')
+        }
+        
+        # Get leaderboard summary
+        try:
+            if race_overview_dashboard._cached_positions is not None:
+                leaderboard = race_overview_dashboard.get_leaderboard_summary(
+                    session_key=session_key,
+                    simulation_time=simulation_time,
+                    session_start_time=session_start_timestamp,
+                    current_lap=current_lap,
+                    focused_driver=focused_driver,
+                    pit_window_range=3
+                )
+                snapshot['leaderboard'] = leaderboard
+            else:
+                snapshot['leaderboard'] = {'error': 'No leaderboard data cached'}
+        except Exception as e:
+            logger.error(f"Error getting leaderboard summary: {e}")
+            snapshot['leaderboard'] = {'error': str(e)}
+        
+        # Get weather summary
+        try:
+            from src.dashboards_dash.weather_dashboard import get_weather_summary
+            weather = get_weather_summary(
+                session_key=session_key,
+                simulation_time=simulation_time,
+                provider=openf1_provider
+            )
+            snapshot['weather'] = weather
+        except Exception as e:
+            logger.error(f"Error getting weather summary: {e}")
+            snapshot['weather'] = {'error': str(e)}
+        
+        # Get race control status
+        try:
+            if race_control_dashboard._cached_messages is not None:
+                status = race_control_dashboard.get_status_summary(
+                    session_key=session_key,
+                    simulation_time=simulation_time,
+                    session_start_time=session_start_timestamp,
+                    current_lap=current_lap
+                )
+                snapshot['race_control'] = status
+            else:
+                snapshot['race_control'] = {'error': 'No race control data cached'}
+        except Exception as e:
+            logger.error(f"Error getting race control summary: {e}")
+            snapshot['race_control'] = {'error': str(e)}
+        
+        return snapshot
+        
+    except Exception as e:
+        logger.error(f"Error generating race state snapshot: {e}")
+        return {'error': str(e)}
+
+
+def format_race_snapshot_for_ai(snapshot: dict) -> str:
+    """
+    Format race state snapshot as markdown for AI prompt.
+    
+    Args:
+        snapshot: Race state snapshot dict from get_race_state_snapshot()
+        
+    Returns:
+        Formatted markdown string for system prompt
+    """
+    if 'error' in snapshot:
+        return f"⚠️ **No race data available**: {snapshot['error']}"
+    
+    lines = []
+    lines.append("## 🏁 CURRENT RACE STATE")
+    lines.append("")
+    
+    # Race info
+    lines.append(f"**Race**: {snapshot.get('race_name', 'Unknown')} - {snapshot.get('session_type', 'Race')}")
+    lines.append(f"**Lap**: {snapshot.get('lap', '?')}/{snapshot.get('total_laps', '?')}")
+    lines.append("")
+    
+    # Leaderboard
+    leaderboard = snapshot.get('leaderboard', {})
+    if 'error' not in leaderboard:
+        # Focus driver
+        focus = leaderboard.get('focus_driver')
+        if focus:
+            lines.append(f"### 🎯 {focus['driver']} (P{focus['pos']})")
+            lines.append(f"- **Gap to leader**: {focus['gap_to_leader']}")
+            lines.append(f"- **Gap ahead**: {focus['gap_ahead']}")
+            lines.append(f"- **Gap behind**: {focus['gap_behind']}")
+            lines.append(f"- **Tire**: {focus['tire']} (Age: {focus['age']} laps)")
+            lines.append(f"- **Pit stops**: {focus['stops']}")
+            lines.append("")
+        
+        # Pit window drivers
+        pit_window = leaderboard.get('pit_window', [])
+        if pit_window:
+            lines.append("### 🔧 Pit Window (nearby drivers)")
+            lines.append("| Pos | Driver | Gap | Tire | Age | Stops |")
+            lines.append("|-----|--------|-----|------|-----|-------|")
+            for driver in pit_window:
+                lines.append(
+                    f"| P{driver['pos']} | {driver['driver']} | {driver['gap']} | "
+                    f"{driver['tire']} | {driver['age']} | {driver['stops']} |"
+                )
+            lines.append("")
+        
+        # Top 10
+        top_10 = leaderboard.get('top_10', [])
+        if top_10 and not focus:  # Only show if no focus driver
+            lines.append("### 🏆 Top 10")
+            lines.append("| Pos | Driver | Gap | Tire | Age | Stops |")
+            lines.append("|-----|--------|-----|------|-----|-------|")
+            for driver in top_10[:5]:  # Only top 5
+                lines.append(
+                    f"| P{driver['pos']} | {driver['driver']} | {driver['gap']} | "
+                    f"{driver['tire']} | {driver['age']} | {driver['stops']} |"
+                )
+            lines.append("")
+    
+    # Weather
+    weather = snapshot.get('weather', {})
+    if 'error' not in weather:
+        lines.append("### 🌤️ Weather")
+        lines.append(f"- **Air temp**: {weather.get('air_temp', '?')}°C")
+        lines.append(f"- **Track temp**: {weather.get('track_temp', '?')}°C")
+        lines.append(f"- **Wind**: {weather.get('wind_speed', '?')} km/h {weather.get('wind_direction', '')}")
+        lines.append(f"- **Humidity**: {weather.get('humidity', '?')}%")
+        if weather.get('rainfall'):
+            lines.append(f"- **⚠️ RAINFALL DETECTED**")
+        lines.append("")
+    
+    # Race control
+    race_control = snapshot.get('race_control', {})
+    if 'error' not in race_control:
+        flag = race_control.get('flag', 'GREEN')
+        lines.append(f"### 🚦 Race Control: **{flag} FLAG**")
+        
+        recent_events = race_control.get('recent_events', [])
+        if recent_events:
+            lines.append("**Recent events**:")
+            for event in recent_events[:3]:  # Only last 3
+                lines.append(f"- {event}")
+        lines.append("")
+    
+    return "\n".join(lines)
+
+
+# ============================================================================
+# PROACTIVE AI WARNINGS SYSTEM
+# ============================================================================
+
+# Global warning tracking to avoid spam
+warning_tracker = {}
+
+
+def analyze_race_state_for_warnings(
+    snapshot: Dict[str, Any],
+    session_data: Dict,
+    focused_driver: str
+) -> Optional[str]:
+    """
+    Analyze race state snapshot and generate proactive warnings using AI.
+    
+    Returns warning message if significant tactical situation detected,
+    None otherwise.
+    
+    Checks for:
+    - Undercut/overcut opportunities
+    - Pit window entry/exit timing
+    - Tire degradation issues
+    - Safety car situations
+    - Weather changes
+    """
+    if not snapshot:
+        return None
+    
+    # Get current lap and driver info
+    current_lap = snapshot.get('lap', 0)
+    driver_code = focused_driver if focused_driver != 'none' else None
+    
+    if not driver_code or current_lap == 0:
+        return None
+    
+    # Check if we've warned recently for this situation
+    warning_key = f"{driver_code}_{current_lap // 3}"  # Group by 3-lap windows
+    
+    if warning_key in warning_tracker:
+        last_warning_lap = warning_tracker[warning_key]
+        if current_lap - last_warning_lap < 3:
+            return None  # Don't spam warnings
+    
+    # Get AI-formatted snapshot
+    race_context = format_race_snapshot_for_ai(snapshot)
+    
+    # Build prompt for tactical analysis
+    analysis_prompt = (
+        "You are an F1 race strategist monitoring the live race. "
+        "Analyze this race state and determine if there are any "
+        "CRITICAL tactical situations that require immediate attention.\n\n"
+        f"Focus driver: {driver_code}\n\n"
+        f"{race_context}\n\n"
+        "Analyze for:\n"
+        "- Undercut/overcut opportunities (cars within 3s with different tire ages)\n"
+        "- Pit window timing (optimal laps to pit based on tire age and gaps)\n"
+        "- Safety car/VSC situations (pit now or wait?)\n"
+        "- Weather changes (tire strategy changes needed?)\n"
+        "- Position battles (DRS trains, blue flags)\n\n"
+        "ONLY respond if there is a CRITICAL situation requiring immediate action. "
+        "If everything is normal or no urgent decisions needed, respond with: "
+        "'NO_WARNING'\n\n"
+        "If warning needed, respond with format:\n"
+        "**WARNING:** [Brief title]\n"
+        "[2-3 sentence explanation with specific numbers and recommendation]"
+    )
+    
+    # Get LLM provider
+    llm_provider = get_llm_provider()
+    if not llm_provider:
+        return None
+    
+    try:
+        import asyncio
+        
+        async def get_warning():
+            return await llm_provider.generate(
+                prompt=analysis_prompt,
+                system_prompt="You are an F1 race strategist providing tactical warnings."
+            )
+        
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            response: LLMResponse = loop.run_until_complete(get_warning())
+        finally:
+            loop.close()
+        
+        warning_text = response.content.strip()
+        
+        # Check if AI indicates no warning needed
+        if 'NO_WARNING' in warning_text or len(warning_text) < 20:
+            return None
+        
+        # Update warning tracker
+        warning_tracker[warning_key] = current_lap
+        
+        # Clean old entries from tracker (keep last 20 laps)
+        keys_to_remove = [
+            k for k, v in warning_tracker.items()
+            if current_lap - v > 20
+        ]
+        for k in keys_to_remove:
+            del warning_tracker[k]
+        
+        return warning_text
+    
+    except Exception as e:
+        logger.debug(f"AI warning generation failed: {e}")
+        return None
+
+
+@callback(
+    Output('chat-messages', 'children', allow_duplicate=True),
+    Input('proactive-check-interval', 'n_intervals'),
+    State('session-store', 'data'),
+    State('simulation-time-store', 'data'),
+    State('driver-selector', 'value'),
+    State('chat-messages', 'children'),
+    prevent_initial_call=True
+)
+def check_proactive_ai_warnings(
+    n_intervals,
+    session_data,
+    sim_time_data,
+    focused_driver,
+    existing_messages
+):
+    """
+    Periodically check race state and generate AI-powered tactical warnings.
+    
+    Runs every 5 seconds (configured in proactive-check-interval).
+    Only generates warnings for significant tactical situations.
+    """
+    if not session_data or not simulation_controller:
+        raise PreventUpdate
+    
+    if not simulation_controller.is_playing:
+        raise PreventUpdate
+    
+    try:
+        # Get race state snapshot
+        snapshot = get_race_state_snapshot(
+            session_data=session_data,
+            sim_time_data=sim_time_data,
+            focused_driver=focused_driver
+        )
+        
+        if not snapshot:
+            raise PreventUpdate
+        
+        # Analyze for warnings
+        warning = analyze_race_state_for_warnings(
+            snapshot=snapshot,
+            session_data=session_data,
+            focused_driver=focused_driver
+        )
+        
+        if not warning:
+            raise PreventUpdate
+        
+        # Create warning message
+        messages = existing_messages or []
+        messages.append({
+            'type': 'ai',
+            'content': f"🚨 **TACTICAL ALERT**\n\n{warning}",
+            'timestamp': datetime.now().isoformat(),
+            'metadata': {
+                'proactive': True,
+                'lap': snapshot.get('lap', 0)
+            }
+        })
+        
+        return messages
+        
+    except Exception as e:
+        logger.debug(f"Proactive AI warning check failed: {e}")
+        raise PreventUpdate
+
+
 def generate_ai_response(
     query: str,
     session_data: Optional[Dict],
@@ -3184,9 +3587,9 @@ def generate_ai_response(
     )
     year = session_data.get('year', 2024) if session_data else 2024
     
-    # Get current lap
+    # Get current lap (available whether playing or paused)
     current_lap = None
-    if simulation_controller and simulation_controller.is_playing:
+    if simulation_controller:
         openf1_lap = simulation_controller.get_current_lap()
         current_lap = max(1, openf1_lap - 2) if openf1_lap > 2 else 1
     
@@ -3220,38 +3623,59 @@ def generate_ai_response(
                     rag_sources.append(source)
             rag_context = "\n\n".join(context_parts)
     
+    # Get live race state snapshot
+    race_context = ""
+    if simulation_controller and session_data and sim_time_data:
+        try:
+            snapshot = get_race_state_snapshot(
+                session_data=session_data,
+                sim_time_data=sim_time_data,
+                focused_driver=focused_driver
+            )
+            
+            if snapshot and 'error' not in snapshot:
+                race_context = format_race_snapshot_for_ai(snapshot)
+            else:
+                logger.warning(f"No valid snapshot - error: {snapshot.get('error') if snapshot else 'None'}")
+        except Exception as e:
+            logger.error(f"Failed to get race snapshot: {e}")
+            race_context = ""
+    
     # Get LLM provider
     llm_provider = get_llm_provider()
     
     if llm_provider is not None:
-        # Build system prompt for F1 strategy expert
-        system_prompt = (
-            "You are an expert F1 race strategist AI assistant. "
-            "You help race engineers and strategists make optimal decisions "
-            "during Formula 1 races and qualifying sessions.\n\n"
-            f"Current session: {race_name} ({year})\n"
-            f"Current state: {lap_info}\n"
-            f"Focus driver: {driver}\n\n"
-            "Provide concise, actionable insights. "
-            "Use data from the context when available. "
-            "If you don't have specific information, say so clearly."
+        # Build system prompt for F1 strategy expert with specific guidance
+        base_prompt = (
+            f"You are an expert F1 race strategist. Session: {race_name} ({year}), {lap_info}. "
+            f"Focused on driver: {driver}.\n\n"
+            "Guidelines:\n"
+            "- Provide SPECIFIC strategic recommendations (pit stops, tire strategy, overtaking)\n"
+            "- Use real numbers from the live data (tire age, lap times, gaps)\n"
+            "- Be concise but COMPLETE (3-5 sentences for complex questions)\n"
+            "- For pit stop questions: analyze tire wear, lap delta, and track position\n"
+            "- Always reference the current race situation in your answer"
         )
         
-        # Build user prompt with RAG context
-        if rag_context:
-            user_prompt = (
-                f"Based on this context information:\n\n"
-                f"---\n{rag_context}\n---\n\n"
-                f"User question: {query}\n\n"
-                f"Please provide a helpful response based on the context above."
+        # Add live race state if available
+        if race_context:
+            system_prompt = (
+                f"{base_prompt}\n\n"
+                f"## CURRENT RACE STATE\n{race_context}\n\n"
+                f"Use this live data to provide tactical advice. Be specific and data-driven."
             )
         else:
+            system_prompt = base_prompt + "\n\nNote: Limited live data available. Use general F1 strategy knowledge."
+        
+        # Build concise user prompt
+        if rag_context:
             user_prompt = (
-                f"User question: {query}\n\n"
-                f"Note: No specific context documents were found. "
-                f"Please provide general F1 strategy guidance or indicate "
-                f"if you need more specific information to answer."
+                f"Context:\n{rag_context}\n\n"
+                f"Q: {query}\n\n"
+                f"Give a brief, specific answer using the context."
             )
+        else:
+            user_prompt = f"Q: {query}\n\nAnswer briefly with available general F1 knowledge."
         
         try:
             # Call LLM asynchronously

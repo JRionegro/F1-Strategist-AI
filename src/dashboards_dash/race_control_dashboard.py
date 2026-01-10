@@ -688,3 +688,87 @@ class RaceControlDashboard:
                 ], className="text-center p-5")
             ], className="p-2")
         ], className="mb-3", style={"height": "620px"})
+
+    def get_status_summary(
+        self,
+        session_key: int,
+        simulation_time: float,
+        session_start_time: pd.Timestamp,
+        current_lap: int
+    ) -> dict:
+        """
+        Get race control status summary for AI context.
+        
+        Args:
+            session_key: OpenF1 session key
+            simulation_time: Current simulation time in seconds
+            session_start_time: Session start timestamp
+            current_lap: Current lap number
+            
+        Returns:
+            Dict with race control summary:
+            {
+                'flag': 'GREEN',  # GREEN, YELLOW, RED, SC, VSC
+                'recent_events': ['VSC ENDING', 'PIT LANE OPEN'],
+                'penalties': ['HAM - 5s Time Penalty'],
+                'incidents': ['Turn 4 - VER off track']
+            }
+        """
+        # Use cached data if available
+        if self._cached_session_key != session_key or self._cached_messages is None:
+            return {'error': 'No cached data available'}
+        
+        messages = self._cached_messages
+        
+        # Filter messages by simulation time
+        current_timestamp = session_start_time + pd.Timedelta(seconds=simulation_time)
+        filtered_messages = messages[messages['Timestamp'] <= current_timestamp]
+        
+        if filtered_messages.empty:
+            return {
+                'flag': 'GREEN',
+                'recent_events': [],
+                'penalties': [],
+                'incidents': []
+            }
+        
+        # Determine current flag status
+        flag = 'GREEN'
+        for _, msg in filtered_messages.sort_values('Timestamp', ascending=False).head(10).iterrows():
+            category = msg['Category']
+            message = msg['Message']
+            
+            if 'RED FLAG' in message or category == 'RedFlag':
+                flag = 'RED'
+                break
+            elif 'SAFETY CAR' in message and 'ENDING' not in message:
+                flag = 'SC'
+                break
+            elif 'VIRTUAL SAFETY CAR' in message and 'ENDING' not in message:
+                flag = 'VSC'
+                break
+            elif 'YELLOW' in message or category == 'Flag':
+                flag = 'YELLOW'
+                break
+        
+        # Get recent events (last 5 messages)
+        recent_events = []
+        for _, msg in filtered_messages.sort_values('Timestamp', ascending=False).head(5).iterrows():
+            recent_events.append(msg['Message'])
+        
+        # Get penalties and incidents
+        penalties = []
+        incidents = []
+        for _, msg in filtered_messages.iterrows():
+            message = msg['Message']
+            if 'PENALTY' in message.upper() or 'TIME' in message.upper():
+                penalties.append(message)
+            elif 'OFF TRACK' in message.upper() or 'INCIDENT' in message.upper():
+                incidents.append(message)
+        
+        return {
+            'flag': flag,
+            'recent_events': recent_events,
+            'penalties': penalties[-3:] if penalties else [],  # Last 3 penalties
+            'incidents': incidents[-3:] if incidents else []   # Last 3 incidents
+        }

@@ -674,3 +674,51 @@ def render_weather_content(session_key: Optional[int] = None, simulation_time: O
                 html.P(f"Error loading weather: {str(e)}", className="text-danger text-center p-3")
             ])
         ], className="mb-3", style={"height": "650px"})
+
+
+def get_weather_summary(
+    session_key: int,
+    simulation_time: float,
+    provider
+) -> dict:
+    """
+    Get compact weather summary for AI context.
+    
+    Args:
+        session_key: OpenF1 session key
+        simulation_time: Current simulation time in seconds
+        provider: OpenF1DataProvider instance
+        
+    Returns:
+        Dict with weather summary:
+        {
+            'air_temp': 28.5,
+            'track_temp': 42.3,
+            'humidity': 45,
+            'wind_speed': 15,
+            'wind_direction': 'NE',
+            'rainfall': False,
+            'pressure': 1013
+        }
+    """
+    try:
+        weather_df = provider.get_weather(session_key=session_key)
+        
+        if weather_df.empty:
+            return {'error': 'No weather data available'}
+        
+        # Get latest weather reading
+        latest_weather = weather_df.iloc[-1]
+        
+        return {
+            'air_temp': round(latest_weather.get('AirTemp', 0), 1),
+            'track_temp': round(latest_weather.get('TrackTemp', 0), 1),
+            'humidity': int(latest_weather.get('Humidity', 0)),
+            'wind_speed': int(latest_weather.get('WindSpeed', 0)),
+            'wind_direction': _degrees_to_cardinal(latest_weather.get('WindDirection', 0)),
+            'rainfall': bool(latest_weather.get('Rainfall', False)),
+            'pressure': round(latest_weather.get('Pressure', 0), 1)
+        }
+    except Exception as e:
+        logger.error(f"Error getting weather summary: {e}")
+        return {'error': str(e)}

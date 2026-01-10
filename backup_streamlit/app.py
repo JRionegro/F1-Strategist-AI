@@ -90,10 +90,11 @@ def initialize_agents() -> Optional[Dict[str, Any]]:
         )
         
         gemini_config = LLMConfig(
-            model_name="gemini-2.0-flash-thinking-exp-01-21",
+            model_name="gemini-2.0-flash-exp",
             api_key=gemini_api_key,
             max_tokens=4096,
-            temperature=0.7
+            temperature=0.7,
+            extra_params={"enable_thinking": False}
         )
         
         # Initialize LLM provider

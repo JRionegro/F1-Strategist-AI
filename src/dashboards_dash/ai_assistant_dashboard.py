@@ -87,7 +87,7 @@ class AIAssistantDashboard:
                     )
                 ], className="mb-2"),
                 
-                # Chat messages area - renders from store
+                # Chat messages area - renders from store (auto-scrolls to bottom)
                 html.Div(
                     id='chat-messages-container',
                     children=rendered_messages,
@@ -97,7 +97,9 @@ class AIAssistantDashboard:
                         'background-color': '#1a1a1a',
                         'border-radius': '5px',
                         'margin-bottom': '8px',
-                        'height': '320px'
+                        'height': '320px',
+                        'display': 'flex',
+                        'flex-direction': 'column'
                     }
                 ),
                 
@@ -186,30 +188,56 @@ class AIAssistantDashboard:
             ]
         
         rendered = []
-        # Reverse order: newest messages first (at top)
-        for msg in reversed(messages):
+        # Group messages into pairs (user question + assistant answer)
+        # Then reverse pairs so most recent Q&A appears at top
+        # But within each pair: question first, then answer
+        pairs = []
+        i = 0
+        while i < len(messages):
+            msg = messages[i]
             msg_type = msg.get('type', 'assistant')
-            content = msg.get('content', '')
-            timestamp = msg.get('timestamp', '')
-            metadata = msg.get('metadata', {})
-            priority = msg.get('priority', 0)
             
-            if msg_type == 'user':
-                rendered.append(
-                    AIAssistantDashboard.create_user_message(content, timestamp)
-                )
-            elif msg_type == 'alert':
-                rendered.append(
-                    AIAssistantDashboard.create_alert_message(
-                        content, timestamp, priority
+            # If it's a user message, try to pair with next assistant message
+            if msg_type == 'user' and i + 1 < len(messages):
+                next_msg = messages[i + 1]
+                if next_msg.get('type') == 'assistant':
+                    # Found a Q&A pair
+                    pairs.append([msg, next_msg])
+                    i += 2
+                    continue
+            
+            # If it's an alert or standalone message, keep it as a single-item pair
+            pairs.append([msg])
+            i += 1
+        
+        # Reverse pairs so most recent is at top
+        pairs.reverse()
+        
+        # Render each pair (question first, then answer within each pair)
+        for pair in pairs:
+            for msg in pair:
+                msg_type = msg.get('type', 'assistant')
+                content = msg.get('content', '')
+                timestamp = msg.get('timestamp', '')
+                metadata = msg.get('metadata', {})
+                priority = msg.get('priority', 0)
+                
+                if msg_type == 'user':
+                    rendered.append(
+                        AIAssistantDashboard.create_user_message(content, timestamp)
                     )
-                )
-            else:
-                rendered.append(
-                    AIAssistantDashboard.create_assistant_message(
-                        content, timestamp, metadata
+                elif msg_type == 'alert':
+                    rendered.append(
+                        AIAssistantDashboard.create_alert_message(
+                            content, timestamp, priority
+                        )
                     )
-                )
+                else:
+                    rendered.append(
+                        AIAssistantDashboard.create_assistant_message(
+                            content, timestamp, metadata
+                        )
+                    )
         
         return rendered
     

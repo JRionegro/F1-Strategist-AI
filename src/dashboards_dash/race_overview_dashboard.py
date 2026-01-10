@@ -991,3 +991,192 @@ class RaceOverviewDashboard:
             ],
             style_data_conditional=style_conditional,  # type: ignore
         )
+
+    def get_leaderboard_summary(
+        self,
+        session_key: int,
+        simulation_time: float,
+        session_start_time: pd.Timestamp,
+        current_lap: int,
+        focused_driver: Optional[str] = None,
+        pit_window_range: int = 3
+    ) -> dict:
+        """
+        Get compact leaderboard summary for AI context.
+        
+        Args:
+            session_key: OpenF1 session key
+            simulation_time: Current simulation time in seconds
+            session_start_time: Session start timestamp
+            current_lap: Current lap number
+            focused_driver: Driver code/number to focus on (e.g., "RUS" or "63")
+            pit_window_range: Number of positions ahead/behind to include
+            
+        Returns:
+            Dict with leaderboard summary:
+            {
+                'top_10': [{pos, driver, gap, tire, age, stops}, ...],
+                'focus_driver': {pos, gap_ahead, gap_behind, tire, age, stops},
+                'pit_window': [{pos, driver, gap, tire, age, stops}, ...]
+            }
+        """
+        # Use cached data if available
+        if self._cached_session_key != session_key or self._cached_positions is None:
+            return {'error': 'No cached data available'}
+        
+        positions = self._cached_positions
+        intervals = self._cached_intervals
+        stints = self._cached_stints
+        drivers = self._cached_drivers
+        
+        # Filter by simulation time
+        current_timestamp = session_start_time + pd.Timedelta(seconds=simulation_time)
+        filtered_positions = positions[positions['Timestamp'] <= current_timestamp]
+        
+        if filtered_positions.empty:
+            return {'error': 'No position data at this time'}
+        
+        # Get latest position for each driver
+        latest_positions = (
+            filtered_positions
+            .sort_values('Timestamp')
+            .groupby('DriverNumber')
+            .tail(1)
+            .sort_values('Position')
+        )
+        
+        # Merge with intervals
+        if intervals is not None and not intervals.empty:
+            filtered_intervals = intervals[intervals['Timestamp'] <= current_timestamp]
+            if not filtered_intervals.empty:
+                latest_intervals = (
+                    filtered_intervals
+                    .sort_values('Timestamp')
+                    .groupby('DriverNumber')
+                    .tail(1)
+                )
+                leaderboard = latest_positions.merge(
+                    latest_intervals[['DriverNumber', 'GapToLeader', 'Interval']],
+                    on='DriverNumber',
+                    how='left'
+                )
+            else:
+                leaderboard = latest_positions.copy()
+                leaderboard['GapToLeader'] = 0.0
+                leaderboard['Interval'] = 0.0
+        else:
+            leaderboard = latest_positions.copy()
+            leaderboard['GapToLeader'] = 0.0
+            leaderboard['Interval'] = 0.0
+        
+        # Merge with drivers
+        if drivers is not None and not drivers.empty:
+            leaderboard = leaderboard.merge(
+                drivers[['DriverNumber', 'Abbreviation', 'TeamName']],
+                on='DriverNumber',
+                how='left'
+            )
+        
+        # Get tire data from stints
+        tire_data = {}
+        if stints is not None and not stints.empty:
+            for driver_num in leaderboard['DriverNumber'].unique():
+                driver_stints = stints[stints['DriverNumber'] == driver_num].sort_values('StintNumber')
+                if not driver_stints.empty:
+                    current_stint = None
+                    for _, stint in driver_stints.iterrows():
+                        if stint['StintStart'] <= current_lap:
+                            current_stint = stint
+                    
+                    if current_stint is not None:
+                        age = current_lap - current_stint['StintStart']
+                        tire_data[driver_num] = {
+                            'compound': current_stint['Compound'],
+                            'age': age,
+                            'pit_stops': current_stint['StintNumber'] - 1
+                        }
+        
+        # Build summary
+        summary = {
+            'top_10': [],
+            'focus_driver': None,
+            'pit_window': []
+        }
+        
+        # Top 10
+        for idx, row in leaderboard.head(10).iterrows():
+            driver_num = row['DriverNumber']
+            tire_info = tire_data.get(driver_num, {'compound': 'UNKNOWN', 'age': 0, 'pit_stops': 0})
+            summary['top_10'].append({
+                'pos': int(row['Position']),
+                'driver': row.get('Abbreviation', str(driver_num)),
+                'gap': f"{row['GapToLeader']:.1f}s" if row['GapToLeader'] > 0 else 'LEADER',
+                'tire': tire_info['compound'],
+                'age': tire_info['age'],
+                'stops': tire_info['pit_stops']
+            })
+        
+        # Focus driver and pit window
+        if focused_driver:
+            # Extract driver number from focus string (e.g., "RUS_2025_63" -> 63)
+            driver_num = None
+            if '_' in focused_driver:
+                parts = focused_driver.split('_')
+                try:
+                    driver_num = int(parts[-1])
+                except:
+                    pass
+            else:
+                try:
+                    driver_num = int(focused_driver)
+                except:
+                    # Try to find by abbreviation
+                    match = leaderboard[leaderboard['Abbreviation'] == focused_driver]
+                    if not match.empty:
+                        driver_num = match.iloc[0]['DriverNumber']
+            
+            if driver_num:
+                focus_row = leaderboard[leaderboard['DriverNumber'] == driver_num]
+                if not focus_row.empty:
+                    focus_row = focus_row.iloc[0]
+                    focus_pos = int(focus_row['Position'])
+                    tire_info = tire_data.get(driver_num, {'compound': 'UNKNOWN', 'age': 0, 'pit_stops': 0})
+                    
+                    # Get gaps to ahead/behind
+                    ahead_row = leaderboard[leaderboard['Position'] == focus_pos - 1]
+                    behind_row = leaderboard[leaderboard['Position'] == focus_pos + 1]
+                    
+                    summary['focus_driver'] = {
+                        'pos': focus_pos,
+                        'driver': focus_row.get('Abbreviation', str(driver_num)),
+                        'gap_to_leader': f"{focus_row['GapToLeader']:.1f}s" if focus_row['GapToLeader'] > 0 else 'LEADER',
+                        'gap_ahead': f"{focus_row['Interval']:.1f}s" if not ahead_row.empty else 'N/A',
+                        'gap_behind': f"{behind_row.iloc[0]['Interval']:.1f}s" if not behind_row.empty else 'N/A',
+                        'tire': tire_info['compound'],
+                        'age': tire_info['age'],
+                        'stops': tire_info['pit_stops']
+                    }
+                    
+                    # Pit window (drivers within range)
+                    pit_window_positions = range(
+                        max(1, focus_pos - pit_window_range),
+                        min(len(leaderboard) + 1, focus_pos + pit_window_range + 1)
+                    )
+                    for pos in pit_window_positions:
+                        if pos == focus_pos:
+                            continue
+                        row_data = leaderboard[leaderboard['Position'] == pos]
+                        if not row_data.empty:
+                            row_data = row_data.iloc[0]
+                            d_num = row_data['DriverNumber']
+                            tire_info = tire_data.get(d_num, {'compound': 'UNKNOWN', 'age': 0, 'pit_stops': 0})
+                            summary['pit_window'].append({
+                                'pos': int(pos),
+                                'driver': row_data.get('Abbreviation', str(d_num)),
+                                'gap': f"{row_data['GapToLeader']:.1f}s" if row_data['GapToLeader'] > 0 else 'LEADER',
+                                'tire': tire_info['compound'],
+                                'age': tire_info['age'],
+                                'stops': tire_info['pit_stops']
+                            })
+        
+        return summary
