@@ -2137,10 +2137,7 @@ def handle_document_upload(
             target_dir.mkdir(parents=True, exist_ok=True)
             target_path = target_dir / final_filename
             
-            # Backup if exists
-            if target_path.exists():
-                document_loader = DocumentLoader()
-                document_loader.backup_existing_document(target_path)
+            # No backup - just overwrite existing file if it exists
             
             # Convert to markdown
             file_ext = Path(filename).suffix.lower()
