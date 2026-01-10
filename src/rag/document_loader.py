@@ -27,10 +27,13 @@ class Document:
     def __post_init__(self):
         """Generate doc_id if not provided."""
         if not self.doc_id:
-            # Generate ID from source and content hash
+            # Generate unique ID from source, chunk index and full content hash
             source = self.metadata.get("source", "unknown")
-            content_hash = hash(self.content[:100]) % 10000
-            self.doc_id = f"{source}_{content_hash}"
+            chunk_index = self.metadata.get("chunk_index", 0)
+            # Use full content hash for uniqueness
+            import hashlib
+            content_hash = hashlib.md5(self.content.encode()).hexdigest()[:8]
+            self.doc_id = f"{source}_chunk{chunk_index}_{content_hash}"
 
 
 @dataclass
@@ -380,7 +383,7 @@ class DocumentLoader:
 
         # Try to use LangChain splitter if available
         try:
-            from langchain.text_splitter import RecursiveCharacterTextSplitter  # type: ignore[import-untyped]
+            from langchain_text_splitters import RecursiveCharacterTextSplitter  # type: ignore[import-untyped]
 
             # Markdown-aware separators
             separators = [
@@ -693,3 +696,214 @@ converted: true
             logger.info(f"Saved converted DOCX to {output_path}")
 
         return content
+
+    def suggest_category_with_llm(
+        self,
+        document_content: str,
+        filename: str,
+        llm_manager=None
+    ) -> dict:
+        """
+        Suggest document category using LLM analysis.
+        
+        Args:
+            document_content: Full document text or excerpt
+            filename: Original filename for context
+            llm_manager: LLM manager instance (optional, will import globally)
+            
+        Returns:
+            Dict with keys: category, confidence, reasoning
+        """
+        try:
+            # Extract first 2000 characters for analysis
+            excerpt = document_content[:2000] if len(document_content) > 2000 else document_content
+            
+            # Import LLM manager if not provided
+            if llm_manager is None:
+                try:
+                    from src.llm.llm_manager import LLMManager
+                    llm_manager = LLMManager()
+                except Exception as e:
+                    logger.warning(f"Could not import LLM manager: {e}")
+                    return {
+                        'category': 'other',
+                        'confidence': 0.0,
+                        'reasoning': 'LLM unavailable - manual categorization required'
+                    }
+            
+            # Build prompt
+            prompt = f"""Analyze this F1 document and categorize it into ONE of these categories:
+
+Categories:
+- strategy: Race strategy, pit stop analysis, tire management, race planning
+- weather: Weather conditions, forecasts, track temperature, meteorological data
+- performance: Lap times, telemetry data, car performance, sector times
+- race_control: Flags, penalties, safety car, VSC, race incidents, steward decisions
+- race_position: Position tracking, overtakes, gaps between drivers, race order
+- fia: FIA regulations, sporting code, technical regulations, rule clarifications
+  * Examples: "FIA Formula 1 Sporting Regulations", "FIA Technical Regulations", 
+    "International Sporting Code", documents with "Article", "regulation", "sporting code"
+  * Keywords: "FIA", "sporting regulations", "technical regulations", "article", 
+    "appendix", "championship", "regulatory", "official", "federation"
+- global: General F1 information, circuit layouts, driver info, team data
+
+IMPORTANT: If the document contains official FIA regulations, sporting code, or technical rules 
+with numbered articles and formal language, it should ALWAYS be categorized as 'fia', even if 
+it also discusses strategy or performance.
+
+Document Information:
+- Filename: {filename}
+- Content excerpt (first 2000 chars):
+{excerpt}
+
+Analyze the content and return a JSON object with:
+{{
+    "category": "one of the categories above",
+    "confidence": 0.0 to 1.0 (how certain you are),
+    "reasoning": "brief explanation of why this category fits"
+}}
+
+Only return the JSON object, no other text."""
+
+            # Call LLM (try Gemini first, fallback to OpenAI)
+            try:
+                response = llm_manager.generate(
+                    prompt=prompt,
+                    provider="gemini",
+                    temperature=0.3,
+                    max_tokens=200
+                )
+            except Exception:
+                try:
+                    response = llm_manager.generate(
+                        prompt=prompt,
+                        provider="openai",
+                        temperature=0.3,
+                        max_tokens=200
+                    )
+                except Exception as e2:
+                    logger.warning(f"LLM call failed: {e2}")
+                    return {
+                        'category': 'other',
+                        'confidence': 0.0,
+                        'reasoning': 'LLM call failed - manual categorization required'
+                    }
+            
+            # Parse JSON response
+            import json
+            try:
+                # Remove markdown code blocks if present
+                clean_response = response.strip()
+                if clean_response.startswith('```'):
+                    clean_response = clean_response.split('```')[1]
+                    if clean_response.startswith('json'):
+                        clean_response = clean_response[4:]
+                clean_response = clean_response.strip()
+                
+                result = json.loads(clean_response)
+                
+                # Validate category
+                valid_categories = ['strategy', 'weather', 'performance', 'race_control', 'race_position', 'fia', 'global', 'other']
+                if result.get('category') not in valid_categories:
+                    result['category'] = 'other'
+                    result['confidence'] = 0.0
+                
+                # Ensure confidence is float
+                result['confidence'] = float(result.get('confidence', 0.0))
+                
+                logger.info(f"LLM suggested category: {result['category']} (confidence: {result['confidence']:.2f})")
+                return result
+                
+            except Exception as parse_error:
+                logger.warning(f"Could not parse LLM response: {parse_error}")
+                return {
+                    'category': 'other',
+                    'confidence': 0.0,
+                    'reasoning': f'Could not parse LLM response: {str(parse_error)[:100]}'
+                }
+                
+        except Exception as e:
+            logger.error(f"Error in suggest_category_with_llm: {e}", exc_info=True)
+            return {
+                'category': 'other',
+                'confidence': 0.0,
+                'reasoning': f'Error during analysis: {str(e)[:100]}'
+            }
+
+    def backup_existing_document(self, filepath: Path) -> Optional[Path]:
+        """
+        Create backup of existing document before replacement.
+        
+        Args:
+            filepath: Path to file that will be replaced
+            
+        Returns:
+            Path to backup file, or None if file doesn't exist
+        """
+        try:
+            filepath = Path(filepath)
+            
+            if not filepath.exists():
+                logger.info(f"No existing file to backup: {filepath}")
+                return None
+            
+            # Create backup filename with timestamp
+            from datetime import datetime
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            backup_filename = f"{filepath.stem}.backup.{timestamp}{filepath.suffix}"
+            backup_path = filepath.parent / backup_filename
+            
+            # Copy file to backup
+            import shutil
+            shutil.copy2(filepath, backup_path)
+            
+            logger.info(f"Created backup: {backup_path}")
+            
+            # Log to upload history
+            self._log_backup_to_history(filepath, backup_path)
+            
+            return backup_path
+            
+        except Exception as e:
+            logger.error(f"Error creating backup: {e}", exc_info=True)
+            return None
+
+    def _log_backup_to_history(self, original_path: Path, backup_path: Path):
+        """
+        Log backup creation to .upload_history.json.
+        
+        Args:
+            original_path: Original file path
+            backup_path: Backup file path
+        """
+        try:
+            from datetime import datetime
+            import json
+            
+            history_file = self.base_dir / ".upload_history.json"
+            
+            # Load existing history
+            if history_file.exists():
+                with open(history_file, 'r', encoding='utf-8') as f:
+                    history = json.load(f)
+            else:
+                history = []
+            
+            # Add new entry
+            entry = {
+                'timestamp': datetime.now().isoformat(),
+                'action': 'backup',
+                'original_file': str(original_path.relative_to(self.base_dir)),
+                'backup_file': str(backup_path.relative_to(self.base_dir))
+            }
+            history.append(entry)
+            
+            # Save history
+            with open(history_file, 'w', encoding='utf-8') as f:
+                json.dump(history, f, indent=2)
+                
+            logger.debug(f"Logged backup to history: {entry}")
+            
+        except Exception as e:
+            logger.warning(f"Could not log backup to history: {e}")
+

@@ -1,9 +1,9 @@
-# Race Position Analysis: {Yas Marina Circuit} - N/A
+# Race Position Analysis: {Las Vegas Strip Circuit} - N/A
 
 ## Executive Summary
 
-Circuit: {Yas Marina Circuit} ({Modern twilight circuit})
-Analysis Date: {2026-01-10 19:02}
+Circuit: {Las Vegas Strip Circuit} ({High-speed street circuit})
+Analysis Date: {2026-01-10 19:44}
 Overtaking Difficulty: N/A/10
 Track Position Value: N/A/10
 
@@ -17,7 +17,7 @@ Track Position Value: N/A/10
 - **P4-P10 Points Finish**: N/A%
 - **Average Grid Movement**: {2-3} positions
 
-### 1.2 Position Value at {Yas Marina Circuit}
+### 1.2 Position Value at {Las Vegas Strip Circuit}
 | Position | Strategic Value | Expected Points | Difficulty to Pass |
 |----------|-----------------|-----------------|-------------------|
 | P1       | 10/10           | N/A  | N/A               |
@@ -241,5 +241,5 @@ Position battle scenarios:
 
 ---
 
-*Document generated: {2026-01-10 19:02}*
+*Document generated: {2026-01-10 19:44}*
 *Data source: OpenF1 API + Position Analytics*

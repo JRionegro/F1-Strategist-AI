@@ -1,9 +1,9 @@
-# Performance Analysis: {Yas Marina Circuit} - N/A
+# Performance Analysis: {Las Vegas Strip Circuit} - N/A
 
 ## Executive Summary
 
-Circuit: {Yas Marina Circuit} ({Modern twilight circuit})
-Analysis Date: {2026-01-10 19:02}
+Circuit: {Las Vegas Strip Circuit} ({High-speed street circuit})
+Analysis Date: {2026-01-10 19:44}
 Data Sources: OpenF1 API, Historical Telemetry
 
 ---
@@ -89,7 +89,7 @@ Historical speed comparison:
 | Tire Degradation Rate     | >N/A% avg  | >N/A% avg  |
 
 ### 4.2 Common Underperformance Causes
-At {Yas Marina Circuit}:
+At {Las Vegas Strip Circuit}:
 1. **Setup Issues**: {Wing angle, ride height, diff settings}
 2. **Tire Management**: {Overheating, graining, blistering}
 3. **Traffic Impact**: {Dirty air cost: 0.3-0.8s per lap}
@@ -178,5 +178,5 @@ Hidden patterns from historical analysis:
 
 ---
 
-*Document generated: {2026-01-10 19:02}*
+*Document generated: {2026-01-10 19:44}*
 *Data source: OpenF1 API + Historical Analysis*

@@ -4,14 +4,14 @@ template: true
 variables: [circuit_name, circuit_location, timezone]
 ---
 
-# Yas Marina Circuit - Complete Weather & Track Conditions Guide
+# Las Vegas Strip Circuit - Complete Weather & Track Conditions Guide
 
 ## Location Information
 
 | Property | Value |
 |----------|-------|
-| **Location** | Yas Island, Abu Dhabi, UAE |
-| **Timezone** | Asia/Dubai (GMT+4) |
+| **Location** | Las Vegas, Nevada, USA |
+| **Timezone** | America/Los_Angeles (GMT-8) |
 | **Typical Race Time** | 14:00 local |
 | **Climate Type** | Desert |
 
@@ -40,7 +40,7 @@ variables: [circuit_name, circuit_location, timezone]
 
 ### 2.1 Typical Pattern
 
-Day-to-night race. Track temp peaks mid-race then drops significantly in final stint as sun sets.
+Track temperature typically peaks mid-afternoon and cools towards evening. Monitor for strategy implications.
 
 ### 2.2 Strategic Impact by Track Temperature
 
@@ -249,7 +249,7 @@ No major weather events in recent seasons. Check local forecasts for current con
 ## 9. Quick Reference Card
 
 ```
-🌡️ WEATHER OVERVIEW: Yas Marina Circuit
+🌡️ WEATHER OVERVIEW: Las Vegas Strip Circuit
 📍 Climate: Desert
 
 TYPICAL CONDITIONS:
@@ -276,4 +276,4 @@ CROSSOVER TIMES:
 ---
 
 *Generated from template. Data: OpenF1 API, Weather Services, Historical Analysis*
-*Last updated: 2026-01-10 19:02*
+*Last updated: 2026-01-10 19:44*

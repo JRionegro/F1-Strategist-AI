@@ -1,9 +1,9 @@
-# Race Control Analysis: {Yas Marina Circuit} - N/A
+# Race Control Analysis: {Las Vegas Strip Circuit} - N/A
 
 ## Executive Summary
 
-Circuit: {Yas Marina Circuit} ({Modern twilight circuit})
-Analysis Date: {2026-01-10 19:02}
+Circuit: {Las Vegas Strip Circuit} ({High-speed street circuit})
+Analysis Date: {2026-01-10 19:44}
 Safety Rating: N/A/10
 Historical Incident Rate: N/A%
 
@@ -57,13 +57,13 @@ Critical lapping zones:
 ## 3. VSC (VIRTUAL SAFETY CAR)
 
 ### 3.1 VSC Deployment Criteria
-At {Yas Marina Circuit}:
+At {Las Vegas Strip Circuit}:
 - **Light Debris**: {Yellow flag, local caution}
 - **Car Recovery**: {VSC or SC depending on location}
 - **Medical Response**: {Red flag if driver extraction needed}
 
 ### 3.2 VSC Pit Window Benefit
-- **Normal Pit Loss**: {22.0}s
+- **Normal Pit Loss**: {25.0}s
 - **VSC Pit Loss**: {10-12}s
 - **Net Advantage**: {8-10}s
 
@@ -99,7 +99,7 @@ At {Yas Marina Circuit}:
 ## 5. RED FLAG SCENARIOS
 
 ### 5.1 Red Flag Triggers
-At {Yas Marina Circuit}:
+At {Las Vegas Strip Circuit}:
 1. **Weather**: {Heavy rain, standing water, visibility}
 2. **Major Incident**: {Major collision, medical intervention}
 3. **Track Damage**: {Barrier damage, debris field}
@@ -138,7 +138,7 @@ Turn 15: Entry line critical}
 
 ## 7. PENALTIES AND INVESTIGATIONS
 
-### 7.1 Common Penalties at {Yas Marina Circuit}
+### 7.1 Common Penalties at {Las Vegas Strip Circuit}
 | Infraction | Typical Penalty | Frequency |
 |------------|-----------------|-----------|
 | Track Limits | {5s / lap deleted} | N/A |
@@ -221,5 +221,5 @@ Key precedents at this circuit:
 
 ---
 
-*Document generated: {2026-01-10 19:02}*
+*Document generated: {2026-01-10 19:44}*
 *Data source: OpenF1 API + FIA Race Director Guidelines*

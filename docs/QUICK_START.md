@@ -67,6 +67,68 @@ The AI Chatbot uses real LLM providers (Claude and/or Gemini) for intelligent F1
 - **Session-aware**: Responses include context from the selected session
 - **RAG-enhanced**: Uses circuit-specific knowledge from the knowledge base
 
+### Managing RAG Documents 📚 **NEW!**
+
+The application includes an integrated document management system to enhance AI responses with custom knowledge.
+
+#### Uploading Documents
+
+1. **Locate RAG Documents Section**: Scroll to the "📚 RAG Documents" section in the sidebar
+2. **Choose Category**: Find the appropriate category for your document:
+   - **🌐 Global**: General F1 knowledge (always loaded)
+   - **📋 Strategy**: Tire strategy, pit stop tactics
+   - **🌦️ Weather**: Weather impact, rain strategies
+   - **⚡ Performance**: Car performance, lap time analysis
+   - **🚩 Race Control**: Flags, penalties, regulations
+   - **📊 Race Position**: Overtaking, race position strategies
+   - **⚖️ FIA**: Official FIA regulations by year
+
+3. **Click ➕ Button**: Next to the category name
+4. **Select File**: Choose a PDF, DOCX, or Markdown file (max 10MB)
+5. **Review AI Suggestion**: The system analyzes your document and suggests the best category
+6. **Preview Content**: Check the document preview before uploading
+7. **Confirm Upload**: Click "Upload Document" to process and index
+
+#### Document Processing
+
+- **PDF/DOCX Conversion**: Automatically converted to Markdown format
+- **Chunking**: Split into 1000-character chunks with 200-character overlap
+- **Embedding**: Vectorized using all-MiniLM-L6-v2 model
+- **Indexing**: Stored in ChromaDB for semantic search
+- **Backup**: Existing documents are backed up before overwriting
+
+#### Supported File Formats
+
+| Format | Extension | Auto-Convert | Max Size |
+|--------|-----------|--------------|----------|
+| Markdown | `.md` | No (native) | 10MB |
+| PDF | `.pdf` | Yes (pymupdf) | 10MB |
+| Word | `.docx` | Yes (python-docx) | 10MB |
+
+#### Document Organization
+
+Uploaded documents are stored in:
+```
+data/rag/
+├── global/                # Global documents
+├── {year}/
+│   ├── fia_regulations.md # FIA regulations per year
+│   └── circuits/
+│       └── {circuit}/
+│           ├── strategy.md
+│           ├── weather.md
+│           ├── performance.md
+│           ├── race_control.md
+│           └── race_position.md
+```
+
+#### Viewing & Editing Documents
+
+- **View Document List**: Expand any category to see uploaded documents
+- **Edit Existing**: Click on a document name to open it in the editor modal
+- **Delete Document**: Use the "🗑️" button next to a document (not yet implemented)
+- **Refresh Context**: RAG context is automatically reloaded when you change Year/Circuit
+
 ## Project Structure 📁
 
 Your F1 Strategist AI project has been set up with the following structure:

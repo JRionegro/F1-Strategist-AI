@@ -78,6 +78,7 @@ from src.dashboards_dash import weather_dashboard
 # RAG Manager for document loading
 from src.rag.rag_manager import get_rag_manager, reset_rag_manager
 from src.rag.template_generator import get_template_generator
+from src.rag.document_loader import DocumentLoader
 
 # LLM providers for AI responses
 from dotenv import load_dotenv
@@ -566,6 +567,15 @@ def create_sidebar():
             
             html.Hr(),
             
+            # Hidden dummy components for removed FIA Manager (to keep callbacks working)
+            html.Div([
+                dcc.Dropdown(id='fia-year-selector', style={'display': 'none'}),
+                html.Div(id='fia-reg-status', style={'display': 'none'}),
+                html.Div(id='fia-existing-regs', style={'display': 'none'}),
+                dcc.Upload(id='fia-reg-upload', style={'display': 'none'}),
+                html.Div(id='fia-upload-preview', style={'display': 'none'}),
+            ], style={'display': 'none'}),
+            
             # RAG Documents Section
             dbc.Accordion([
                 dbc.AccordionItem([
@@ -582,11 +592,20 @@ def create_sidebar():
                     html.Div([
                         # Global Documents
                         html.Div([
-                            html.H6(
-                                "🌐 Global",
-                                className="text-info mb-1",
-                                style={'fontSize': '0.85rem'}
-                            ),
+                            html.Div([
+                                html.H6(
+                                    "🌐 Global",
+                                    className="text-info mb-1 d-inline-block",
+                                    style={'fontSize': '0.85rem'}
+                                ),
+                                html.Button(
+                                    "+",
+                                    id={'type': 'rag-upload-btn', 'category': 'global'},
+                                    n_clicks=0,
+                                    className="btn btn-sm btn-outline-info ms-2",
+                                    style={'fontSize': '0.7rem', 'padding': '0px 6px', 'lineHeight': '1.2'}
+                                )
+                            ], className="d-flex align-items-center"),
                             html.Div(
                                 id="rag-global-docs",
                                 className="ps-2 small text-muted"
@@ -595,11 +614,20 @@ def create_sidebar():
                         
                         # Strategy Documents
                         html.Div([
-                            html.H6(
-                                "📋 Strategy",
-                                className="text-info mb-1",
-                                style={'fontSize': '0.85rem'}
-                            ),
+                            html.Div([
+                                html.H6(
+                                    "📋 Strategy",
+                                    className="text-info mb-1 d-inline-block",
+                                    style={'fontSize': '0.85rem'}
+                                ),
+                                html.Button(
+                                    "+",
+                                    id={'type': 'rag-upload-btn', 'category': 'strategy'},
+                                    n_clicks=0,
+                                    className="btn btn-sm btn-outline-info ms-2",
+                                    style={'fontSize': '0.7rem', 'padding': '0px 6px', 'lineHeight': '1.2'}
+                                )
+                            ], className="d-flex align-items-center"),
                             html.Div(
                                 id="rag-strategy-docs",
                                 className="ps-2 small text-muted"
@@ -608,11 +636,20 @@ def create_sidebar():
                         
                         # Weather Documents
                         html.Div([
-                            html.H6(
-                                "🌦️ Weather",
-                                className="text-info mb-1",
-                                style={'fontSize': '0.85rem'}
-                            ),
+                            html.Div([
+                                html.H6(
+                                    "🌦️ Weather",
+                                    className="text-info mb-1 d-inline-block",
+                                    style={'fontSize': '0.85rem'}
+                                ),
+                                html.Button(
+                                    "+",
+                                    id={'type': 'rag-upload-btn', 'category': 'weather'},
+                                    n_clicks=0,
+                                    className="btn btn-sm btn-outline-info ms-2",
+                                    style={'fontSize': '0.7rem', 'padding': '0px 6px', 'lineHeight': '1.2'}
+                                )
+                            ], className="d-flex align-items-center"),
                             html.Div(
                                 id="rag-weather-docs",
                                 className="ps-2 small text-muted"
@@ -621,11 +658,20 @@ def create_sidebar():
                         
                         # Performance Documents
                         html.Div([
-                            html.H6(
-                                "📊 Performance",
-                                className="text-info mb-1",
-                                style={'fontSize': '0.85rem'}
-                            ),
+                            html.Div([
+                                html.H6(
+                                    "📊 Performance",
+                                    className="text-info mb-1 d-inline-block",
+                                    style={'fontSize': '0.85rem'}
+                                ),
+                                html.Button(
+                                    "+",
+                                    id={'type': 'rag-upload-btn', 'category': 'performance'},
+                                    n_clicks=0,
+                                    className="btn btn-sm btn-outline-info ms-2",
+                                    style={'fontSize': '0.7rem', 'padding': '0px 6px', 'lineHeight': '1.2'}
+                                )
+                            ], className="d-flex align-items-center"),
                             html.Div(
                                 id="rag-performance-docs",
                                 className="ps-2 small text-muted"
@@ -634,11 +680,20 @@ def create_sidebar():
                         
                         # Race Control Documents
                         html.Div([
-                            html.H6(
-                                "🚦 Race Control",
-                                className="text-info mb-1",
-                                style={'fontSize': '0.85rem'}
-                            ),
+                            html.Div([
+                                html.H6(
+                                    "🚦 Race Control",
+                                    className="text-info mb-1 d-inline-block",
+                                    style={'fontSize': '0.85rem'}
+                                ),
+                                html.Button(
+                                    "+",
+                                    id={'type': 'rag-upload-btn', 'category': 'race_control'},
+                                    n_clicks=0,
+                                    className="btn btn-sm btn-outline-info ms-2",
+                                    style={'fontSize': '0.7rem', 'padding': '0px 6px', 'lineHeight': '1.2'}
+                                )
+                            ], className="d-flex align-items-center"),
                             html.Div(
                                 id="rag-race-control-docs",
                                 className="ps-2 small text-muted"
@@ -647,29 +702,57 @@ def create_sidebar():
                         
                         # Race Position Documents
                         html.Div([
-                            html.H6(
-                                "🏁 Positions",
-                                className="text-info mb-1",
-                                style={'fontSize': '0.85rem'}
-                            ),
+                            html.Div([
+                                html.H6(
+                                    "🏁 Positions",
+                                    className="text-info mb-1 d-inline-block",
+                                    style={'fontSize': '0.85rem'}
+                                ),
+                                html.Button(
+                                    "+",
+                                    id={'type': 'rag-upload-btn', 'category': 'race_position'},
+                                    n_clicks=0,
+                                    className="btn btn-sm btn-outline-info ms-2",
+                                    style={'fontSize': '0.7rem', 'padding': '0px 6px', 'lineHeight': '1.2'}
+                                )
+                            ], className="d-flex align-items-center"),
                             html.Div(
                                 id="rag-race-position-docs",
                                 className="ps-2 small text-muted"
                             )
                         ], className="mb-1"),
                         
-                        # FIA Regulations
+                        # FIA Regulations Documents
                         html.Div([
-                            html.H6(
-                                "📖 FIA Regs",
-                                className="text-info mb-1",
-                                style={'fontSize': '0.85rem'}
-                            ),
+                            html.Div([
+                                html.H6(
+                                    "📖 FIA Regulations",
+                                    className="text-info mb-1 d-inline-block",
+                                    style={'fontSize': '0.85rem'}
+                                ),
+                                html.Button(
+                                    "+",
+                                    id={'type': 'rag-upload-btn', 'category': 'fia'},
+                                    n_clicks=0,
+                                    className="btn btn-sm btn-outline-info ms-2",
+                                    style={'fontSize': '0.7rem', 'padding': '0px 6px', 'lineHeight': '1.2'}
+                                )
+                            ], className="d-flex align-items-center"),
                             html.Div(
                                 id="rag-fia-docs",
                                 className="ps-2 small text-muted"
                             )
                         ], className="mb-1"),
+                    ]),
+                    
+                    # Hidden Upload Components (one per category)
+                    html.Div([
+                        dcc.Upload(
+                            id={'type': 'rag-upload-input', 'category': cat},
+                            accept='.pdf,.docx,.md',
+                            max_size=10*1024*1024,  # 10MB
+                            style={'display': 'none'}
+                        ) for cat in ['global', 'strategy', 'weather', 'performance', 'race_control', 'race_position', 'fia']
                     ]),
                     
                     # Action buttons
@@ -946,6 +1029,124 @@ app.layout = dbc.Container([
     
     # Hidden store for current document being edited
     dcc.Store(id="doc-editor-store", data={"filepath": None, "category": None}),
+    
+    # Document Upload Confirmation Modal
+    dbc.Modal([
+        dbc.ModalHeader(dbc.ModalTitle("📤 Confirm Document Upload")),
+        dbc.ModalBody([
+            # File info section
+            html.Div([
+                html.H6("📄 File Information", className="text-info mb-2"),
+                html.Div(id="upload-file-info", className="mb-3")
+            ]),
+            
+            # Category selection
+            html.Div([
+                html.H6("📂 Category", className="text-info mb-2"),
+                dcc.Dropdown(
+                    id='upload-category-override',
+                    options=[
+                        {'label': '🌐 Global', 'value': 'global'},
+                        {'label': '📋 Strategy', 'value': 'strategy'},
+                        {'label': '🌦️ Weather', 'value': 'weather'},
+                        {'label': '📊 Performance', 'value': 'performance'},
+                        {'label': '🚦 Race Control', 'value': 'race_control'},
+                        {'label': '🏁 Positions', 'value': 'race_position'},
+                        {'label': '📖 FIA Regulations', 'value': 'fia'},
+                    ],
+                    placeholder="Select document category...",
+                    className="mb-3"
+                ),
+            ]),
+            
+            # Conversion preview (collapsible)
+            html.Div([
+                dbc.Button(
+                    "👁️ Preview Converted Content",
+                    id="upload-preview-toggle",
+                    color="info",
+                    size="sm",
+                    className="mb-2"
+                ),
+                dbc.Collapse([
+                    html.Pre(
+                        id="upload-preview-content",
+                        className="bg-dark text-light p-2",
+                        style={"maxHeight": "200px", "overflow": "auto", "fontSize": "0.75rem"}
+                    )
+                ], id="upload-preview-collapse", is_open=False)
+            ], className="mb-3"),
+            
+            # Target path
+            html.Div([
+                html.H6("📍 Target Path", className="text-info mb-2"),
+                html.Code(id="upload-target-path", className="d-block p-2 bg-dark text-light")
+            ], className="mb-3"),
+            
+            # Filename editor
+            html.Div([
+                html.H6("✏️ Filename", className="text-info mb-2"),
+                dbc.Input(
+                    id="upload-filename-edit",
+                    type="text",
+                    placeholder="Enter filename (without extension)...",
+                    className="mb-2"
+                ),
+                html.Small("Extension .md will be added automatically", className="text-muted")
+            ], className="mb-3"),
+            
+            # Duplicate warning
+            html.Div(id="upload-duplicate-warning", className="mb-2"),
+            
+            # Processing status/spinner - This will show the loading overlay
+            html.Div(id="upload-processing-status", className="text-center"),
+            
+            # Loading overlay (hidden by default, shown during processing)
+            html.Div(
+                id="upload-loading-overlay",
+                children=[
+                    html.Div([
+                        dbc.Spinner(color="primary", size="lg"),
+                        html.H5("🔄 Processing...", className="mt-3 text-primary"),
+                        html.P("Converting PDF to markdown and indexing...", className="text-muted"),
+                        html.P("This may take 10-30 seconds for large PDFs", className="text-muted small"),
+                    ], className="text-center")
+                ],
+                style={
+                    "display": "none",  # Hidden by default
+                    "position": "absolute",
+                    "top": 0,
+                    "left": 0,
+                    "right": 0,
+                    "bottom": 0,
+                    "backgroundColor": "rgba(0, 0, 0, 0.8)",
+                    "zIndex": 1000,
+                    "display": "flex",
+                    "alignItems": "center",
+                    "justifyContent": "center",
+                    "borderRadius": "0.3rem"
+                }
+            )
+        ], style={"position": "relative"}),  # Make ModalBody relative for overlay positioning
+        dbc.ModalFooter([
+            dbc.Button(
+                "✅ Upload & Index",
+                id="upload-confirm-btn",
+                color="primary",
+                className="me-2"
+            ),
+            dbc.Button(
+                "❌ Cancel",
+                id="upload-cancel-btn",
+                color="secondary",
+                outline=True
+            )
+        ])
+    ], id="upload-modal", is_open=False, size="lg", centered=True, backdrop="static"),
+    
+    # Hidden stores for upload state
+    dcc.Store(id="upload-file-store", data=None),
+    dcc.Store(id="upload-metadata-store", data=None),
     
     # Template Generation Confirmation Modal
     dbc.Modal([
@@ -1612,7 +1813,7 @@ def update_rag_on_context_change(year, meeting_key):
             "⚪ Not loaded",
             "",
             [html.Small("Select year first", className="text-muted fst-italic")],
-            [], [], [], [], [], [], []
+            [], [], [], [], [], []
         )
     
     try:
@@ -1673,7 +1874,7 @@ def update_rag_on_context_change(year, meeting_key):
             "🔴 Error",
             "",
             [html.Small(f"Error: {str(e)[:50]}", className="text-danger")],
-            [], [], [], [], [], [], []
+            [], [], [], [], [], []
         )
 
 
@@ -1712,6 +1913,591 @@ def reload_rag_documents(n_clicks, year, meeting_key):
     except Exception as e:
         logger.error(f"Error reloading RAG: {e}")
         return f"❌ Error: {str(e)[:50]}", "🔴 Error", ""
+
+
+@callback(
+    Output('fia-reg-status', 'children'),
+    Output('fia-existing-regs', 'children'),
+    Input('fia-year-selector', 'value'),
+    prevent_initial_call=False
+)
+def update_fia_regulations_status(selected_year):
+    """Update FIA regulations status and list existing regulations."""
+    from pathlib import Path
+    
+    if not selected_year:
+        return "⚠️ No year selected", ""
+    
+    try:
+        # Check for existing regulation file
+        fia_dir = Path('data/rag') / str(selected_year)
+        reg_file = fia_dir / f"fia_regulations_{selected_year}.md"
+        
+        if reg_file.exists():
+            status = html.Span([
+                html.I(className="fas fa-check-circle text-success me-1"),
+                f"✅ {selected_year} regulations loaded"
+            ], className="small text-success")
+            
+            # Show file with edit button
+            existing_list = html.Div([
+                html.Button(
+                    [html.I(className="fas fa-file-alt me-1"), f"fia_regulations_{selected_year}.md"],
+                    id={'type': 'doc-edit-btn', 'index': str(reg_file)},
+                    n_clicks=0,
+                    className="btn btn-sm btn-link text-start p-0 text-info"
+                ),
+                html.Small(f" • {reg_file.stat().st_size / 1024:.1f} KB", className="text-muted ms-2")
+            ])
+        else:
+            status = html.Span([
+                html.I(className="fas fa-exclamation-circle text-warning me-1"),
+                f"⚠️ No regulations for {selected_year}"
+            ], className="small text-warning")
+            existing_list = html.Small("No regulation file found. Upload one above.", className="text-muted")
+        
+        return status, existing_list
+        
+    except Exception as e:
+        logger.error(f"Error checking FIA regulations: {e}")
+        return html.Span(f"❌ Error: {str(e)[:30]}", className="small text-danger"), ""
+
+
+@callback(
+    Output('fia-upload-preview', 'children'),
+    Input('fia-reg-upload', 'contents'),
+    State('fia-reg-upload', 'filename'),
+    prevent_initial_call=True
+)
+def preview_fia_upload(contents, filename):
+    """Show preview of uploaded FIA regulation file."""
+    if not contents or not filename:
+        return ""
+    
+    try:
+        file_size = len(contents) * 3 / 4  # Approximate decoded size
+        return html.Div([
+            html.Small([
+                html.I(className="fas fa-file-pdf text-danger me-1"),
+                html.Strong(filename),
+                f" ({file_size / 1024:.1f} KB)"
+            ], className="text-muted"),
+            html.Br(),
+            html.Small("Click to open upload modal and confirm", className="text-info")
+        ], className="p-2 bg-dark rounded")
+        
+    except Exception:
+        return ""
+
+
+# ============================================================================
+# DOCUMENT UPLOAD CALLBACKS
+# ============================================================================
+
+# Hidden style for overlay (used to hide it)
+OVERLAY_HIDDEN = {"display": "none"}
+OVERLAY_VISIBLE = {
+    "display": "flex",
+    "position": "absolute",
+    "top": 0,
+    "left": 0,
+    "right": 0,
+    "bottom": 0,
+    "backgroundColor": "rgba(0, 0, 0, 0.85)",
+    "zIndex": 1000,
+    "alignItems": "center",
+    "justifyContent": "center",
+    "borderRadius": "0.3rem"
+}
+
+@callback(
+    Output('upload-modal', 'is_open'),
+    Output('upload-file-info', 'children'),
+    Output('upload-category-override', 'value'),
+    Output('upload-preview-content', 'children'),
+    Output('upload-target-path', 'children'),
+    Output('upload-filename-edit', 'value'),
+    Output('upload-duplicate-warning', 'children'),
+    Output('upload-file-store', 'data'),
+    Output('upload-processing-status', 'children'),
+    Output('upload-loading-overlay', 'style', allow_duplicate=True),
+    Output('upload-confirm-btn', 'disabled'),
+    Output('upload-confirm-btn', 'children'),
+    # Add RAG status outputs to update sidebar after upload
+    Output('rag-status', 'children', allow_duplicate=True),
+    Output('rag-doc-count', 'children', allow_duplicate=True),
+    Output('rag-global-docs', 'children', allow_duplicate=True),
+    Output('rag-strategy-docs', 'children', allow_duplicate=True),
+    Output('rag-weather-docs', 'children', allow_duplicate=True),
+    Output('rag-performance-docs', 'children', allow_duplicate=True),
+    Output('rag-race-control-docs', 'children', allow_duplicate=True),
+    Output('rag-race-position-docs', 'children', allow_duplicate=True),
+    Output('rag-fia-docs', 'children', allow_duplicate=True),
+    Input({'type': 'rag-upload-input', 'category': ALL}, 'contents'),
+    Input('fia-reg-upload', 'contents'),
+    Input('upload-confirm-btn', 'n_clicks'),
+    Input('upload-cancel-btn', 'n_clicks'),
+    State({'type': 'rag-upload-input', 'category': ALL}, 'filename'),
+    State('fia-reg-upload', 'filename'),
+    State('fia-year-selector', 'value'),
+    State('year-selector', 'value'),
+    State('circuit-selector', 'value'),
+    State('upload-category-override', 'value'),
+    State('upload-filename-edit', 'value'),
+    State('upload-file-store', 'data'),
+    prevent_initial_call=True
+)
+def handle_document_upload(
+    category_upload_contents_list, fia_contents, confirm_clicks, cancel_clicks,
+    category_upload_filenames_list, fia_filename, fia_year, context_year, context_circuit,
+    category_override, edited_filename, stored_file_data
+):
+    """Handle document upload flow: file selection → preview/LLM → confirmation → save."""
+    import base64
+    import io
+    from pathlib import Path
+    
+    triggered_id = ctx.triggered_id
+    
+    # Helper for RAG no_update tuple (9 values for RAG outputs)
+    rag_no_updates = (
+        dash.no_update, dash.no_update,  # status, doc_count
+        dash.no_update, dash.no_update, dash.no_update,  # global, strategy, weather
+        dash.no_update, dash.no_update, dash.no_update, dash.no_update  # perf, rc, pos, fia
+    )
+    
+    # UI reset values (overlay hidden, button enabled, button text)
+    ui_reset = (OVERLAY_HIDDEN, False, "✅ Upload & Index")
+    
+    # Cancel button - close modal (9 original + 3 UI + 9 RAG = 21 outputs)
+    if triggered_id == 'upload-cancel-btn':
+        return (False, "", "", None, "", "", "", None, "") + ui_reset + rag_no_updates
+    
+    # Confirm button - process and save document
+    if triggered_id == 'upload-confirm-btn' and stored_file_data:
+        try:
+            # Decode file
+            content_type, content_string = stored_file_data['content'].split(',')
+            decoded = base64.b64decode(content_string)
+            filename = stored_file_data['filename']
+            category = category_override if category_override else stored_file_data.get('default_category', 'global')
+            
+            # Check if user selected FIA category OR if uploaded via FIA button
+            is_fia_category = (category == 'fia') or stored_file_data.get('is_fia')
+            
+            # Determine target directory
+            if is_fia_category:
+                # FIA documents go to year level: data/rag/2025/fia_regulations.md
+                year = fia_year if fia_year else context_year
+                target_dir = Path('data/rag') / str(year)
+                if edited_filename:
+                    final_filename = edited_filename if edited_filename.endswith('.md') else f"{edited_filename}.md"
+                else:
+                    final_filename = f"fia_regulations_{year}.md"
+            elif category == 'global':
+                # Global category goes to data/rag/global/
+                target_dir = Path('data/rag') / 'global'
+                if edited_filename:
+                    final_filename = edited_filename if edited_filename.endswith('.md') else f"{edited_filename}.md"
+                else:
+                    final_filename = filename.replace('.pdf', '.md').replace('.docx', '.md').replace('.doc', '.md')
+                    final_filename = final_filename.lower().replace(' ', '_')
+            else:
+                # Circuit-specific categories: strategy, weather, performance, race_control, race_position
+                if context_circuit and context_year:
+                    circuit_name = _get_circuit_name_for_rag(context_circuit, context_year)
+                    target_dir = Path('data/rag') / str(context_year) / 'circuits' / circuit_name
+                    # Use category as filename: strategy.md, weather.md, etc.
+                    if category in ['strategy', 'weather', 'performance', 'race_control', 'race_position']:
+                        final_filename = f"{category}.md"
+                    else:
+                        # Other category - use original filename
+                        if edited_filename:
+                            final_filename = edited_filename if edited_filename.endswith('.md') else f"{edited_filename}.md"
+                        else:
+                            final_filename = filename.replace('.pdf', '.md').replace('.docx', '.md').replace('.doc', '.md')
+                            final_filename = final_filename.lower().replace(' ', '_')
+                elif context_year:
+                    # Year level but no circuit - save to year folder
+                    target_dir = Path('data/rag') / str(context_year)
+                    if edited_filename:
+                        final_filename = edited_filename if edited_filename.endswith('.md') else f"{edited_filename}.md"
+                    else:
+                        final_filename = filename.replace('.pdf', '.md').replace('.docx', '.md').replace('.doc', '.md')
+                        final_filename = final_filename.lower().replace(' ', '_')
+                else:
+                    # No context - save to global
+                    target_dir = Path('data/rag') / 'global'
+                    if edited_filename:
+                        final_filename = edited_filename if edited_filename.endswith('.md') else f"{edited_filename}.md"
+                    else:
+                        final_filename = filename.replace('.pdf', '.md').replace('.docx', '.md').replace('.doc', '.md')
+                        final_filename = final_filename.lower().replace(' ', '_')
+            
+            target_dir.mkdir(parents=True, exist_ok=True)
+            target_path = target_dir / final_filename
+            
+            # Backup if exists
+            if target_path.exists():
+                document_loader = DocumentLoader()
+                document_loader.backup_existing_document(target_path)
+            
+            # Convert to markdown
+            file_ext = Path(filename).suffix.lower()
+            
+            if file_ext == '.pdf':
+                # Convert PDF
+                import tempfile
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+                    tmp.write(decoded)
+                    tmp_path = tmp.name
+                
+                try:
+                    document_loader = DocumentLoader()
+                    markdown_content = document_loader.convert_pdf_to_markdown(tmp_path, str(target_path))
+                    
+                except Exception as conv_error:
+                    # Conversion failed - reject upload
+                    error_msg = html.Div([
+                        html.I(className="fas fa-exclamation-triangle text-danger me-2"),
+                        html.Span(f"PDF conversion failed: {str(conv_error)[:100]}", className="text-danger"),
+                        html.Br(),
+                        html.Small("File may be corrupted, password-protected, or have unsupported formatting.", className="text-muted")
+                    ], className="alert alert-danger")
+                    
+                    return False, "", "", None, "", "", "", None, error_msg
+                finally:
+                    Path(tmp_path).unlink(missing_ok=True)
+                    
+            elif file_ext in ['.docx', '.doc']:
+                # Convert DOCX
+                import tempfile
+                with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp:
+                    tmp.write(decoded)
+                    tmp_path = tmp.name
+                
+                try:
+                    document_loader = DocumentLoader()
+                    markdown_content = document_loader.convert_docx_to_markdown(tmp_path, str(target_path))
+                except Exception as conv_error:
+                    error_msg = html.Div([
+                        html.I(className="fas fa-exclamation-triangle text-danger me-2"),
+                        html.Span(f"DOCX conversion failed: {str(conv_error)[:100]}", className="text-danger")
+                    ], className="alert alert-danger")
+                    return False, "", "", None, "", "", "", None, error_msg
+                finally:
+                    Path(tmp_path).unlink(missing_ok=True)
+                    
+            elif file_ext == '.md':
+                # Already markdown - just save
+                markdown_content = decoded.decode('utf-8')
+                with open(target_path, 'w', encoding='utf-8') as f:
+                    # Add metadata header if not present
+                    if not markdown_content.strip().startswith('---'):
+                        from datetime import datetime
+                        metadata = f"""---
+category: {category}
+year: {context_year or fia_year}
+uploaded_at: {datetime.now().isoformat()}
+---
+
+"""
+                        f.write(metadata + markdown_content)
+                    else:
+                        f.write(markdown_content)
+            
+            # Reload RAG with correct year from UI state (not cached context)
+            rag_manager = get_rag_manager()
+            # Use context_year from UI, or fia_year for FIA docs
+            reload_year = context_year or fia_year
+            # Convert circuit selector value to circuit name
+            reload_circuit = None
+            if context_circuit:
+                reload_circuit = _get_circuit_name_for_rag(context_circuit, reload_year)
+            chunk_count = rag_manager.load_context(
+                year=reload_year,
+                circuit=reload_circuit,
+                clear_existing=True
+            )
+            
+            # Get updated document lists for sidebar
+            docs = rag_manager.list_documents()
+            
+            # Format lists for display
+            global_list = _format_doc_list(docs.get("global", []), "global")
+            strategy_list = _format_doc_list(docs.get("strategy", []), "strategy")
+            weather_list = _format_doc_list(docs.get("weather", []), "weather")
+            performance_list = _format_doc_list(
+                docs.get("performance", []), "performance"
+            )
+            race_control_list = _format_doc_list(
+                docs.get("race_control", []), "race_control"
+            )
+            race_position_list = _format_doc_list(
+                docs.get("race_position", []), "race_position"
+            )
+            fia_list = _format_doc_list(docs.get("fia", []), "fia")
+            
+            # Success - show toast and close modal
+            success_msg = html.Div([
+                html.I(className="fas fa-check-circle text-success me-2"),
+                html.Span(f"✅ {final_filename} uploaded successfully ({chunk_count} chunks indexed)", className="text-success")
+            ], className="alert alert-success")
+            
+            # Close modal and show success (9 original + 3 UI + 9 RAG = 21 outputs)
+            return (
+                False, "", "", None, "", "", "", None, success_msg,
+                # UI reset (hide overlay, enable button, reset text)
+                OVERLAY_HIDDEN, False, "✅ Upload & Index",
+                # RAG status updates
+                "🟢 Loaded",
+                f"({chunk_count} chunks)",
+                global_list, strategy_list, weather_list,
+                performance_list, race_control_list, race_position_list, fia_list
+            )
+            
+        except Exception as e:
+            logger.error(f"Upload processing error: {e}", exc_info=True)
+            error_msg = html.Div([
+                html.I(className="fas fa-times-circle text-danger me-2"),
+                html.Span(f"Upload failed: {str(e)[:100]}", className="text-danger")
+            ], className="alert alert-danger")
+            return (False, "", "", None, "", "", "", None, error_msg) + ui_reset + rag_no_updates
+    
+    # File upload - open modal with preview and LLM suggestion
+    file_contents = None
+    filename = None
+    is_fia = False
+    category_hint = None
+    
+    # Check which upload triggered
+    if triggered_id and isinstance(triggered_id, dict) and triggered_id.get('type') == 'rag-upload-input':
+        # Category upload from hidden dcc.Upload
+        category_hint = triggered_id.get('category')
+        
+        # Find which upload has content
+        for i, contents in enumerate(category_upload_contents_list):
+            if contents:
+                file_contents = contents
+                filename = category_upload_filenames_list[i]
+                break
+        
+    elif triggered_id == 'fia-reg-upload' and fia_contents:
+        file_contents = fia_contents
+        filename = fia_filename
+        is_fia = True
+        category_hint = 'fia'
+    
+    if not file_contents or not filename:
+        raise PreventUpdate
+    
+    try:
+        # Parse file
+        content_type, content_string = file_contents.split(',')
+        decoded = base64.b64decode(content_string)
+        file_size = len(decoded)
+        file_ext = Path(filename).suffix.lower()
+        
+        # Validate file
+        if file_size > 10 * 1024 * 1024:  # 10MB limit
+            error_msg = html.Div([
+                html.I(className="fas fa-exclamation-triangle text-warning me-2"),
+                html.Span(f"File too large: {file_size / 1024 / 1024:.1f}MB (max 10MB)", className="text-warning")
+            ], className="alert alert-warning")
+            return (False, error_msg, "", None, "", "", "", None, "") + ui_reset + rag_no_updates
+        
+        if file_ext not in ['.pdf', '.docx', '.doc', '.md']:
+            error_msg = html.Div([
+                html.I(className="fas fa-exclamation-triangle text-warning me-2"),
+                html.Span(f"Unsupported file type: {file_ext}", className="text-warning")
+            ], className="alert alert-warning")
+            return (False, error_msg, "", None, "", "", "", None, "") + ui_reset + rag_no_updates
+        
+        # File info display
+        file_info = html.Div([
+            html.P([html.Strong("Name: "), filename]),
+            html.P([html.Strong("Size: "), f"{file_size / 1024:.1f} KB"]),
+            html.P([html.Strong("Type: "), file_ext.upper()])
+        ])
+        
+        # Quick preview (detailed extraction happens at save time)
+        preview_text = ""
+        if file_ext == '.md':
+            preview_text = decoded.decode('utf-8', errors='ignore')[:500]
+        elif file_ext == '.pdf':
+            preview_text = f"📄 PDF file ready to upload. Content will be extracted during save."
+        elif file_ext in ['.docx', '.doc']:
+            preview_text = f"📝 Word document ready to upload. Content will be extracted during save."
+        
+        # Determine default category based on button source
+        if is_fia:
+            default_category = 'fia'
+        else:
+            # Try to infer from filename
+            fname_lower = filename.lower()
+            if 'fia' in fname_lower or 'regulation' in fname_lower or 'sporting' in fname_lower:
+                default_category = 'fia'
+            elif 'strategy' in fname_lower or 'tyre' in fname_lower or 'pit' in fname_lower:
+                default_category = 'strategy'
+            elif 'weather' in fname_lower or 'rain' in fname_lower or 'temperature' in fname_lower:
+                default_category = 'weather'
+            elif 'telemetry' in fname_lower or 'performance' in fname_lower or 'lap' in fname_lower:
+                default_category = 'performance'
+            elif 'flag' in fname_lower or 'incident' in fname_lower or 'safety' in fname_lower:
+                default_category = 'race_control'
+            elif 'position' in fname_lower or 'gap' in fname_lower or 'overtake' in fname_lower:
+                default_category = 'race_position'
+            else:
+                default_category = None  # User must select
+        
+        # Determine initial target path based on default category
+        is_fia_category = (default_category == 'fia')
+        
+        if default_category:
+            if is_fia_category:
+                # FIA documents go to year level
+                year = fia_year if fia_year else context_year
+                target_path_str = f"data/rag/{year}/fia_regulations_{year}.md"
+                suggested_filename = f"fia_regulations_{year}"
+            elif default_category == 'global':
+                # Global category
+                target_path_str = f"data/rag/global/{filename.replace(file_ext, '.md')}"
+                suggested_filename = filename.replace(file_ext, '')
+            elif default_category in ['strategy', 'weather', 'performance', 'race_control', 'race_position']:
+                # Circuit-specific categories
+                if context_circuit and context_year:
+                    circuit = _get_circuit_name_for_rag(context_circuit, context_year)
+                    target_path_str = f"data/rag/{context_year}/circuits/{circuit}/{default_category}.md"
+                    suggested_filename = default_category
+                elif context_year:
+                    target_path_str = f"data/rag/{context_year}/{default_category}.md"
+                    suggested_filename = default_category
+                else:
+                    target_path_str = f"data/rag/global/{filename.replace(file_ext, '.md')}"
+                    suggested_filename = filename.replace(file_ext, '')
+            else:
+                # Fallback
+                target_path_str = f"data/rag/global/{filename.replace(file_ext, '.md')}"
+                suggested_filename = filename.replace(file_ext, '')
+        else:
+            # No default - show placeholder until user selects
+            target_path_str = "⚠️ Select a category first"
+            suggested_filename = filename.replace(file_ext, '')
+        
+        # Check for duplicates
+        target_path_obj = Path(target_path_str)
+        if target_path_obj.exists():
+            duplicate_warning = html.Div([
+                html.I(className="fas fa-exclamation-triangle text-warning me-2"),
+                html.Span("⚠️ File exists! Uploading will create a backup of the old version.", className="text-warning fw-bold")
+            ], className="alert alert-warning")
+        else:
+            duplicate_warning = ""
+        
+        # Store file data for confirmation
+        stored_data = {
+            'content': file_contents,
+            'filename': filename,
+            'default_category': default_category,
+            'is_fia': is_fia
+        }
+        
+        # Return modal opened with all info (9 original + 3 UI + 9 RAG no_update)
+        return (
+            True,  # is_open
+            file_info,
+            default_category,  # Pre-select default category (if any)
+            preview_text[:500],  # Preview first 500 chars
+            target_path_str,
+            suggested_filename,
+            duplicate_warning,
+            stored_data,
+            ""  # No processing status yet
+        ) + ui_reset + rag_no_updates
+        
+    except Exception as e:
+        logger.error(f"Error preparing upload: {e}", exc_info=True)
+        error_msg = html.Div([
+            html.I(className="fas fa-times-circle text-danger me-2"),
+            html.Span(f"Error: {str(e)[:100]}", className="text-danger")
+        ], className="alert alert-danger")
+        return (False, error_msg, "", None, "", "", "", None, "") + ui_reset + rag_no_updates
+
+
+@callback(
+    Output('upload-target-path', 'children', allow_duplicate=True),
+    Output('upload-filename-edit', 'value', allow_duplicate=True),
+    Input('upload-category-override', 'value'),
+    State('upload-file-store', 'data'),
+    State('year-selector', 'value'),
+    State('circuit-selector', 'value'),
+    State('fia-year-selector', 'value'),
+    prevent_initial_call=True
+)
+def update_target_path_on_category_change(
+    selected_category, stored_file_data, context_year, context_circuit, fia_year
+):
+    """Update target path display when user changes category in dropdown."""
+    if not stored_file_data or not selected_category:
+        raise PreventUpdate
+    
+    try:
+        from pathlib import Path
+        
+        filename = stored_file_data['filename']
+        file_ext = Path(filename).suffix.lower()
+        is_fia_from_button = stored_file_data.get('is_fia', False)
+        
+        # User selected category takes priority
+        is_fia_category = (selected_category == 'fia') or is_fia_from_button
+        
+        # Calculate new target path based on selected category
+        if is_fia_category:
+            year = fia_year if fia_year else context_year
+            target_path_str = f"data/rag/{year}/fia_regulations_{year}.md"
+            suggested_filename = f"fia_regulations_{year}"
+        elif selected_category == 'global':
+            target_path_str = f"data/rag/global/{filename.replace(file_ext, '.md')}"
+            suggested_filename = filename.replace(file_ext, '')
+        elif selected_category in ['strategy', 'weather', 'performance', 'race_control', 'race_position']:
+            if context_circuit and context_year:
+                circuit = _get_circuit_name_for_rag(context_circuit, context_year)
+                target_path_str = f"data/rag/{context_year}/circuits/{circuit}/{selected_category}.md"
+                suggested_filename = selected_category
+            elif context_year:
+                target_path_str = f"data/rag/{context_year}/{selected_category}.md"
+                suggested_filename = selected_category
+            else:
+                target_path_str = f"data/rag/global/{filename.replace(file_ext, '.md')}"
+                suggested_filename = filename.replace(file_ext, '')
+        else:
+            # Other/unknown category
+            if context_circuit and context_year:
+                circuit = _get_circuit_name_for_rag(context_circuit, context_year)
+                target_path_str = f"data/rag/{context_year}/circuits/{circuit}/{filename.replace(file_ext, '.md')}"
+            elif context_year:
+                target_path_str = f"data/rag/{context_year}/{filename.replace(file_ext, '.md')}"
+            else:
+                target_path_str = f"data/rag/global/{filename.replace(file_ext, '.md')}"
+            
+            suggested_filename = filename.replace(file_ext, '')
+        
+        return target_path_str, suggested_filename
+        
+    except Exception as e:
+        logger.error(f"Error updating target path: {e}", exc_info=True)
+        raise PreventUpdate
+
+
+@callback(
+    Output('upload-preview-collapse', 'is_open'),
+    Input('upload-preview-toggle', 'n_clicks'),
+    State('upload-preview-collapse', 'is_open'),
+    prevent_initial_call=True
+)
+def toggle_upload_preview(n_clicks, is_open):
+    """Toggle preview content visibility."""
+    return not is_open if n_clicks else is_open
 
 
 # ============================================================================
@@ -1845,9 +2631,13 @@ def _do_generate_templates(year: int, circuit: str, circuit_display: str):
             save_to_disk=True
         )
         
-        # Reload RAG context to include new docs
+        # Reload RAG context with correct year/circuit (not cached context)
         rag_manager = get_rag_manager()
-        chunk_count = rag_manager.reload()
+        chunk_count = rag_manager.load_context(
+            year=year,
+            circuit=circuit,
+            clear_existing=True
+        )
         
         # Get updated document lists
         all_docs = rag_manager.list_documents()
@@ -1906,6 +2696,80 @@ def _do_generate_templates(year: int, circuit: str, circuit_display: str):
             dash.no_update, dash.no_update, dash.no_update,
             dash.no_update, dash.no_update
         )
+
+
+# ============================================================================
+# UPLOAD BUTTON TRIGGER (Clientside to activate file picker)
+# ============================================================================
+
+app.clientside_callback(
+    """
+    function(n_clicks_list) {
+        // Find which button was clicked
+        const triggered = dash_clientside.callback_context.triggered;
+        if (!triggered || triggered.length === 0) {
+            return window.dash_clientside.no_update;
+        }
+        
+        const triggeredId = triggered[0].prop_id;
+        
+        // Extract category from the triggered button
+        const match = triggeredId.match(/"category":"([^"]+)"/);
+        if (match && match[1]) {
+            const category = match[1];
+            
+            // Find and click the corresponding hidden upload input
+            const uploadInputs = document.querySelectorAll('[id*="rag-upload-input"]');
+            for (let input of uploadInputs) {
+                const inputId = input.id;
+                if (inputId.includes(category)) {
+                    // Trigger click on the hidden dcc.Upload's file input
+                    const fileInput = input.querySelector('input[type="file"]');
+                    if (fileInput) {
+                        fileInput.click();
+                        return window.dash_clientside.no_update;
+                    }
+                }
+            }
+        }
+        
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output({'type': 'rag-upload-btn', 'category': ALL}, 'n_clicks', allow_duplicate=True),
+    Input({'type': 'rag-upload-btn', 'category': ALL}, 'n_clicks'),
+    prevent_initial_call=True
+)
+
+
+# Clientside callback to show loading overlay immediately on upload confirm
+app.clientside_callback(
+    """
+    function(n_clicks) {
+        if (n_clicks) {
+            // Show the loading overlay immediately
+            const overlay = document.getElementById('upload-loading-overlay');
+            if (overlay) {
+                overlay.style.display = 'flex';
+            }
+            // Disable the buttons to prevent double-click
+            const confirmBtn = document.getElementById('upload-confirm-btn');
+            const cancelBtn = document.getElementById('upload-cancel-btn');
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+                confirmBtn.innerHTML = '⏳ Processing...';
+            }
+            if (cancelBtn) {
+                cancelBtn.disabled = true;
+            }
+        }
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output('upload-loading-overlay', 'style'),
+    Input('upload-confirm-btn', 'n_clicks'),
+    prevent_initial_call=True
+)
 
 
 # ============================================================================

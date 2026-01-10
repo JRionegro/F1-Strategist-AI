@@ -214,6 +214,35 @@ The system exposes **19 tools** via MCP for structured data access:
 └─────────────────────────────────────────────────┘
 ```
 
+### Document Upload (NEW ✨)
+
+The RAG system now includes an **integrated document upload interface** directly in the UI:
+
+**Features**:
+- **7 Document Categories**: Global, Strategy, Weather, Performance, Race Control, Race Position, FIA Regulations
+- **One-Click Upload**: Click the "➕" button next to any category to add documents
+- **Smart File Processing**:
+  - Supported formats: PDF, DOCX, Markdown (.md)
+  - Automatic PDF/DOCX conversion to Markdown
+  - Maximum file size: 10MB per document
+- **AI-Powered Categorization**: LLM analyzes document content and suggests the best category
+- **Backup & Version Control**: Automatic backup of existing documents before overwriting
+- **Real-Time Indexing**: Documents are immediately chunked, embedded, and indexed in ChromaDB
+
+**How It Works**:
+1. Click "➕" button in RAG Documents sidebar section
+2. Select a file (PDF, DOCX, or MD)
+3. Review AI-suggested category (or change it manually)
+4. Preview document content before uploading
+5. Confirm upload - document is processed and indexed automatically
+
+**Technical Implementation**:
+- Hidden `dcc.Upload` components for each category with pattern-matching IDs
+- Clientside JavaScript callback triggers native file picker on button click
+- Server-side callback processes upload with LLM category suggestion
+- `DocumentLoader` class handles PDF/DOCX conversion to Markdown
+- ChromaDB vector store automatically re-indexes when documents change
+
 ### Document Organization
 
 ```

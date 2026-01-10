@@ -4,21 +4,21 @@ template: true
 variables: [circuit_name, circuit_type, lap_length, total_laps, pit_loss, drs_zones]
 ---
 
-# Yas Marina Circuit - Complete Strategy Guide
+# Las Vegas Strip Circuit - Complete Strategy Guide
 
 ## Circuit Characteristics
 
 | Property | Value |
 |----------|-------|
-| **Circuit Type** | Modern twilight circuit |
-| **Lap Length** | 5.281 km |
-| **Race Laps** | 58 |
-| **Pit Lane Time Loss** | 22.0 seconds |
+| **Circuit Type** | High-speed street circuit |
+| **Lap Length** | 6.201 km |
+| **Race Laps** | 50 |
+| **Pit Lane Time Loss** | 25.0 seconds |
 | **DRS Zones** | 2 |
 
 ## Track Layout
 
-Modern circuit featuring hotel section, long back straight, and flowing final sector under the hotel.
+Technical circuit requiring good car balance and tire management.
 
 ---
 
@@ -26,8 +26,8 @@ Modern circuit featuring hotel section, long back straight, and flowing final se
 
 ### Starting Grid Position Value
 
-- **Overtaking Difficulty**: 5/10
-- **Track Position Importance**: 6/10
+- **Overtaking Difficulty**: 4/10
+- **Track Position Importance**: 5/10
 - **First Lap Position Gain Potential**: 1-3 positions typical
 - **Clean Air Premium**: ~0.3-0.5s per lap
 
@@ -38,7 +38,7 @@ Modern circuit featuring hotel section, long back straight, and flowing final se
 | **Start** | 1-5 | Position defense/attack, tire preservation |
 | **Early Race** | 6-20 | Undercut window opens, fuel burn effect |
 | **Mid-Race** | 21-40 | Primary pit window, SC probability peak |
-| **Late Race** | 41-58 | Final stint management, DRS trains |
+| **Late Race** | 41-50 | Final stint management, DRS trains |
 
 ---
 
@@ -57,7 +57,7 @@ Modern circuit featuring hotel section, long back straight, and flowing final se
 - **Entry Speed Limit**: 80 km/h
 - **Pit Lane Length**: 400 m
 - **Typical Stationary Time**: 2.5 seconds
-- **Total Time Loss per Stop**: 22.0 seconds
+- **Total Time Loss per Stop**: 25.0 seconds
 - **Delta vs Track (per stop)**: ~18-22s
 
 ### 2.3 Undercut Analysis
@@ -65,7 +65,7 @@ Modern circuit featuring hotel section, long back straight, and flowing final se
 The **undercut** involves pitting earlier than your rival to gain track position
 through fresh tire pace advantage.
 
-- **Undercut Power at Yas Marina Circuit**: 6/10
+- **Undercut Power at Las Vegas Strip Circuit**: 6/10
 - **Optimal Window**: 1-2 laps before rival
 - **Fresh Tire Advantage**: ~1.5s per lap
 - **Effective For**: Rival with degraded tires
@@ -101,15 +101,15 @@ and potentially clear track after rivals pit.
 
 ### 3.1 Primary Overtaking Zones
 
-1. Turn 6 hairpin (end of DRS zone 1)
-2. Turn 9 (end of back straight)
+Main straight end
+Secondary straight end
 
 ### 3.2 DRS Zones
 
 | Zone | Detection Point | Activation | Notes |
 |------|-----------------|------------|-------|
-| 1 | Turn 5 exit | Turn 6 | Back straight |
-| 2 | Turn 9 exit | Turn 11 | Hotel straight |
+| 1 | Sector 1 exit | Sector 2 | Primary zone |
+| 2 | Sector 2 exit | Sector 3 | Secondary zone |
 
 ### 3.3 Non-DRS Opportunities
 
@@ -133,7 +133,7 @@ and potentially clear track after rivals pit.
 
 ### 4.1 Historical Data
 
-- **SC Probability**: 30%
+- **SC Probability**: 45%
 - **Average SCs per Race**: 1.2
 - **VSC Probability**: 25%
 - **Red Flag Probability**: 5%
@@ -203,7 +203,7 @@ SC provides opportunity for cheap pit stops. Monitor tire age vs rivals to optim
 
 ### 5.4 Reverse Strategy Analysis
 
-What strategies would opponents fear most at Yas Marina Circuit?
+What strategies would opponents fear most at Las Vegas Strip Circuit?
 
 - Leader fears: Successful undercut or late SC
 - Midfield fears: DRS trains preventing progress, wrong strategy call
@@ -281,10 +281,10 @@ Based on recent seasons:
 ## 10. Quick Reference Card
 
 ```
-🏁 CIRCUIT: Yas Marina Circuit
-📍 TYPE: Modern twilight circuit
-🔄 LAPS: 58 @ 5.281 km
-⏱️ PIT LOSS: 22.0s
+🏁 CIRCUIT: Las Vegas Strip Circuit
+📍 TYPE: High-speed street circuit
+🔄 LAPS: 50 @ 6.201 km
+⏱️ PIT LOSS: 25.0s
 
 OPTIMAL STRATEGIES:
 ├── 1-STOP: Lap 18-25 (MEDIUM → HARD)
@@ -292,12 +292,12 @@ OPTIMAL STRATEGIES:
 └── SC REACT: Pit if gap >3s to car behind
 
 KEY METRICS:
-├── Overtake Difficulty: 5/10
+├── Overtake Difficulty: 4/10
 ├── Undercut Power: 6/10
-└── SC Probability: 30%
+└── SC Probability: 45%
 ```
 
 ---
 
 *Generated from template. Data: OpenF1 API, FIA Regulations, Historical Analysis*
-*Last updated: 2026-01-10 19:02*
+*Last updated: 2026-01-10 19:44*

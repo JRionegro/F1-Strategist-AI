@@ -44,6 +44,13 @@ An AI-powered Formula 1 race strategy assistant with unified OpenF1 data source 
   - ✅ API key configuration via sidebar UI
   - ✅ Auto-clear chat on context change
   - ✅ Proactive alerts during simulation
+- **RAG Document Management** 🆕:
+  - ✅ One-click document upload (PDF, DOCX, Markdown)
+  - ✅ 7 document categories (Global, Strategy, Weather, etc.)
+  - ✅ AI-powered category suggestion using LLM
+  - ✅ Automatic PDF/DOCX to Markdown conversion
+  - ✅ Real-time ChromaDB indexing
+  - ✅ Document backup and version control
 - **Live Mode**: 
   - ✅ Automatic availability detection (±3 hours window)
   - ✅ Context controls locking when Live mode active
