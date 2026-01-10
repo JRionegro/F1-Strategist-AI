@@ -67,8 +67,16 @@ class SimulationController:
             self.last_update = datetime.now()
             self.play_start_time = datetime.now()  # Track when playback started
             self.play_start_session_time = self.current_time  # Track session time when started
-            self.simulation_offset = start_from_seconds if start_from_seconds is not None else 0.0
-            logger.info(f"Simulation started (offset: {self.simulation_offset:.1f}s)")
+            
+            # Only reset offset if explicitly provided, otherwise preserve current position
+            if start_from_seconds is not None:
+                self.simulation_offset = start_from_seconds
+                logger.info(f"Simulation started from offset: {self.simulation_offset:.1f}s")
+            else:
+                # Preserve current position when resuming from pause
+                # Calculate offset from current_time (which was being tracked during pause)
+                self.simulation_offset = (self.current_time - self.start_time).total_seconds()
+                logger.info(f"Simulation resumed at offset: {self.simulation_offset:.1f}s")
     
     def get_elapsed_seconds(self) -> float:
         """
