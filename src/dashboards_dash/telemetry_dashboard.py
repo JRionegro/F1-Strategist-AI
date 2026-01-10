@@ -207,7 +207,7 @@ class TelemetryDashboard:
                                     "responsive": True,
                                     "displayModeBar": False
                                 },
-                                style={"height": "540px"}
+                                style={"height": "580px"}
                             ),
                         ],
                         className="p-0",
@@ -215,7 +215,7 @@ class TelemetryDashboard:
                     ),
                 ],
                 className="mb-2 border border-secondary",
-                style={"height": "575px", "backgroundColor": "#1e1e1e"}
+                style={"height": "620px", "backgroundColor": "#1e1e1e"}
             )
 
         except Exception as e:
@@ -619,8 +619,8 @@ class TelemetryDashboard:
             template="plotly_dark",
             paper_bgcolor="#1e1e1e",
             plot_bgcolor="#161b22",
-            height=500,
-            margin=dict(l=50, r=20, t=10, b=40),
+            height=490,
+            margin=dict(l=50, r=20, t=10, b=50),
             legend=dict(
                 orientation="h",
                 yanchor="top",

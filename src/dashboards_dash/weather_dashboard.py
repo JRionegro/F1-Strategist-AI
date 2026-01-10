@@ -433,7 +433,9 @@ def create_weather_strategy_panel(
 
     # Create compact insight badges
     insight_badges = []
-    for insight in insights:
+    for idx, insight in enumerate(insights):
+        # Don't add border-bottom to the last item
+        class_name = "mb-1 p-1" if idx == len(insights) - 1 else "mb-1 p-1 border-bottom border-secondary"
         insight_badges.append(
             html.Div(
                 [
@@ -446,18 +448,13 @@ def create_weather_strategy_panel(
                         className=f"text-{insight['color']}"
                     ),
                 ],
-                className="mb-1 p-1 border-bottom border-secondary"
+                className=class_name
             )
         )
 
     return html.Div(
         [
             html.Div(insight_badges),
-            html.Small(
-                "💡 For AI analysis, use Weather Agent",
-                className="text-muted",
-                style={"fontSize": "0.65rem"}
-            ),
         ]
     )
 
