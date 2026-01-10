@@ -1325,6 +1325,11 @@ def update_drivers(session, circuit_key, year):
         # Get full session_info
         session_info = sessions[0]
         
+        # DEBUG: Log session_info keys and meeting_name
+        logger.info(f"Session info keys: {session_info.keys()}")
+        logger.info(f"Meeting name from session_info: {session_info.get('meeting_name', 'NOT_FOUND')}")
+        logger.info(f"Session name from session_info: {session_info.get('session_name', 'NOT_FOUND')}")
+        
         # Load session using SessionAdapter
         logger.info(f"Loading session with session_key={session_key}")
         session_obj = SessionAdapter(
@@ -2057,6 +2062,9 @@ def handle_document_editor(
     Input('simulation-time-store', 'data'),  # Real-time updates
     Input('chat-messages-store', 'data'),  # Chat messages for AI dashboard
     State('driver-selector', 'value'),
+    State('circuit-selector', 'value'),
+    State('circuit-selector', 'options'),
+    State('session-selector', 'value'),
     prevent_initial_call=False
 )
 def update_dashboards(
@@ -2064,7 +2072,10 @@ def update_dashboards(
     session_data,
     simulation_time_data,
     chat_messages,
-    focused_driver
+    focused_driver,
+    selected_circuit,
+    circuit_options,
+    selected_session
 ):
     """Update visible dashboards based on selection."""
     global current_session_obj  # Declare at function start
@@ -2086,9 +2097,22 @@ def update_dashboards(
     
     for dashboard_id in selected_dashboards:
         if dashboard_id == "ai":
-            # AI Assistant Dashboard - messages updated by separate callback
-            circuit_name = session_data.get('circuit_short_name', 'Unknown') if session_data else 'Unknown'
-            session_type = session_data.get('session_type', 'Race') if session_data else 'Race'
+            # AI Assistant Dashboard - use sidebar values directly
+            # Get circuit name from dropdown label
+            circuit_name = 'Unknown Circuit'
+            if selected_circuit and circuit_options:
+                for opt in circuit_options:
+                    if opt['value'] == selected_circuit:
+                        # Extract clean name from "R24 - Abu Dhabi" -> "Abu Dhabi"
+                        label = opt['label']
+                        if ' - ' in label:
+                            circuit_name = label.split(' - ', 1)[1]
+                        else:
+                            circuit_name = label
+                        break
+            
+            # Session type from dropdown
+            session_type = selected_session if selected_session else 'Race'
             
             # Extract driver code from focused_driver (e.g., "RUS_2025_63" -> "RUS")
             driver_code = None
