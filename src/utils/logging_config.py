@@ -46,6 +46,7 @@ class LogCategory(Enum):
     API = "f1.api"                   # External API calls
     CHAT = "f1.chat"                 # AI chat/LLM
     DATA = "f1.data"                 # Data providers
+    PROACTIVE = "f1.proactive"       # Proactive AI alerts system
 
 
 # Default log levels per category
@@ -62,6 +63,7 @@ DEFAULT_LEVELS: Dict[LogCategory, int] = {
     LogCategory.API: logging.WARNING,         # Hide API calls
     LogCategory.CHAT: logging.INFO,           # Show chat activity
     LogCategory.DATA: logging.WARNING,        # Hide data loading
+    LogCategory.PROACTIVE: logging.DEBUG,     # Show proactive AI alerts (DEBUG for dev)
 }
 
 # Store for category loggers
@@ -97,6 +99,14 @@ def setup_logging(
     )
     console_handler.setFormatter(console_format)
     root_logger.addHandler(console_handler)
+
+    # Special handler for PROACTIVE category to always show DEBUG in console
+    proactive_handler = logging.StreamHandler()
+    proactive_handler.setLevel(logging.DEBUG)
+    proactive_handler.setFormatter(console_format)
+    proactive_logger = logging.getLogger(LogCategory.PROACTIVE.value)
+    proactive_logger.addHandler(proactive_handler)
+    proactive_logger.propagate = False  # Don't duplicate to root
 
     # Optional file handler
     if log_file:

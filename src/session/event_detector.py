@@ -15,8 +15,9 @@ from typing import Dict, List, Optional, Any
 import pandas as pd
 
 from src.data.openf1_data_provider import OpenF1DataProvider
+from src.utils.logging_config import get_logger, LogCategory
 
-logger = logging.getLogger(__name__)
+logger = get_logger(LogCategory.PROACTIVE)
 
 
 @dataclass
@@ -94,6 +95,7 @@ class RaceEventDetector:
             # Only check every 2 laps to avoid spam
             if current_lap <= self._last_checked['last_alert_lap'] + 1:
                 # Still check for safety car (urgent)
+                logger.debug(f"[DETECT] Checking SC only (same lap window)")
                 sc_event = self._check_safety_car(
                     session_key, current_time
                 )
@@ -102,6 +104,7 @@ class RaceEventDetector:
                 return events
             
             self._last_checked['last_alert_lap'] = current_lap
+            logger.debug(f"[DETECT] Full check at lap {current_lap}")
             
             # Check pit window for focused driver
             if focused_driver:
@@ -153,6 +156,7 @@ class RaceEventDetector:
             )
             
             if stints_df.empty:
+                logger.debug(f"[PIT_CHECK] No stint data for driver {driver_number}")
                 return None
             
             # Get latest stint
@@ -164,9 +168,41 @@ class RaceEventDetector:
             # Get tire window
             window = self.TIRE_WINDOWS.get(compound, self.TIRE_WINDOWS['MEDIUM'])
             
+            logger.info(
+                f"[PIT_CHECK] Driver {driver_number}: {compound} tire, "
+                f"stint_age={stint_age}, window=[{window['min']}-{window['optimal']}]"
+            )
+            
+            # Check if APPROACHING pit window (3-5 laps before window opens)
+            laps_to_window = window['min'] - stint_age
+            if 1 <= laps_to_window <= 5:
+                event_key = (f'pit_approaching_{compound}', current_lap // 5)
+                if event_key not in self._last_checked['alerted_events']:
+                    self._last_checked['alerted_events'].add(event_key)
+                    
+                    return RaceEvent(
+                        event_type='pit_approaching',
+                        priority=2,
+                        message=(
+                            f"📊 PIT WINDOW APPROACHING: Driver {driver_number} on "
+                            f"{compound} tires (stint: {stint_age} laps). "
+                            f"Optimal pit window opens in ~{laps_to_window} laps. "
+                            f"Start planning pit strategy!"
+                        ),
+                        data={
+                            'compound': compound,
+                            'stint_age': stint_age,
+                            'laps_to_window': laps_to_window,
+                            'window': window
+                        },
+                        timestamp=current_time,
+                        driver_number=driver_number
+                    )
+            
             # Check if in optimal window
             event_key = (f'pit_window_{compound}', current_lap // 5)
             if event_key in self._last_checked['alerted_events']:
+                logger.debug(f"[PIT_CHECK] Already alerted for {event_key}")
                 return None
             
             if window['min'] <= stint_age <= window['optimal']:
@@ -320,37 +356,72 @@ class RaceEventDetector:
         current_time: datetime
     ) -> Optional[RaceEvent]:
         """Check for safety car or VSC deployment."""
+        logger.debug(f"[SC_CHECK] Entering method with session_key={session_key}")
         try:
             race_control_df = self.provider.get_race_control_messages(
                 session_key=session_key
             )
+            logger.debug(f"[SC_CHECK] Got race_control_df, empty={race_control_df.empty if race_control_df is not None else 'None'}")
             
             if race_control_df.empty:
+                logger.debug("[SC_CHECK] No race control messages")
                 return None
             
             # Filter to messages before current_time
-            if 'Date' in race_control_df.columns:
+            # Column is 'Time' (renamed from 'date' in provider)
+            time_col = 'Time' if 'Time' in race_control_df.columns else 'Date'
+            if time_col in race_control_df.columns:
                 race_control_df = race_control_df[
-                    pd.to_datetime(race_control_df['Date']) <= current_time
+                    pd.to_datetime(race_control_df[time_col]) <= current_time
                 ]
+                logger.debug(f"[SC_CHECK] Filtered by {time_col} <= {current_time}")
+            else:
+                logger.warning(f"[SC_CHECK] No time column found! Columns: {list(race_control_df.columns)}")
             
             if race_control_df.empty:
+                logger.debug(f"[SC_CHECK] No messages before {current_time}")
                 return None
             
+            logger.debug(f"[SC_CHECK] Found {len(race_control_df)} messages before current time")
+            
             # Check for SC/VSC in recent messages
-            recent = race_control_df.tail(5)
+            recent = race_control_df.tail(10)
+            
+            # DEBUG: Log last 5 messages to see actual format
+            for idx, (_, msg) in enumerate(recent.tail(5).iterrows()):
+                cat = str(msg.get('Category', 'N/A'))
+                txt = str(msg.get('Message', 'N/A'))[:60]
+                logger.debug(f"[SC_MSG_{idx}] Cat='{cat}' Msg='{txt}'")
             
             for _, msg in recent.iterrows():
                 category = str(msg.get('Category', '')).upper()
                 message = str(msg.get('Message', '')).upper()
-                msg_time = msg.get('Date')
+                flag = str(msg.get('Flag', '')).upper()
+                msg_time = msg.get('Time') or msg.get('Date')  # Try both column names
+                
+                # Log SC-related messages (broader search)
+                if any(kw in category or kw in message or kw in flag 
+                       for kw in ['SAFETY', 'VSC', 'SC ', ' SC', 'NEUTRALI']):
+                    logger.info(f"[SC_CHECK] Potential SC: Cat='{category}' Flag='{flag}' Msg='{message[:50]}'")
                 
                 # Check if already alerted for this SC
                 if msg_time and self._last_checked['last_sc_time']:
                     if msg_time <= self._last_checked['last_sc_time']:
                         continue
                 
-                if 'SAFETY CAR' in category or 'SAFETY CAR' in message:
+                # Flexible Safety Car detection patterns
+                is_safety_car = (
+                    'SAFETY CAR' in category or 
+                    'SAFETY CAR' in message or
+                    'SAFETYCAR' in category or
+                    'SAFETYCAR' in message or
+                    category == 'SAFETYCAR' or
+                    'SC DEPLOYED' in message or
+                    ('SC' in flag and 'DEPLOYED' in message) or
+                    ('SAFETY' in message and 'DEPLOYED' in message)
+                )
+                
+                if is_safety_car:
                     self._last_checked['last_sc_time'] = msg_time
                     
                     return RaceEvent(
@@ -365,7 +436,15 @@ class RaceEventDetector:
                         timestamp=current_time
                     )
                 
-                if 'VSC' in category or 'VIRTUAL SAFETY CAR' in message:
+                # Flexible VSC detection
+                is_vsc = (
+                    'VSC' in category or 
+                    'VSC' in flag or
+                    'VIRTUAL SAFETY CAR' in message or
+                    'VIRTUAL' in message and 'SAFETY' in message
+                )
+                
+                if is_vsc:
                     self._last_checked['last_sc_time'] = msg_time
                     
                     return RaceEvent(
@@ -380,7 +459,9 @@ class RaceEventDetector:
                     )
             
         except Exception as e:
-            logger.debug(f"Safety car check failed: {e}")
+            import traceback
+            logger.warning(f"[SC_CHECK] Safety car check failed: {e}")
+            logger.debug(f"[SC_CHECK] Traceback: {traceback.format_exc()}")
         
         return None
     

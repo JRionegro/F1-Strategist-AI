@@ -111,6 +111,10 @@ overview_logger = get_logger(LogCategory.RACE_OVERVIEW)  # Race overview
 control_logger = get_logger(LogCategory.RACE_CONTROL)  # Race control
 api_logger = get_logger(LogCategory.API)  # API calls
 chat_logger = get_logger(LogCategory.CHAT)  # Chat/AI
+proactive_logger = get_logger(LogCategory.PROACTIVE)  # Proactive AI alerts
+
+# Enable PROACTIVE debugging by default for development
+enable_category(LogCategory.PROACTIVE)
 
 # Uncomment to enable specific debugging:
 # enable_category(LogCategory.SIMULATION)  # See simulation updates
@@ -3887,9 +3891,10 @@ def update_simulation_time_store(n_intervals, selected_dashboards, current_store
     if simulation_controller is None:
         raise PreventUpdate
     
-    # Only update if simulation is actively playing
-    if not simulation_controller.is_playing:
-        raise PreventUpdate
+    # NOTE: Removed is_playing check here.
+    # The interval is disabled when paused (via toggle_play_pause),
+    # so this callback won't run anyway when paused.
+    # The previous is_playing check was causing race conditions.
     
     try:
         # Throttle: only update dashboard every N real seconds
@@ -4267,7 +4272,18 @@ def check_proactive_alerts(
     
     CRITICAL: Only uses data up to current simulation time (NO FUTURE DATA).
     """
+    proactive_logger.debug(
+        f"[PROACTIVE] check_proactive_alerts triggered, "
+        f"interval={n_intervals}, focused_driver={focused_driver}"
+    )
+    
     if not session_data or not session_data.get('loaded'):
+        proactive_logger.debug("[PROACTIVE] No session loaded, skipping")
+        raise PreventUpdate
+    
+    # Check if driver is selected - required for most alerts
+    if not focused_driver or focused_driver == 'none':
+        proactive_logger.debug("[PROACTIVE] No driver selected, skipping (select a driver to enable alerts)")
         raise PreventUpdate
     
     messages = current_messages or []
@@ -4277,6 +4293,7 @@ def check_proactive_alerts(
         # Get current simulation state
         session_key = session_data.get('session_key')
         if not session_key:
+            proactive_logger.debug("[PROACTIVE] No session_key, skipping")
             raise PreventUpdate
         
         # Parse simulation time
@@ -4287,9 +4304,7 @@ def check_proactive_alerts(
         if simulation_controller:
             current_lap = simulation_controller.get_current_lap()
         
-        # Don't check too frequently
-        if current_lap <= last_lap:
-            raise PreventUpdate
+        proactive_logger.debug(f"[PROACTIVE] current_lap={current_lap}, last_lap={last_lap}")
         
         # Get current time from simulation
         current_time = None
@@ -4297,17 +4312,28 @@ def check_proactive_alerts(
             current_time = simulation_controller.current_time
         
         if not current_time:
+            proactive_logger.debug("[PROACTIVE] No current_time, skipping")
             raise PreventUpdate
         
-        # Get focused driver number
+        proactive_logger.info(f"[PROACTIVE] Checking events at lap {current_lap}, time={current_time}")
+        
+        # Get focused driver number from the value format "VER_2025_1"
         driver_number = None
         if focused_driver and focused_driver != 'none':
-            # Try to get driver number from session data
-            drivers = session_data.get('drivers', {})
-            for num, info in drivers.items():
-                if info.get('code') == focused_driver:
-                    driver_number = int(num)
-                    break
+            try:
+                # focused_driver format: "CODE_YEAR_NUMBER" e.g. "VER_2025_1"
+                parts = focused_driver.split('_')
+                if len(parts) >= 3:
+                    driver_number = int(parts[-1])  # Last part is driver number
+                    proactive_logger.info(
+                        f"[PROACTIVE] Tracking driver #{driver_number} ({parts[0]})"
+                    )
+            except (ValueError, IndexError) as e:
+                proactive_logger.warning(
+                    f"[PROACTIVE] Could not parse driver from {focused_driver}: {e}"
+                )
+        
+        proactive_logger.debug(f"[PROACTIVE] focused_driver={focused_driver}, driver_number={driver_number}")
         
         # Detect events
         events = event_detector.detect_events(
@@ -4318,8 +4344,14 @@ def check_proactive_alerts(
             total_laps=session_data.get('total_laps', 57)
         )
         
+        if events:
+            proactive_logger.info(f"[PROACTIVE] ✓ Detected {len(events)} events!")
+        else:
+            proactive_logger.info(f"[PROACTIVE] No events (driver={driver_number}, lap={current_lap})")
+        
         # Add alerts for detected events
         for event in events:
+            proactive_logger.info(f"[PROACTIVE] EVENT: {event.event_type} - {event.message[:50]}...")
             messages.append({
                 'type': 'alert',
                 'content': event.message,
@@ -4333,23 +4365,37 @@ def check_proactive_alerts(
         
         return messages, {'last_lap': current_lap}
         
+    except PreventUpdate:
+        raise  # Re-raise PreventUpdate without logging
     except Exception as e:
-        logger.debug(f"Proactive alert check failed: {e}")
+        import traceback
+        proactive_logger.warning(f"[PROACTIVE] Alert check failed: {e}")
+        proactive_logger.debug(f"[PROACTIVE] Traceback: {traceback.format_exc()}")
         raise PreventUpdate
 
 
 @callback(
     Output('proactive-check-interval', 'disabled'),
-    Input('play-pause-btn', 'n_clicks'),
-    State('proactive-check-interval', 'disabled'),
+    Input('play-btn', 'n_clicks'),
     prevent_initial_call=True
 )
-def toggle_proactive_interval(n_clicks, is_disabled):
+def toggle_proactive_interval(n_clicks):
     """Enable/disable proactive checking when simulation plays/pauses."""
     if not n_clicks:
         raise PreventUpdate
-    # Toggle: if was disabled, enable it (return False)
-    return not is_disabled
+    
+    # Check actual simulation state
+    if simulation_controller is None:
+        proactive_logger.debug("[PROACTIVE] No simulation controller, interval stays disabled")
+        return True  # Keep disabled
+    
+    # Get actual is_playing state (after toggle_play_pause was called)
+    is_playing = simulation_controller.is_playing
+    
+    # If playing, enable interval (disabled=False). If paused, disable (disabled=True)
+    new_disabled = not is_playing
+    proactive_logger.info(f"[PROACTIVE] Interval toggled: disabled={new_disabled} (is_playing={is_playing})")
+    return new_disabled
 
 
 # ============================================================================
@@ -4657,16 +4703,21 @@ def analyze_race_state_for_warnings(
         return None
 
 
-@callback(
-    Output('chat-messages', 'children', allow_duplicate=True),
-    Input('proactive-check-interval', 'n_intervals'),
-    State('session-store', 'data'),
-    State('simulation-time-store', 'data'),
-    State('driver-selector', 'value'),
-    State('chat-messages', 'children'),
-    prevent_initial_call=True
-)
-def check_proactive_ai_warnings(
+# NOTE: check_proactive_ai_warnings callback DISABLED for Phase 1
+# This uses LLM analysis which can block the UI. 
+# Use rule-based check_proactive_alerts instead.
+# Will be re-enabled in Phase 3 with async/background processing.
+#
+# @callback(
+#     Output('chat-messages-store', 'data', allow_duplicate=True),
+#     Input('proactive-check-interval', 'n_intervals'),
+#     State('session-store', 'data'),
+#     State('simulation-time-store', 'data'),
+#     State('driver-selector', 'value'),
+#     State('chat-messages-store', 'data'),
+#     prevent_initial_call=True
+# )
+def check_proactive_ai_warnings_DISABLED(
     n_intervals,
     session_data,
     sim_time_data,
@@ -4674,11 +4725,20 @@ def check_proactive_ai_warnings(
     existing_messages
 ):
     """
-    Periodically check race state and generate AI-powered tactical warnings.
+    DISABLED: Periodically check race state and generate AI-powered tactical warnings.
     
     Runs every 5 seconds (configured in proactive-check-interval).
     Only generates warnings for significant tactical situations.
+    
+    NOTE: This callback is disabled in Phase 1 because:
+    1. LLM calls can take 2-5 seconds, blocking the UI
+    2. It conflicts with check_proactive_alerts (same interval)
+    3. Will be re-enabled with async processing in Phase 3
     """
+    proactive_logger.debug("[PROACTIVE-LLM] Callback disabled in Phase 1")
+    raise PreventUpdate
+    
+    # Original code preserved for Phase 3:
     if not session_data or not simulation_controller:
         raise PreventUpdate
     
@@ -4721,7 +4781,7 @@ def check_proactive_ai_warnings(
         return messages
         
     except Exception as e:
-        logger.debug(f"Proactive AI warning check failed: {e}")
+        proactive_logger.warning(f"[PROACTIVE-LLM] AI warning check failed: {e}")
         raise PreventUpdate
 
 
