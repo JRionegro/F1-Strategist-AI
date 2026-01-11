@@ -327,30 +327,48 @@ class RaceControlDashboard:
                 import re
                 message_upper = message_text.upper()
                 
-                # Build comprehensive search with word boundaries to avoid false positives
-                # like "COL" matching "COLLISION"
+                # === SMART DRIVER DETECTION ===
+                # Avoid false positives like "SECTOR 14", "TURN 14", "LAP 14"
+                # Only match driver numbers in driver-specific contexts
+                
                 search_patterns = []
                 
                 if driver_number:
-                    # Number-based patterns with word boundaries
+                    num = re.escape(driver_number)
+                    # Positive patterns - contexts where number IS a driver reference
                     search_patterns.extend([
-                        rf"\b{re.escape(driver_number)}\b",  # Standalone number
-                        rf"\({re.escape(driver_number)}\)",  # (43)
-                        rf"CAR\s+{re.escape(driver_number)}\b",
-                        rf"CARS\s+{re.escape(driver_number)}\b",
-                        rf"NO\.?\s+{re.escape(driver_number)}\b",
-                        rf"#{re.escape(driver_number)}\b"
+                        rf"\({num}\)",              # (14) - parentheses around number
+                        rf"CAR\s*{num}\b",          # CAR 14, CAR14
+                        rf"CARS?\s+.*{num}\b",      # CARS 14 AND 44
+                        rf"NO\.?\s*{num}\b",        # NO 14, NO. 14
+                        rf"#{num}\b",               # #14
+                        rf"DRIVER\s*{num}\b",       # DRIVER 14
                     ])
+                    
+                    # Match number only if NOT preceded by false-positive words
+                    # Use negative lookbehind for: SECTOR, TURN, LAP, DRS ZONE, CORNER
+                    false_positive_prefixes = (
+                        r"(?<!SECTOR\s)(?<!SECTOR)"
+                        r"(?<!TURN\s)(?<!TURN)"
+                        r"(?<!LAP\s)(?<!LAP)"
+                        r"(?<!ZONE\s)(?<!ZONE)"
+                        r"(?<!DRS\s)(?<!DRS)"
+                        r"(?<!CORNER\s)(?<!CORNER)"
+                        r"(?<!T)"  # T14 = Turn 14
+                        r"(?<!S)"  # S14 = Sector abbreviation
+                    )
+                    # This pattern matches standalone number NOT after false positives
+                    # But regex lookbehind must be fixed width, so we use a different approach
                 
                 if driver_code:
                     code_upper = driver_code.upper()
                     # Code-based patterns with strict boundaries
-                    # Only match if followed by: ), space, -, or end of string
+                    # Only match if followed by: ), space, -, comma, or end of string
                     # This prevents "COL" from matching "COLLISION"
                     search_patterns.extend([
-                        rf"\({re.escape(code_upper)}\)",  # (COL)
-                        rf"\b{re.escape(code_upper)}[\)\s\-]",  # COL) or COL or COL-
-                        rf"\b{re.escape(code_upper)}$"  # COL at end of message
+                        rf"\({re.escape(code_upper)}\)",     # (ALO)
+                        rf"\b{re.escape(code_upper)}[\)\s\-,]",  # ALO) or ALO or ALO-
+                        rf"\b{re.escape(code_upper)}$"       # ALO at end of message
                     ])
                 
                 if driver_last_name:
@@ -360,12 +378,55 @@ class RaceControlDashboard:
                 if driver_full_name:
                     search_patterns.append(rf"\b{re.escape(driver_full_name.upper())}\b")
                 
-                # Check if any pattern matches
+                # Check if any positive pattern matches
                 for pattern in search_patterns:
                     if re.search(pattern, message_upper):
                         is_focused_driver = True
-                        logger.info(f"[REGEX] Match found for pattern '{pattern}' in: {message_text}")
                         break
+                
+                # Secondary check: if number found but might be false positive
+                # Check for driver number with additional validation
+                if not is_focused_driver and driver_number:
+                    num = re.escape(driver_number)
+                    # Check if number appears in message
+                    if re.search(rf"\b{num}\b", message_upper):
+                        # Exclude if preceded by false-positive context words
+                        false_positives = [
+                            rf"SECTOR\s*{num}",
+                            rf"TURN\s*{num}",
+                            rf"LAP\s*{num}",
+                            rf"T{num}\b",           # T14 = Turn 14
+                            rf"S{num}\b",           # S14 = Sector 14
+                            rf"DRS\s*ZONE\s*{num}",
+                            rf"CORNER\s*{num}",
+                            rf"ZONE\s*{num}",
+                            rf"ROUND\s*{num}",
+                            rf"STAGE\s*{num}",
+                            rf"SESSION\s*{num}",
+                        ]
+                        
+                        is_false_positive = any(
+                            re.search(fp, message_upper) for fp in false_positives
+                        )
+                        
+                        if not is_false_positive:
+                            # Additional context: check if message seems driver-related
+                            driver_context_words = [
+                                'PIT', 'PENALTY', 'TIME', 'WARNING', 'INVESTIGATION',
+                                'INCIDENT', 'DELETED', 'TRACK LIMITS', 'OVERTAKE',
+                                'COLLISION', 'CONTACT', 'UNSAFE', 'RELEASE', 'JUMP',
+                                'START', 'GRID', 'POSITION', 'STOP', 'TYRE', 'TIRE',
+                                'STEWARD', 'BLACK', 'WHITE', 'FLAG', 'RETIRED',
+                                'STOPPED', 'SLOW', 'MECHANICAL', 'DAMAGE'
+                            ]
+                            
+                            has_driver_context = any(
+                                word in message_upper for word in driver_context_words
+                            )
+                            
+                            # Only highlight if message has driver-related context
+                            if has_driver_context:
+                                is_focused_driver = True
 
             # Color coding
             text_color = {
