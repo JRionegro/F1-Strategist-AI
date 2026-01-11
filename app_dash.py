@@ -698,10 +698,11 @@ def create_sidebar():
                         className="text-center mt-1 small text-muted"
                     ),
                     
-                    # Interval for updating simulation progress (3 seconds)
+                    # Interval for updating simulation progress
+                    # Base interval is 1.5 seconds, adjusted dynamically by speed
                     dcc.Interval(
                         id='simulation-interval',
-                        interval=3000,  # milliseconds (every 3 seconds)
+                        interval=1500,  # milliseconds (1.5 seconds base)
                         n_intervals=0,
                         disabled=True  # Start disabled, enable when playing
                     )
@@ -1076,6 +1077,7 @@ app.layout = dbc.Container([
     dcc.Store(id='cache-buster-store', data={'timestamp': 0}),
     dcc.Store(id='sidebar-visible-store', data=True),
     dcc.Store(id='simulation-time-store', data={'time': 0.0, 'timestamp': 0}),
+    dcc.Store(id='current-lap-store', data={'lap': 1, 'total': 57}),  # For fast lap updates
     dcc.Store(id='weather-last-update-store', data={'timestamp': 0, 'state': None}),
     
     # Telemetry comparison driver store
@@ -3241,6 +3243,7 @@ def update_dashboards(
                                     dbc.Col(
                                         html.Span(
                                             lap_info_text,
+                                            id="race-overview-lap-badge",  # ID for fast updates
                                             className="badge bg-danger ms-2",
                                             style={"fontSize": "0.85rem", "fontWeight": "normal"}
                                         ),
@@ -3250,7 +3253,7 @@ def update_dashboards(
                                 ], className="align-items-center g-0"),
                                 className="py-1"
                             ),
-                            dbc.CardBody(children=[overview_content], className="p-2")
+                            dbc.CardBody(children=[overview_content], className="p-2", id="race-overview-body")
                         ], className="mb-3", style={"height": "620px", "overflow": "auto"})
                     )
                     logger.info("Race overview dashboard rendered successfully")
@@ -3715,23 +3718,36 @@ def restart_simulation(n_clicks):
 # Callback: Change simulation speed
 @callback(
     Output('speed-slider', 'value'),
+    Output('simulation-interval', 'interval'),
     Input('speed-slider', 'value'),
     prevent_initial_call=True
 )
 def change_speed(speed):
-    """Change simulation playback speed."""
+    """Change simulation playback speed and adjust update interval."""
     global simulation_controller
+    
+    # Calculate optimal interval based on speed
+    # At high speeds, we need faster updates to keep UI in sync
+    # Base interval: 1500ms at 1x, decreasing at higher speeds
+    # Formula: interval = 1500 / sqrt(speed) to balance responsiveness and load
+    import math
+    base_interval = 1500
+    # Minimum 500ms to avoid overwhelming the browser
+    optimal_interval = max(500, int(base_interval / math.sqrt(float(speed))))
     
     if simulation_controller:
         try:
             simulation_controller.set_speed(float(speed))
-            logger.info(f"Simulation speed changed to {speed}x")
-            return speed
+            logger.info(
+                f"Simulation speed changed to {speed}x, "
+                f"interval adjusted to {optimal_interval}ms"
+            )
+            return speed, optimal_interval
         except ValueError as e:
             logger.error(f"Invalid speed value: {e}")
-            return 1.0
+            return 1.0, base_interval
     
-    return speed
+    return speed, optimal_interval
 
 
 # Callback: Handle lap jump buttons (forward/backward)
@@ -3839,15 +3855,25 @@ def update_simulation_progress(n_intervals, session_data):
 # The static display is functional and doesn't interfere with simulation playback
 
 
+# Track last dashboard update time (real-world time) to throttle updates
+_last_dashboard_update_time = 0.0
+_DASHBOARD_UPDATE_INTERVAL = 2.0  # Update dashboard every 2 real seconds
+
+
 @callback(
     Output('simulation-time-store', 'data'),
     Input('simulation-interval', 'n_intervals'),
     State('dashboard-selector', 'value'),
+    State('simulation-time-store', 'data'),
     prevent_initial_call=True
 )
-def update_simulation_time_store(n_intervals, selected_dashboards):
-    """Update simulation time store for all dashboards to consume."""
-    global simulation_controller
+def update_simulation_time_store(n_intervals, selected_dashboards, current_store):
+    """Update simulation time store for dashboard updates.
+    
+    This triggers the full dashboard refresh including gaps/intervals.
+    Throttled to update every 2 real seconds to prevent UI freezing.
+    """
+    global simulation_controller, _last_dashboard_update_time
     
     # Only update if race_overview dashboard is selected
     if not selected_dashboards or 'race_overview' not in selected_dashboards:
@@ -3862,14 +3888,32 @@ def update_simulation_time_store(n_intervals, selected_dashboards):
         raise PreventUpdate
     
     try:
+        # Throttle: only update dashboard every N real seconds
+        current_real_time = time.time()
+        time_since_last_update = current_real_time - _last_dashboard_update_time
+        
+        if time_since_last_update < _DASHBOARD_UPDATE_INTERVAL:
+            # Not enough real time has passed, skip this update
+            raise PreventUpdate
+        
+        # Update timestamp for throttling
+        _last_dashboard_update_time = current_real_time
+        
         # Get current simulation time
         simulation_time = simulation_controller.get_elapsed_seconds()
+        
+        logger.debug(
+            f"Dashboard update triggered: sim_time={simulation_time:.1f}s, "
+            f"real_interval={time_since_last_update:.1f}s"
+        )
         
         return {
             'time': simulation_time,
             'timestamp': n_intervals  # Force update even if time is same
         }
         
+    except PreventUpdate:
+        raise
     except Exception as e:
         logger.error(
             f"Error updating simulation time store: {e}",
@@ -3877,6 +3921,55 @@ def update_simulation_time_store(n_intervals, selected_dashboards):
         )
         raise PreventUpdate
 
+
+# Callback: Fast update for lap badge only (lightweight, runs on every interval)
+# This updates the lap counter immediately without regenerating the dashboard
+@callback(
+    Output('current-lap-store', 'data'),
+    Input('simulation-interval', 'n_intervals'),
+    State('session-store', 'data'),
+    prevent_initial_call=True
+)
+def update_current_lap_store(n_intervals, session_data):
+    """Update current lap store for fast badge updates."""
+    global simulation_controller
+    
+    if simulation_controller is None or not simulation_controller.is_playing:
+        raise PreventUpdate
+    
+    try:
+        # Get current lap from controller
+        current_lap = simulation_controller.get_current_lap()
+        total_laps = session_data.get('total_laps', 57) if session_data else 57
+        
+        # Convert OpenF1 lap to racing lap (lap 3 = racing lap 1)
+        racing_lap = max(1, current_lap - 2) if current_lap else 1
+        
+        return {
+            'lap': racing_lap,
+            'total': total_laps,
+            'timestamp': n_intervals
+        }
+    except Exception as e:
+        logger.error(f"Error updating lap store: {e}")
+        raise PreventUpdate
+
+
+# Callback: Update race overview lap badge independently (fast path)
+@callback(
+    Output('race-overview-lap-badge', 'children'),
+    Input('current-lap-store', 'data'),
+    prevent_initial_call=True
+)
+def update_lap_badge(lap_data):
+    """Update lap badge text quickly without regenerating dashboard."""
+    if not lap_data:
+        raise PreventUpdate
+    
+    lap = lap_data.get('lap', 1)
+    total = lap_data.get('total', 57)
+    
+    return f"Lap {lap}/{total}"
 
 
 # Callback: Update circuit map driver positions in real-time
