@@ -155,6 +155,149 @@ _llm_provider: Optional[LLMProvider] = None
 _llm_provider_type: Optional[str] = None  # 'hybrid', 'claude', 'gemini'
 
 
+# Circuit total laps lookup table (works for both LIVE and historical)
+# This is the authoritative source - matches official F1 race distances
+CIRCUIT_TOTAL_LAPS = {
+    "bahrain": 57,
+    "sakhir": 57,
+    "saudi": 50,
+    "jeddah": 50,
+    "australia": 58,
+    "melbourne": 58,
+    "japan": 53,
+    "suzuka": 53,
+    "china": 56,
+    "shanghai": 56,
+    "miami": 57,
+    "monaco": 78,
+    "monte carlo": 78,
+    "spain": 66,
+    "barcelona": 66,
+    "canada": 70,
+    "montreal": 70,
+    "austria": 71,
+    "spielberg": 71,
+    "britain": 52,
+    "silverstone": 52,
+    "hungary": 70,
+    "hungaroring": 70,
+    "belgium": 44,
+    "spa": 44,
+    "netherlands": 72,
+    "zandvoort": 72,
+    "italy": 53,
+    "monza": 53,
+    "singapore": 62,
+    "marina bay": 62,
+    "qatar": 57,
+    "lusail": 57,
+    "usa": 56,
+    "austin": 56,
+    "cota": 56,
+    "united states": 56,
+    "las vegas": 50,
+    "vegas": 50,
+    "mexico": 71,
+    "brazil": 71,
+    "interlagos": 71,
+    "sao paulo": 71,
+    "abu dhabi": 58,
+    "yas marina": 58,
+    "azerbaijan": 51,
+    "baku": 51,
+    "imola": 63,
+    "emilia": 63,
+}
+
+
+def _get_total_laps_for_circuit(circuit_name: str) -> int:
+    """
+    Get total racing laps for a circuit by name.
+    
+    Works for both LIVE and historical sessions by using
+    the circuit name lookup table.
+    
+    Args:
+        circuit_name: Circuit name (e.g., 'Las Vegas', 'Silverstone')
+    
+    Returns:
+        Total racing laps for the circuit, or 57 as default
+    """
+    if not circuit_name:
+        return 57
+    
+    circuit_lower = circuit_name.lower().strip()
+    
+    # Direct lookup
+    if circuit_lower in CIRCUIT_TOTAL_LAPS:
+        return CIRCUIT_TOTAL_LAPS[circuit_lower]
+    
+    # Partial match (e.g., "Las Vegas Street Circuit" -> "las vegas")
+    for key, laps in CIRCUIT_TOTAL_LAPS.items():
+        if key in circuit_lower or circuit_lower in key:
+            return laps
+    
+    logger.warning(
+        f"Unknown circuit '{circuit_name}', using default 57 laps"
+    )
+    return 57
+
+
+def _calculate_total_laps(session_obj, circuit_name: Optional[str] = None) -> int:
+    """
+    Calculate total racing laps for a session.
+    
+    Strategy:
+    1. If circuit_name provided, use lookup table (best for LIVE)
+    2. Try to get from session lap data (for historical/completed races)
+    3. Fall back to circuit lookup from session info
+    4. Default to 57
+    
+    Args:
+        session_obj: FastF1/OpenF1 session object
+        circuit_name: Optional circuit name for direct lookup
+    
+    Returns:
+        Total racing laps (int)
+    """
+    # Priority 1: Use circuit name if provided
+    if circuit_name:
+        laps = _get_total_laps_for_circuit(circuit_name)
+        if laps != 57:  # Found a match
+            return laps
+    
+    # Priority 2: Try to get circuit from session and use lookup
+    try:
+        if session_obj:
+            # Try to get circuit name from session
+            session_circuit = None
+            if hasattr(session_obj, 'event') and session_obj.event is not None:
+                if hasattr(session_obj.event, 'Location'):
+                    session_circuit = session_obj.event.Location
+                elif hasattr(session_obj.event, 'CircuitName'):
+                    session_circuit = session_obj.event.CircuitName
+            
+            if session_circuit:
+                laps = _get_total_laps_for_circuit(session_circuit)
+                if laps != 57:
+                    return laps
+            
+            # Priority 3: Calculate from actual lap data (historical only)
+            if hasattr(session_obj, 'laps') and not session_obj.laps.empty:
+                max_lap = session_obj.laps['LapNumber'].max()
+                if pd.notna(max_lap) and max_lap > 10:
+                    # Subtract 2 for formation laps
+                    calculated = max(1, int(max_lap) - 2)
+                    logger.info(
+                        f"Calculated total_laps from data: {calculated}"
+                    )
+                    return calculated
+    except Exception as e:
+        logger.warning(f"Error calculating total_laps: {e}")
+    
+    return 57  # Default fallback
+
+
 def get_llm_provider() -> Optional[LLMProvider]:
     """
     Get or initialize the LLM provider (singleton).
@@ -1682,7 +1825,11 @@ def update_drivers(session, circuit_key, year):
             'drivers': {
                 opt['value']: opt['label'] for opt in driver_options
             },
-            'total_laps': session_info.get('total_laps', 57)
+            'total_laps': _calculate_total_laps(
+                session_obj,
+                str(session_info.get('circuit_short_name')
+                    or session_info.get('location') or '')
+            )
         }
     
     except Exception as e:
@@ -3587,9 +3734,10 @@ def handle_lap_jumps(back_clicks, forward_clicks, current_time_data):
 @callback(
     Output('simulation-progress', 'children'),
     Input('simulation-interval', 'n_intervals'),
+    State('session-store', 'data'),
     prevent_initial_call=False
 )
-def update_simulation_progress(n_intervals):
+def update_simulation_progress(n_intervals, session_data):
     """Update the simulation progress display in real-time."""
     global simulation_controller
     
@@ -3614,7 +3762,8 @@ def update_simulation_progress(n_intervals):
         # Convert to VISUAL racing lap
         # OpenF1 has 2 laps before racing starts (lap 3 = racing lap 1)
         visual_lap = max(1, current_lap - 2)
-        total_laps = 57  # 57 racing laps
+        # Get total_laps from session_data (calculated from actual race data)
+        total_laps = session_data.get('total_laps', 57) if session_data else 57
         
         logger.info(f"Visual racing lap: {visual_lap}/{total_laps}")
         

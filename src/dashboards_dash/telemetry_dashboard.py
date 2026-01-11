@@ -170,15 +170,15 @@ class TelemetryDashboard:
                                     (comp_driver_num, comp_telemetry)
                                 )
 
-            # Create visualization
-            fig = self._create_telemetry_figure(drivers_to_plot)
-
             # Get driver info for display
             driver_info = self._get_driver_info(focus_driver_num)
             driver_name = driver_info.get('name', f"Driver {focus_driver_num}")
             # Convert OpenF1 lap to racing lap (OpenF1 lap 3 = racing lap 1)
             openf1_lap = lap_data.get('LapNumber', 3)
-            lap_number = max(1, openf1_lap - 2) if openf1_lap else 'N/A'
+            racing_lap = max(1, openf1_lap - 2) if openf1_lap else 1
+
+            # Create visualization (pass racing_lap for DRS rule validation)
+            fig = self._create_telemetry_figure(drivers_to_plot, racing_lap)
 
             return dbc.Card(
                 [
@@ -188,7 +188,7 @@ class TelemetryDashboard:
                                 [
                                     "📊 Telemetry",
                                     html.Span(
-                                        f" - {driver_name} (Lap {lap_number})",
+                                        f" - {driver_name} (Lap {racing_lap})",
                                         className="text-muted ms-2",
                                         style={"fontSize": "0.8rem"}
                                     ),
@@ -376,11 +376,20 @@ class TelemetryDashboard:
                 TelemetryDashboard._failed_lap_requests[cache_key] = time.time()
                 return None
             
-            print(
-                f"✅ TELEMETRY API: Got {len(car_data)} points for "
-                f"lap {lap_number}",
-                flush=True
-            )
+            # Debug: Check DRS data
+            if 'DRS' in car_data.columns:
+                drs_active_count = (car_data['DRS'] >= 10).sum()
+                print(
+                    f"✅ TELEMETRY API: Got {len(car_data)} points for "
+                    f"lap {lap_number} | DRS active: {drs_active_count} points",
+                    flush=True
+                )
+            else:
+                print(
+                    f"✅ TELEMETRY API: Got {len(car_data)} points for "
+                    f"lap {lap_number} | ⚠️ No DRS column",
+                    flush=True
+                )
             
             # Process data: calculate distance and downsample
             car_data = self._calculate_distance(car_data)
@@ -521,13 +530,15 @@ class TelemetryDashboard:
 
     def _create_telemetry_figure(
         self,
-        drivers_data: List[tuple]
+        drivers_data: List[tuple],
+        racing_lap: int = 1
     ) -> go.Figure:
         """
         Create telemetry visualization with stacked charts.
 
         Args:
             drivers_data: List of (driver_number, telemetry_df) tuples
+            racing_lap: Current racing lap number (1-based, excludes formation)
         """
         # Create subplots: Speed, Throttle, Brake, Gear
         fig = make_subplots(
@@ -568,8 +579,9 @@ class TelemetryDashboard:
                 )
 
                 # Add DRS zones as colored bands (only for first driver)
+                # F1 Rule: DRS is enabled after completing 2 racing laps
                 if idx == 0 and 'DRS' in telemetry.columns:
-                    self._add_drs_zones(fig, telemetry, x_data)
+                    self._add_drs_zones(fig, telemetry, x_data, racing_lap)
 
             # Throttle trace
             if 'Throttle' in telemetry.columns:
@@ -688,16 +700,46 @@ class TelemetryDashboard:
         self,
         fig: go.Figure,
         telemetry: pd.DataFrame,
-        x_data: pd.Series
+        x_data: pd.Series,
+        racing_lap: int = 1
     ) -> None:
-        """Add DRS activation zones as colored bands on speed chart."""
+        """Add DRS activation zones as colored bands on speed chart.
+        
+        F1 Rule: DRS is enabled after completing 2 racing laps.
+        
+        OpenF1 DRS values:
+        - 0, 1: DRS off
+        - 8: Detected, eligible once in activation zone
+        - 10, 12, 14: DRS on (wing open)
+        
+        Args:
+            racing_lap: Current racing lap (1-based). DRS shown only if lap >= 3.
+        """
         if 'DRS' not in telemetry.columns:
+            logger.debug("DRS column not found in telemetry data")
             return
 
-        # Find DRS activation zones (DRS > 0 or DRS >= 10 depending on API)
-        drs_active = telemetry['DRS'] >= 10  # DRS >= 10 means open
+        # F1 Rule: DRS is NOT enabled in the first 2 racing laps
+        # (formation lap doesn't count, so racing laps 1-2 have no DRS)
+        if racing_lap < 3:
+            logger.info(
+                f"🚫 DRS disabled: Racing lap {racing_lap} < 3 "
+                "(F1 rule: DRS enabled after 2 completed laps)"
+            )
+            return
+
+        # Debug: log DRS values
+        drs_values = telemetry['DRS'].unique()
+        drs_count = (telemetry['DRS'] >= 10).sum()
+        logger.info(f"🔍 DRS DEBUG: Racing lap {racing_lap}, "
+                    f"Unique values={sorted(drs_values)}, "
+                    f"Count>=10: {drs_count}/{len(telemetry)}")
+
+        # Find DRS activation zones (DRS >= 10 means wing open)
+        drs_active = telemetry['DRS'] >= 10
 
         if not drs_active.any():
+            logger.info("🔍 DRS DEBUG: No DRS activation (all False)")
             return
 
         # Find start and end of each DRS zone
@@ -705,25 +747,56 @@ class TelemetryDashboard:
         starts = x_data[drs_changes == 1].tolist()
         ends = x_data[drs_changes == -1].tolist()
 
+        logger.info(f"🔍 DRS DEBUG: diff found {len(starts)} starts, "
+                    f"{len(ends)} ends")
+        logger.info(f"🔍 DRS DEBUG: drs_active.iloc[0]={drs_active.iloc[0]}, "
+                    f"drs_active.iloc[-1]={drs_active.iloc[-1]}")
+
         # Handle edge cases
         if drs_active.iloc[0]:
             starts.insert(0, x_data.iloc[0])
+            logger.info("🔍 DRS DEBUG: Added start at beginning (edge case)")
         if drs_active.iloc[-1]:
             ends.append(x_data.iloc[-1])
+            logger.info("🔍 DRS DEBUG: Added end at end (edge case)")
 
-        # Add shapes for DRS zones (on first subplot only)
-        for start, end in zip(starts, ends):
+        logger.info(f"Adding {len(starts)} DRS zones to telemetry chart")
+
+        # Get the y-axis range for speed (first subplot)
+        speed_data = telemetry['Speed']
+        y_min = speed_data.min() * 0.95 if not speed_data.empty else 0
+        y_max = speed_data.max() * 1.05 if not speed_data.empty else 350
+
+        # Add shapes for DRS zones (on first subplot - Speed)
+        for i, (start, end) in enumerate(zip(starts, ends)):
+            # Green band covering full height of speed chart
             fig.add_shape(
                 type="rect",
                 x0=start,
                 x1=end,
-                y0=0,
-                y1=1,
-                yref="paper",
-                fillcolor="rgba(0, 255, 0, 0.15)",
+                y0=y_min,
+                y1=y_max,
+                xref="x",
+                yref="y",
+                fillcolor="rgba(0, 200, 83, 0.25)",
                 layer="below",
-                line_width=0,
-                row=1, col=1
+                line=dict(color="rgba(0, 200, 83, 0.6)", width=1),
+            )
+
+            # Add "DRS" label annotation at the center of each zone
+            zone_center = (start + end) / 2
+            fig.add_annotation(
+                x=zone_center,
+                y=y_max * 0.95,
+                xref="x",
+                yref="y",
+                text="DRS",
+                showarrow=False,
+                font=dict(size=10, color="#00C853", family="Arial Black"),
+                bgcolor="rgba(0, 0, 0, 0.6)",
+                bordercolor="#00C853",
+                borderwidth=1,
+                borderpad=3,
             )
 
     def _render_placeholder(self) -> dbc.Card:
