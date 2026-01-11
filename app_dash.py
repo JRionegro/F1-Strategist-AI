@@ -3224,9 +3224,32 @@ def update_dashboards(
                         session_start_time=session_start_time,
                         current_lap=overview_current_lap
                     )
+                    
+                    # Build lap info for header
+                    total_laps = session_data.get('total_laps', 57) if session_data else 57
+                    racing_lap = max(1, overview_current_lap - 2) if overview_current_lap else 1
+                    lap_info_text = f"Lap {racing_lap}/{total_laps}"
+                    
                     dashboards.append(
                         dbc.Card([
-                            dbc.CardHeader(html.H5("🏁 Race Overview", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
+                            dbc.CardHeader(
+                                dbc.Row([
+                                    dbc.Col(
+                                        html.H5("🏁 Race Overview", className="mb-0", style={"fontSize": "1.2rem"}),
+                                        width="auto"
+                                    ),
+                                    dbc.Col(
+                                        html.Span(
+                                            lap_info_text,
+                                            className="badge bg-danger ms-2",
+                                            style={"fontSize": "0.85rem", "fontWeight": "normal"}
+                                        ),
+                                        width="auto",
+                                        className="ms-auto"
+                                    ),
+                                ], className="align-items-center g-0"),
+                                className="py-1"
+                            ),
                             dbc.CardBody(children=[overview_content], className="p-2")
                         ], className="mb-3", style={"height": "620px", "overflow": "auto"})
                     )
