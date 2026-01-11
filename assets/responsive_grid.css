@@ -99,3 +99,48 @@
         height: auto;
     }
 }
+
+/* ============================================================================
+   DARK MODE DROPDOWN STYLES (for Telemetry comparison selector)
+   ============================================================================ */
+
+.dash-dropdown-dark .Select-control {
+    background-color: #2d2d2d !important;
+    border-color: #444 !important;
+    color: #fff !important;
+}
+
+.dash-dropdown-dark .Select-menu-outer {
+    background-color: #2d2d2d !important;
+    border-color: #444 !important;
+}
+
+.dash-dropdown-dark .Select-option {
+    background-color: #2d2d2d !important;
+    color: #fff !important;
+}
+
+.dash-dropdown-dark .Select-option:hover,
+.dash-dropdown-dark .Select-option.is-focused {
+    background-color: #444 !important;
+}
+
+.dash-dropdown-dark .Select-value-label,
+.dash-dropdown-dark .Select-placeholder {
+    color: #ccc !important;
+}
+
+.dash-dropdown-dark .Select-input input {
+    color: #fff !important;
+}
+
+.dash-dropdown-dark .Select-clear-zone,
+.dash-dropdown-dark .Select-arrow-zone {
+    color: #888 !important;
+}
+
+/* Dropdown in telemetry header - compact style */
+#telemetry-comparison-driver {
+    min-width: 160px;
+    max-width: 220px;
+}

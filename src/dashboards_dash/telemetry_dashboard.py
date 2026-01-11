@@ -17,7 +17,7 @@ Features:
 
 import logging
 import time
-from typing import Optional, List, Any, Dict
+from typing import Optional, List, Any, Dict, Sequence
 from datetime import timedelta
 
 import pandas as pd
@@ -81,9 +81,9 @@ class TelemetryDashboard:
         simulation_time: Optional[float] = None,
         session_start_time: Optional[pd.Timestamp] = None,
         focused_driver: Optional[str] = None,
-        comparison_drivers: Optional[List[str]] = None,
+        comparison_driver: Optional[str] = None,
         current_lap: Optional[int] = None,
-        driver_options: Optional[List[Any]] = None
+        driver_options: Optional[List[Dict[str, Any]]] = None
     ) -> dbc.Card:
         """
         Render the Telemetry Dashboard.
@@ -93,9 +93,9 @@ class TelemetryDashboard:
             simulation_time: Current simulation time in seconds
             session_start_time: Session start timestamp
             focused_driver: Driver number as string (focus driver)
-            comparison_drivers: List of driver numbers for comparison
+            comparison_driver: Driver to compare against (single driver)
             current_lap: Current lap number from simulation
-            driver_options: List of driver options for dropdowns
+            driver_options: List of driver options for comparison dropdown
 
         Returns:
             Dash Card component with telemetry visualization
@@ -143,32 +143,33 @@ class TelemetryDashboard:
             # Build driver list for visualization
             drivers_to_plot = [(focus_driver_num, telemetry_data)]
             
-            # Add comparison drivers if specified
-            if comparison_drivers:
-                for comp_driver in comparison_drivers[:2]:
-                    if comp_driver and comp_driver != focused_driver:
-                        comp_driver_num = self._parse_driver_number(comp_driver)
-                        if comp_driver_num is None:
-                            continue
-                        comp_lap = self._get_driver_last_lap(
+            # Add comparison driver if specified
+            comparison_driver_info = None
+            if comparison_driver and comparison_driver != focused_driver:
+                comp_driver_num = self._parse_driver_number(comparison_driver)
+                if comp_driver_num is not None:
+                    comp_lap = self._get_driver_last_lap(
+                        comp_driver_num,
+                        simulation_time,
+                        session_start_time,
+                        current_lap
+                    )
+                    if comp_lap is not None:
+                        comp_telemetry = self._fetch_lap_telemetry(
+                            session_key,
                             comp_driver_num,
-                            simulation_time,
-                            session_start_time,
-                            current_lap
+                            comp_lap
                         )
-                        if comp_lap is not None:
-                            comp_telemetry = self._fetch_lap_telemetry(
-                                session_key,
-                                comp_driver_num,
-                                comp_lap
+                        if (
+                            comp_telemetry is not None and
+                            not comp_telemetry.empty
+                        ):
+                            drivers_to_plot.append(
+                                (comp_driver_num, comp_telemetry)
                             )
-                            if (
-                                comp_telemetry is not None and
-                                not comp_telemetry.empty
-                            ):
-                                drivers_to_plot.append(
-                                    (comp_driver_num, comp_telemetry)
-                                )
+                            comparison_driver_info = self._get_driver_info(
+                                comp_driver_num
+                            )
 
             # Get driver info for display
             driver_info = self._get_driver_info(focus_driver_num)
@@ -180,23 +181,68 @@ class TelemetryDashboard:
             # Create visualization (pass racing_lap for DRS rule validation)
             fig = self._create_telemetry_figure(drivers_to_plot, racing_lap)
 
+            # Build comparison dropdown options (exclude focus driver)
+            comparison_options = []
+            if driver_options:
+                comparison_options = [
+                    opt for opt in driver_options
+                    if opt.get('value') != focused_driver
+                ]
+
+            # Build subtitle with comparison info
+            subtitle_text = f" - {driver_name} (Lap {racing_lap})"
+            if comparison_driver_info:
+                comp_name = comparison_driver_info.get(
+                    'name', f"Driver {comparison_driver}"
+                )
+                subtitle_text += f" vs {comp_name}"
+
             return dbc.Card(
                 [
                     dbc.CardHeader(
                         [
-                            html.H4(
+                            dbc.Row(
                                 [
-                                    "📊 Telemetry",
-                                    html.Span(
-                                        f" - {driver_name} (Lap {racing_lap})",
-                                        className="text-muted ms-2",
-                                        style={"fontSize": "0.8rem"}
+                                    dbc.Col(
+                                        html.H4(
+                                            [
+                                                "📊 Telemetry",
+                                                html.Span(
+                                                    subtitle_text,
+                                                    className="text-muted ms-2",
+                                                    style={"fontSize": "0.8rem"}
+                                                ),
+                                            ],
+                                            className="mb-0",
+                                            style={"fontSize": "0.9rem"}
+                                        ),
+                                        width="auto",
+                                        className="d-flex align-items-center"
+                                    ),
+                                    dbc.Col(
+                                        dcc.Dropdown(
+                                            id='telemetry-comparison-driver',
+                                            options=comparison_options,  # type: ignore[arg-type]
+                                            value=comparison_driver,
+                                            placeholder="Compare with...",
+                                            clearable=True,
+                                            style={
+                                                'fontSize': '11px',
+                                                'fontFamily': 'monospace',
+                                                'minWidth': '180px',
+                                                'backgroundColor': '#2d2d2d',
+                                            },
+                                            className="dash-dropdown-dark"
+                                        ),
+                                        width="auto",
+                                        className="ms-auto"
                                     ),
                                 ],
-                                className="mb-0",
-                                style={"fontSize": "0.9rem"}
+                                className="g-0 align-items-center",
+                                style={"flexWrap": "nowrap"}
                             )
-                        ]
+                        ],
+                        style={"padding": "0.5rem 1rem"}
                     ),
                     dbc.CardBody(
                         [
@@ -207,7 +253,7 @@ class TelemetryDashboard:
                                     "responsive": True,
                                     "displayModeBar": False
                                 },
-                                style={"height": "580px"}
+                                style={"height": "560px"}
                             ),
                         ],
                         className="p-0",
@@ -798,6 +844,26 @@ class TelemetryDashboard:
                 borderwidth=1,
                 borderpad=3,
             )
+
+        # Add legend entry for DRS zones (Focus Driver only)
+        # Using a dummy scatter trace with matching color
+        fig.add_trace(
+            go.Scatter(
+                x=[None],
+                y=[None],
+                mode='markers',
+                marker=dict(
+                    size=12,
+                    color="rgba(0, 200, 83, 0.5)",
+                    symbol="square",
+                    line=dict(color="#00C853", width=1)
+                ),
+                name="DRS (Focus)",
+                showlegend=True,
+                legendgroup="drs_legend"
+            ),
+            row=1, col=1
+        )
 
     def _render_placeholder(self) -> dbc.Card:
         """Render placeholder when no session loaded."""

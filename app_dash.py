@@ -1078,6 +1078,9 @@ app.layout = dbc.Container([
     dcc.Store(id='simulation-time-store', data={'time': 0.0, 'timestamp': 0}),
     dcc.Store(id='weather-last-update-store', data={'timestamp': 0, 'state': None}),
     
+    # Telemetry comparison driver store
+    dcc.Store(id='telemetry-comparison-store', data={'driver': None}),
+    
     # AI Chat stores
     dcc.Store(id='chat-messages-store', storage_type='memory', data=[]),
     dcc.Store(id='chat-pending-query-store', data={'query': None, 'quick': None}),
@@ -3072,6 +3075,7 @@ def handle_document_editor(
     Input('session-store', 'data'),
     Input('simulation-time-store', 'data'),  # Real-time updates
     Input('chat-messages-store', 'data'),  # Chat messages for AI dashboard
+    Input('telemetry-comparison-store', 'data'),  # Telemetry comparison driver
     State('driver-selector', 'value'),
     State('circuit-selector', 'value'),
     State('circuit-selector', 'options'),
@@ -3083,6 +3087,7 @@ def update_dashboards(
     session_data,
     simulation_time_data,
     chat_messages,
+    telemetry_comparison_data,
     focused_driver,
     selected_circuit,
     circuit_options,
@@ -3422,12 +3427,28 @@ def update_dashboards(
                         logger.warning(f"Could not get lap: {e}")
                         current_lap = None
                 
+                # Get comparison driver from store
+                comparison_driver = None
+                if telemetry_comparison_data:
+                    comparison_driver = telemetry_comparison_data.get('driver')
+                
+                # Build driver options for comparison dropdown
+                driver_options = []
+                if session_data and session_data.get('drivers'):
+                    drivers_dict = session_data.get('drivers', {})
+                    driver_options = [
+                        {'label': label, 'value': value}
+                        for value, label in drivers_dict.items()
+                    ]
+                
                 telemetry_content = telemetry_dashboard.render(
                     session_key=session_key,
                     simulation_time=simulation_time,
                     session_start_time=session_start_time,
                     focused_driver=focused_driver if focused_driver != 'none' else None,
-                    current_lap=current_lap
+                    comparison_driver=comparison_driver,
+                    current_lap=current_lap,
+                    driver_options=driver_options
                 )
                 dashboards.append(telemetry_content)
                 logger.info("Telemetry dashboard rendered successfully")
@@ -4778,6 +4799,21 @@ def generate_ai_response(
             'error': 'No LLM API key configured'
         }
     }
+
+
+# ============================================================================
+# TELEMETRY COMPARISON DRIVER CALLBACK
+# ============================================================================
+
+@callback(
+    Output('telemetry-comparison-store', 'data'),
+    Input('telemetry-comparison-driver', 'value'),
+    prevent_initial_call=True
+)
+def update_telemetry_comparison(comparison_driver):
+    """Update the comparison driver for telemetry dashboard."""
+    logger.info(f"Telemetry comparison driver changed to: {comparison_driver}")
+    return {'driver': comparison_driver}
 
 
 if __name__ == '__main__':
