@@ -776,6 +776,8 @@ class RaceControlDashboard:
             Dict with race control summary:
             {
                 'flag': 'GREEN',  # GREEN, YELLOW, RED, SC, VSC
+                'safety_car': True/False,
+                'virtual_safety_car': True/False,
                 'recent_events': ['VSC ENDING', 'PIT LANE OPEN'],
                 'penalties': ['HAM - 5s Time Penalty'],
                 'incidents': ['Turn 4 - VER off track']
@@ -787,55 +789,105 @@ class RaceControlDashboard:
         
         messages = self._cached_messages
         
+        # Determine time column (OpenF1 provider renames 'date' to 'Time')
+        time_col = 'Time' if 'Time' in messages.columns else 'Timestamp'
+        
         # Filter messages by simulation time
         current_timestamp = session_start_time + pd.Timedelta(seconds=simulation_time)
-        filtered_messages = messages[messages['Timestamp'] <= current_timestamp]
+        try:
+            filtered_messages = messages[messages[time_col] <= current_timestamp]
+        except Exception as e:
+            logger.warning(f"Error filtering messages by time: {e}")
+            filtered_messages = messages
         
         if filtered_messages.empty:
             return {
                 'flag': 'GREEN',
+                'safety_car': False,
+                'virtual_safety_car': False,
                 'recent_events': [],
                 'penalties': [],
                 'incidents': []
             }
         
-        # Determine current flag status
+        # Determine current flag status from recent messages
         flag = 'GREEN'
-        for _, msg in filtered_messages.sort_values('Timestamp', ascending=False).head(10).iterrows():
-            category = msg['Category']
-            message = msg['Message']
+        safety_car = False
+        virtual_safety_car = False
+        
+        # Check last 15 messages for SC/VSC status
+        recent_sorted = filtered_messages.sort_values(time_col, ascending=False).head(15)
+        
+        for _, msg in recent_sorted.iterrows():
+            category = str(msg.get('Category', '')).upper()
+            message = str(msg.get('Message', '')).upper()
             
-            if 'RED FLAG' in message or category == 'RedFlag':
+            # Check for RED FLAG
+            if 'RED FLAG' in message or 'REDFLAG' in category:
                 flag = 'RED'
                 break
-            elif 'SAFETY CAR' in message and 'ENDING' not in message:
+            
+            # Check for SAFETY CAR (deployed, not ending)
+            sc_patterns = ['SAFETY CAR DEPLOYED', 'SAFETY CAR IN THIS LAP',
+                          'SAFETYCAR', 'SC DEPLOYED', 'THE SAFETY CAR']
+            sc_ending = ['ENDING', 'IN THIS LAP', 'WITHDRAW']
+            
+            is_sc_deployed = any(p in message for p in sc_patterns)
+            is_sc_ending = any(e in message for e in sc_ending)
+            
+            if is_sc_deployed and not is_sc_ending:
                 flag = 'SC'
+                safety_car = True
                 break
-            elif 'VIRTUAL SAFETY CAR' in message and 'ENDING' not in message:
+            elif 'SAFETY CAR' in message and is_sc_ending:
+                # SC ending - track is going green
+                flag = 'GREEN'
+                break
+            
+            # Check for VIRTUAL SAFETY CAR
+            vsc_patterns = ['VIRTUAL SAFETY CAR', 'VSC DEPLOYED', 'VSC ']
+            is_vsc = any(p in message for p in vsc_patterns)
+            
+            if is_vsc and not is_sc_ending:
                 flag = 'VSC'
+                virtual_safety_car = True
                 break
-            elif 'YELLOW' in message or category == 'Flag':
+            elif 'VSC' in message and is_sc_ending:
+                flag = 'GREEN'
+                break
+            
+            # Check for YELLOW
+            if 'YELLOW' in message or category == 'FLAG':
                 flag = 'YELLOW'
-                break
+                # Don't break - keep looking for SC/VSC
         
         # Get recent events (last 5 messages)
         recent_events = []
-        for _, msg in filtered_messages.sort_values('Timestamp', ascending=False).head(5).iterrows():
-            recent_events.append(msg['Message'])
+        for _, msg in recent_sorted.head(5).iterrows():
+            msg_text = msg.get('Message', '')
+            if msg_text:
+                recent_events.append(str(msg_text))
         
         # Get penalties and incidents
         penalties = []
         incidents = []
         for _, msg in filtered_messages.iterrows():
-            message = msg['Message']
-            if 'PENALTY' in message.upper() or 'TIME' in message.upper():
-                penalties.append(message)
-            elif 'OFF TRACK' in message.upper() or 'INCIDENT' in message.upper():
-                incidents.append(message)
+            message = str(msg.get('Message', '')).upper()
+            if 'PENALTY' in message or 'TIME PENALTY' in message:
+                penalties.append(msg.get('Message', ''))
+            elif 'OFF TRACK' in message or 'INCIDENT' in message:
+                incidents.append(msg.get('Message', ''))
+        
+        logger.debug(
+            f"Race control status: flag={flag}, SC={safety_car}, "
+            f"VSC={virtual_safety_car}, recent_events={len(recent_events)}"
+        )
         
         return {
             'flag': flag,
+            'safety_car': safety_car,
+            'virtual_safety_car': virtual_safety_car,
             'recent_events': recent_events,
-            'penalties': penalties[-3:] if penalties else [],  # Last 3 penalties
-            'incidents': incidents[-3:] if incidents else []   # Last 3 incidents
+            'penalties': penalties[-3:] if penalties else [],
+            'incidents': incidents[-3:] if incidents else []
         }

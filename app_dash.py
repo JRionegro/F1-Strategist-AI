@@ -4514,11 +4514,49 @@ def format_race_snapshot_for_ai(snapshot: dict) -> str:
         return f"⚠️ **No race data available**: {snapshot['error']}"
     
     lines = []
+    
+    # Check for Safety Car or VSC FIRST - this is critical info!
+    race_control = snapshot.get('race_control', {})
+    safety_car_active = race_control.get('safety_car', False)
+    vsc_active = race_control.get('virtual_safety_car', False)
+    flag = race_control.get('flag', 'GREEN')
+    
+    # PROMINENT SC/VSC WARNING AT THE TOP
+    if safety_car_active or flag == 'SC':
+        lines.append("## 🚨🚨🚨 SAFETY CAR DEPLOYED 🚨🚨🚨")
+        lines.append("")
+        lines.append("**⚠️ CRITICAL: The Safety Car is currently on track!**")
+        lines.append("- **Pit window is OPEN** - Gap to cars behind is minimized")
+        lines.append("- All drivers can pit with minimal time loss")
+        lines.append("- Field is bunched up - positions will be closer on restart")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+    elif vsc_active or flag == 'VSC':
+        lines.append("## 🟡🟡🟡 VIRTUAL SAFETY CAR ACTIVE 🟡🟡🟡")
+        lines.append("")
+        lines.append("**⚠️ VSC is deployed - speeds are reduced**")
+        lines.append("- Pit stop time loss is reduced (~5-7 seconds)")
+        lines.append("- Good opportunity to pit if strategy allows")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+    elif flag == 'RED':
+        lines.append("## 🔴🔴🔴 RED FLAG 🔴🔴🔴")
+        lines.append("")
+        lines.append("**Race is stopped. All cars must return to pit lane.**")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+    
     lines.append("## 🏁 CURRENT RACE STATE")
     lines.append("")
     
     # Race info
-    lines.append(f"**Race**: {snapshot.get('race_name', 'Unknown')} - {snapshot.get('session_type', 'Race')}")
+    lines.append(
+        f"**Race**: {snapshot.get('race_name', 'Unknown')} - "
+        f"{snapshot.get('session_type', 'Race')}"
+    )
     lines.append(f"**Lap**: {snapshot.get('lap', '?')}/{snapshot.get('total_laps', '?')}")
     lines.append("")
     
@@ -4574,16 +4612,12 @@ def format_race_snapshot_for_ai(snapshot: dict) -> str:
             lines.append(f"- **⚠️ RAINFALL DETECTED**")
         lines.append("")
     
-    # Race control
-    race_control = snapshot.get('race_control', {})
+    # Race control - show recent events (SC/VSC already shown at top)
     if 'error' not in race_control:
-        flag = race_control.get('flag', 'GREEN')
-        lines.append(f"### 🚦 Race Control: **{flag} FLAG**")
-        
         recent_events = race_control.get('recent_events', [])
         if recent_events:
-            lines.append("**Recent events**:")
-            for event in recent_events[:3]:  # Only last 3
+            lines.append("### 🚦 Recent Race Control Messages")
+            for event in recent_events[:3]:
                 lines.append(f"- {event}")
         lines.append("")
     
