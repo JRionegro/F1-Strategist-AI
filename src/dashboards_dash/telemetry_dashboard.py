@@ -28,7 +28,10 @@ from dash import dcc, html
 import dash_bootstrap_components as dbc
 import fastf1
 
-logger = logging.getLogger(__name__)
+from src.utils.logging_config import get_logger, LogCategory
+
+# Use categorized logger for telemetry
+logger = get_logger(LogCategory.TELEMETRY)
 
 # TTL for failed sessions cache (5 minutes)
 FAILED_SESSION_TTL_SECONDS = 300
@@ -363,10 +366,9 @@ class TelemetryDashboard:
         lap_start = lap_data.get('LapStartTime')
         lap_end = lap_data.get('LapEndTime')
         
-        print(
-            f"📊 TELEMETRY DEBUG: Lap {lap_number} start={lap_start}, "
-            f"end={lap_end}",
-            flush=True
+        logger.debug(
+            f"📊 TELEMETRY: Lap {lap_number} start={lap_start}, "
+            f"end={lap_end}"
         )
         
         if pd.isna(lap_start):
@@ -399,10 +401,9 @@ class TelemetryDashboard:
             else:
                 date_end = str(lap_end).replace('+00:00', '')
         
-        print(
+        logger.debug(
             f"🌐 TELEMETRY API: Fetching driver {driver_number}, "
-            f"lap {lap_number}: {date_start} to {date_end}",
-            flush=True
+            f"lap {lap_number}: {date_start} to {date_end}"
         )
         
         try:
@@ -414,10 +415,9 @@ class TelemetryDashboard:
             )
             
             if car_data is None or car_data.empty:
-                print(
+                logger.debug(
                     f"❌ TELEMETRY API: No data returned for driver "
-                    f"{driver_number} lap {lap_number}",
-                    flush=True
+                    f"{driver_number} lap {lap_number}"
                 )
                 TelemetryDashboard._failed_lap_requests[cache_key] = time.time()
                 return None
@@ -425,16 +425,14 @@ class TelemetryDashboard:
             # Debug: Check DRS data
             if 'DRS' in car_data.columns:
                 drs_active_count = (car_data['DRS'] >= 10).sum()
-                print(
+                logger.debug(
                     f"✅ TELEMETRY API: Got {len(car_data)} points for "
-                    f"lap {lap_number} | DRS active: {drs_active_count} points",
-                    flush=True
+                    f"lap {lap_number} | DRS active: {drs_active_count} points"
                 )
             else:
-                print(
+                logger.debug(
                     f"✅ TELEMETRY API: Got {len(car_data)} points for "
-                    f"lap {lap_number} | ⚠️ No DRS column",
-                    flush=True
+                    f"lap {lap_number} | ⚠️ No DRS column"
                 )
             
             # Process data: calculate distance and downsample
@@ -459,7 +457,7 @@ class TelemetryDashboard:
     ) -> Optional[dict]:
         """Get the last completed lap for a driver."""
         if self._cached_laps is None or self._cached_laps.empty:
-            print(f"🚫 TELEMETRY DEBUG: No cached laps available", flush=True)
+            logger.debug("🚫 TELEMETRY: No cached laps available")
             return None
 
         driver_laps = self._cached_laps[
@@ -467,16 +465,14 @@ class TelemetryDashboard:
         ].copy()
 
         if driver_laps.empty:
-            print(
-                f"🚫 TELEMETRY DEBUG: No laps for driver {driver_number}",
-                flush=True
+            logger.debug(
+                f"🚫 TELEMETRY: No laps for driver {driver_number}"
             )
             return None
         
-        print(
-            f"📋 TELEMETRY DEBUG: Driver {driver_number} has "
-            f"{len(driver_laps)} laps",
-            flush=True
+        logger.debug(
+            f"📋 TELEMETRY: Driver {driver_number} has "
+            f"{len(driver_laps)} laps"
         )
 
         # Filter by simulation time if available
@@ -489,9 +485,8 @@ class TelemetryDashboard:
                     pd.notna(driver_laps['LapEndTime']) &
                     (driver_laps['LapEndTime'] <= current_time)
                 ]
-                print(
-                    f"📋 TELEMETRY DEBUG: Completed laps: {len(completed_laps)}",
-                    flush=True
+                logger.debug(
+                    f"📋 TELEMETRY: Completed laps: {len(completed_laps)}"
                 )
                 if not completed_laps.empty:
                     driver_laps = completed_laps
@@ -502,9 +497,8 @@ class TelemetryDashboard:
 
         last_lap = driver_laps.iloc[0]
         lap_dict = last_lap.to_dict()
-        print(
-            f"✅ TELEMETRY DEBUG: Using lap {lap_dict.get('LapNumber')}",
-            flush=True
+        logger.debug(
+            f"✅ TELEMETRY: Using lap {lap_dict.get('LapNumber')}"
         )
         return lap_dict
 

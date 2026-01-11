@@ -13,7 +13,10 @@ try:
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+from src.utils.logging_config import get_logger, LogCategory
+
+# Use categorized logger for RAG/embeddings
+logger = get_logger(LogCategory.RAG)
 
 
 class EmbeddingsProvider:

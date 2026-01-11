@@ -9,7 +9,10 @@ from datetime import datetime, timedelta
 from typing import Callable, Optional
 import pandas as pd
 
-logger = logging.getLogger(__name__)
+from src.utils.logging_config import get_logger, LogCategory
+
+# Use categorized logger for simulation
+logger = get_logger(LogCategory.SIMULATION)
 
 
 class SimulationController:
@@ -320,14 +323,14 @@ class SimulationController:
             if valid_laps.empty:
                 return 1
             
-            logger.info(f"[SimController] current_time: {current_time}")
-            logger.info(f"[SimController] valid_laps count: {len(valid_laps)}")
-            logger.info(f"[SimController] First lap start: {valid_laps['LapStartTime'].min()}")
+            logger.debug(f"[SimController] current_time: {current_time}")
+            logger.debug(f"[SimController] valid_laps count: {len(valid_laps)}")
+            logger.debug(f"[SimController] First lap start: {valid_laps['LapStartTime'].min()}")
             
             # At start of race (before any lap has started)
             if current_time <= valid_laps['LapStartTime'].min():
                 self.current_lap = int(valid_laps['LapNumber'].min())
-                logger.info(f"[SimController] Before race start, returning lap {self.current_lap}")
+                logger.debug(f"[SimController] Before race start, returning lap {self.current_lap}")
                 return self.current_lap
             
             # Filter laps that have started
@@ -335,17 +338,17 @@ class SimulationController:
             
             if started_laps.empty:
                 self.current_lap = int(valid_laps['LapNumber'].min())
-                logger.info(f"[SimController] No started laps, returning lap {self.current_lap}")
+                logger.debug(f"[SimController] No started laps, returning lap {self.current_lap}")
                 return self.current_lap
             
-            logger.info(f"[SimController] started_laps count: {len(started_laps)}")
+            logger.debug(f"[SimController] started_laps count: {len(started_laps)}")
             
             # Sort by start time descending to check most recent laps first
             started_laps_sorted = started_laps.sort_values('LapStartTime', ascending=False)
             
             # Find the lap currently in progress
             current_lap = int(started_laps_sorted.iloc[0]['LapNumber'])
-            logger.info(f"[SimController] Initial current_lap (most recent): {current_lap}")
+            logger.debug(f"[SimController] Initial current_lap (most recent): {current_lap}")
             
             # Check if this lap has ended
             for _, lap_row in started_laps_sorted.iterrows():
@@ -353,17 +356,17 @@ class SimulationController:
                 lap_start = lap_row['LapStartTime']
                 lap_end = lap_row.get('LapEndTime', pd.NaT)
                 
-                logger.info(f"[SimController] Checking lap {lap_num}: start={lap_start}, end={lap_end}, current={current_time}")
+                logger.debug(f"[SimController] Checking lap {lap_num}: start={lap_start}, end={lap_end}, current={current_time}")
                 
                 # If lap hasn't ended yet, or ended after current time -> in progress
                 if pd.isna(lap_end) or lap_end > current_time:
                     current_lap = lap_num
-                    logger.info(f"[SimController] ✅ Lap {lap_num} is IN PROGRESS (end={lap_end})")
+                    logger.debug(f"[SimController] ✅ Lap {lap_num} is IN PROGRESS (end={lap_end})")
                     break
                 else:
-                    logger.info(f"[SimController] ❌ Lap {lap_num} has ENDED (end={lap_end} <= current={current_time})")
+                    logger.debug(f"[SimController] ❌ Lap {lap_num} has ENDED (end={lap_end} <= current={current_time})")
             
-            logger.info(f"[SimController] FINAL current_lap: {current_lap}")
+            logger.debug(f"[SimController] FINAL current_lap: {current_lap}")
             self.current_lap = current_lap
             return self.current_lap
             

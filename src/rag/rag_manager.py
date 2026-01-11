@@ -12,8 +12,10 @@ from typing import Optional
 
 from .chromadb_store import ChromaDBStore
 from .document_loader import DocumentLoader, Document
+from src.utils.logging_config import get_logger, LogCategory
 
-logger = logging.getLogger(__name__)
+# Use categorized logger for RAG operations
+logger = get_logger(LogCategory.RAG)
 
 
 @dataclass

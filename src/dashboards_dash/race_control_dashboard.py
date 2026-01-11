@@ -13,7 +13,10 @@ import dash_bootstrap_components as dbc
 import pandas as pd
 from dash import html
 
-logger = logging.getLogger(__name__)
+from src.utils.logging_config import get_logger, LogCategory
+
+# Use categorized logger for race control
+logger = get_logger(LogCategory.RACE_CONTROL)
 
 
 class RaceControlDashboard:

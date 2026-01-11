@@ -245,12 +245,128 @@ git checkout main
 git merge feature/pit-optimizer
 ```
 
+## Logging System
+
+The project uses a **categorized logging system** that allows fine-grained
+control over console output. This prevents log spam during runtime while
+still allowing detailed debugging when needed.
+
+### Log Categories
+
+| Category | Logger Name | Default Level | Description |
+|----------|-------------|---------------|-------------|
+| STARTUP | `f1.startup` | INFO | App initialization (always visible) |
+| SIMULATION | `f1.simulation` | WARNING | Simulation timing, lap tracking |
+| DASHBOARD | `f1.dashboard` | WARNING | Dashboard rendering and updates |
+| TELEMETRY | `f1.telemetry` | WARNING | Car telemetry data, DRS zones |
+| RACE_OVERVIEW | `f1.race_overview` | WARNING | Leaderboard, positions, intervals |
+| RACE_CONTROL | `f1.race_control` | WARNING | Flags, penalties, incidents |
+| WEATHER | `f1.weather` | WARNING | Weather data and forecasts |
+| RAG | `f1.rag` | INFO | Document loading, embeddings |
+| API | `f1.api` | WARNING | External API calls (OpenF1) |
+| CHAT | `f1.chat` | INFO | AI chat and LLM interactions |
+| DATA | `f1.data` | WARNING | Data providers and loading |
+
+### Basic Usage
+
+```python
+from src.utils.logging_config import get_logger, LogCategory
+
+# Get a categorized logger
+logger = get_logger(LogCategory.TELEMETRY)
+logger.info("DRS zone detected")   # Only logs if TELEMETRY level is INFO
+logger.debug("Detailed telemetry") # Only logs if TELEMETRY level is DEBUG
+```
+
+### Enable/Disable Categories at Runtime
+
+```python
+from src.utils.logging_config import (
+    enable_category,
+    disable_category,
+    set_category_level
+)
+import logging
+
+# Enable INFO logging for a category
+enable_category(LogCategory.SIMULATION)
+
+# Disable INFO logging (only WARNING+ will show)
+disable_category(LogCategory.SIMULATION)
+
+# Set specific level
+set_category_level(LogCategory.TELEMETRY, logging.DEBUG)
+```
+
+### Debug Profiles
+
+Pre-defined profiles for common debugging scenarios:
+
+```python
+from src.utils.logging_config import apply_debug_profile
+
+# Available profiles:
+# - 'telemetry': TELEMETRY + API
+# - 'simulation': SIMULATION + DASHBOARD
+# - 'race': RACE_OVERVIEW + RACE_CONTROL
+# - 'rag': RAG + CHAT
+# - 'all': All categories
+
+apply_debug_profile('simulation')  # Enable simulation debugging
+apply_debug_profile('all')         # Verbose mode - see everything
+```
+
+### Check Current Status
+
+```python
+from src.utils.logging_config import get_category_status
+
+# Get all category levels
+status = get_category_status()
+print(status)
+# {'f1.startup': 'INFO', 'f1.simulation': 'WARNING', ...}
+```
+
+### Example: Debugging Telemetry Issues
+
+```python
+# In app_dash.py after setup_logging():
+from src.utils.logging_config import (
+    setup_logging,
+    enable_category,
+    LogCategory
+)
+
+setup_logging()
+
+# Enable telemetry debugging for this session
+enable_category(LogCategory.TELEMETRY)
+enable_category(LogCategory.API)
+
+# Now all telemetry logs will appear in console
+```
+
+### Best Practices
+
+1. **Use categorized loggers** - Always use `get_logger(LogCategory.X)` instead
+   of `logging.getLogger(__name__)`
+2. **Choose appropriate levels**:
+   - `DEBUG`: Detailed diagnostic info (frequent updates, data dumps)
+   - `INFO`: General operational messages (startup, significant events)
+   - `WARNING`: Something unexpected but handled
+   - `ERROR`: Operation failed
+3. **Keep runtime logs at DEBUG** - Callbacks that run frequently (intervals,
+   updates) should use `logger.debug()` to avoid console spam
+4. **STARTUP logs are always visible** - Use for important initialization messages
+
+---
+
 ## Debugging Tips
 
-1. **Enable debug logging**
+1. **Enable category-specific debugging**
    ```python
-   import logging
-   logging.basicConfig(level=logging.DEBUG)
+   from src.utils.logging_config import apply_debug_profile
+   apply_debug_profile('simulation')  # See simulation logs
    ```
 
 2. **Use breakpoints**

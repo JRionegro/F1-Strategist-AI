@@ -12,7 +12,10 @@ import pandas as pd
 import requests
 from time import sleep
 
-logger = logging.getLogger(__name__)
+from src.utils.logging_config import get_logger, LogCategory
+
+# Use categorized logger for API/data operations
+logger = get_logger(LogCategory.DATA)
 
 
 class OpenF1DataProvider:

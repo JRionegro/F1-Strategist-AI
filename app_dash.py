@@ -88,25 +88,34 @@ from src.llm.gemini_provider import GeminiProvider
 from src.llm.provider import LLMProvider
 from src.llm.models import LLMConfig, LLMResponse
 
+# Centralized logging configuration
+from src.utils.logging_config import (
+    setup_logging, get_logger, LogCategory,
+    enable_category, disable_category, apply_debug_profile
+)
+
 # Load environment variables for API keys
 load_dotenv()
 
-# Configure logging - force output to console
-import sys
-root_logger = logging.getLogger()
-root_logger.setLevel(logging.INFO)
-# Remove existing handlers
-for handler in root_logger.handlers[:]:
-    root_logger.removeHandler(handler)
-# Add console handler
-console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setLevel(logging.INFO)
-console_handler.setFormatter(
-    logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-)
-root_logger.addHandler(console_handler)
+# Initialize centralized logging system
+# By default: only STARTUP and critical messages are shown
+# To enable debugging, use: apply_debug_profile('telemetry') or enable_category(LogCategory.SIMULATION)
+setup_logging(console_level=logging.INFO)
 
-logger = logging.getLogger(__name__)
+# Get loggers for different categories
+logger = get_logger(LogCategory.STARTUP)  # Main app logger (startup messages)
+sim_logger = get_logger(LogCategory.SIMULATION)  # Simulation timing
+dash_logger = get_logger(LogCategory.DASHBOARD)  # Dashboard rendering
+telem_logger = get_logger(LogCategory.TELEMETRY)  # Telemetry data
+overview_logger = get_logger(LogCategory.RACE_OVERVIEW)  # Race overview
+control_logger = get_logger(LogCategory.RACE_CONTROL)  # Race control
+api_logger = get_logger(LogCategory.API)  # API calls
+chat_logger = get_logger(LogCategory.CHAT)  # Chat/AI
+
+# Uncomment to enable specific debugging:
+# enable_category(LogCategory.SIMULATION)  # See simulation updates
+# enable_category(LogCategory.TELEMETRY)   # See DRS/telemetry data
+# apply_debug_profile('race')              # Enable race overview + control
 
 # Initialize OpenF1 provider with SSL verification disabled for corporate proxies
 openf1_provider = OpenF1DataProvider(verify_ssl=False)
@@ -3151,7 +3160,7 @@ def update_dashboards(
         elif dashboard_id == "race_overview":
             # Race Overview Dashboard (Leaderboard + Circuit Map)
             if not session_loaded:
-                logger.info("Race overview requested but session not yet loaded, showing placeholder")
+                dash_logger.debug("Race overview: session not yet loaded")
                 dashboards.append(
                     dbc.Card([
                         dbc.CardHeader(html.H5("🏁 Race Overview", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
@@ -3183,7 +3192,7 @@ def update_dashboards(
                         ], className="mb-3", style={"height": "620px"})
                     )
                 else:
-                    logger.info("Rendering race overview dashboard...")
+                    overview_logger.info("Rendering race overview dashboard...")
                     # Get session_key from loaded session
                     session_key = None
                     simulation_time = None
@@ -3194,11 +3203,11 @@ def update_dashboards(
                     # Get simulation time from callback parameter or controller
                     if simulation_time_data and 'time' in simulation_time_data:
                         simulation_time = simulation_time_data.get('time', 0.0)
-                        logger.info(f"Using simulation time from store: {simulation_time:.1f}s")
+                        sim_logger.debug(f"Using simulation time from store: {simulation_time:.1f}s")
                     elif simulation_controller is not None:
                         try:
                             simulation_time = simulation_controller.get_elapsed_seconds()
-                            logger.info(f"Using simulation time from controller: {simulation_time:.1f}s")
+                            sim_logger.debug(f"Using simulation time from controller: {simulation_time:.1f}s")
                         except Exception as e:
                             logger.warning(f"Could not get simulation time: {e}")
                             simulation_time = 0.0
@@ -3214,7 +3223,7 @@ def update_dashboards(
                     if simulation_controller is not None:
                         try:
                             overview_current_lap = simulation_controller.get_current_lap()
-                            logger.info(
+                            sim_logger.debug(
                                 f"Passing current_lap to overview: {overview_current_lap}"
                             )
                         except Exception as e:
@@ -3256,7 +3265,7 @@ def update_dashboards(
                             dbc.CardBody(children=[overview_content], className="p-2", id="race-overview-body")
                         ], className="mb-3", style={"height": "620px", "overflow": "auto"})
                     )
-                    logger.info("Race overview dashboard rendered successfully")
+                    overview_logger.info("Race overview dashboard rendered successfully")
                     
             except Exception as e:
                 logger.error(f"Error creating race overview dashboard: {e}", exc_info=True)
@@ -3272,7 +3281,7 @@ def update_dashboards(
         elif dashboard_id == "race_control":
             # Race Control Dashboard (Flags, SC/VSC, Penalties)
             if not session_loaded:
-                logger.info("Race control requested but session not yet loaded")
+                dash_logger.debug("Race control: session not yet loaded")
                 dashboards.append(
                     dbc.Card([
                         dbc.CardHeader(html.H5(" Race Control", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
@@ -3304,7 +3313,7 @@ def update_dashboards(
                         ], className="mb-3", style={"height": "620px"})
                     )
                 else:
-                    logger.info("Rendering race control dashboard...")
+                    control_logger.info("Rendering race control dashboard...")
                     session_key = None
                     simulation_time = None
                     
@@ -3313,11 +3322,11 @@ def update_dashboards(
                     
                     if simulation_time_data and 'time' in simulation_time_data:
                         simulation_time = simulation_time_data.get('time', 0.0)
-                        logger.info(f"Using simulation time from store: {simulation_time:.1f}s")
+                        sim_logger.debug(f"Using simulation time from store: {simulation_time:.1f}s")
                     elif simulation_controller is not None:
                         try:
                             simulation_time = simulation_controller.get_elapsed_seconds()
-                            logger.info(f"Using simulation time from controller: {simulation_time:.1f}s")
+                            sim_logger.debug(f"Using simulation time from controller: {simulation_time:.1f}s")
                         except Exception as e:
                             logger.warning(f"Could not get simulation time: {e}")
                             simulation_time = 0.0
@@ -3334,7 +3343,7 @@ def update_dashboards(
                             openf1_lap = simulation_controller.get_current_lap()
                             # Convert to visual racing lap (OpenF1 lap 3 = racing lap 1)
                             current_lap = max(1, openf1_lap - 2) if openf1_lap > 2 else 1
-                            logger.info(f"Current lap from controller: OpenF1 {openf1_lap} → Racing {current_lap}")
+                            sim_logger.debug(f"Current lap from controller: OpenF1 {openf1_lap} → Racing {current_lap}")
                         except Exception as e:
                             logger.warning(f"Could not get lap from controller: {e}")
                             current_lap = None
@@ -3347,7 +3356,7 @@ def update_dashboards(
                         current_lap=current_lap
                     )
                     dashboards.append(control_content)
-                    logger.info("Race control dashboard rendered successfully")
+                    control_logger.info("Race control dashboard rendered successfully")
                     
             except Exception as e:
                 logger.error(f"Error creating race control dashboard: {e}", exc_info=True)
@@ -3363,7 +3372,7 @@ def update_dashboards(
         elif dashboard_id == "weather":
             # Weather Dashboard (Phase 1 MVP) - Compact 33% width
             if not session_loaded:
-                logger.info("Weather dashboard requested but session not yet loaded")
+                dash_logger.info("Weather dashboard requested but session not yet loaded")
                 dashboards.append(
                     dbc.Col([
                         dbc.Card([
@@ -3381,7 +3390,7 @@ def update_dashboards(
                     ], width=4, className="d-flex")
                 )
             else:
-                logger.info("Rendering weather dashboard...")
+                dash_logger.info("Rendering weather dashboard...")
                 try:
                     # Get simulation time
                     simulation_time = None
@@ -3418,7 +3427,7 @@ def update_dashboards(
         elif dashboard_id == "telemetry":
             # Telemetry Dashboard - Speed, Throttle, Brake, Gear for focus driver
             try:
-                logger.info("Rendering telemetry dashboard...")
+                telem_logger.info("Rendering telemetry dashboard...")
                 
                 # Get session_key from loaded session
                 session_key = None
@@ -3430,11 +3439,11 @@ def update_dashboards(
                 # Get simulation time from store or controller
                 if simulation_time_data and 'time' in simulation_time_data:
                     simulation_time = simulation_time_data.get('time', 0.0)
-                    logger.info(f"Using simulation time from store: {simulation_time:.1f}s")
+                    sim_logger.debug(f"Using simulation time from store: {simulation_time:.1f}s")
                 elif simulation_controller is not None:
                     try:
                         simulation_time = simulation_controller.get_elapsed_seconds()
-                        logger.info(f"Using simulation time from controller: {simulation_time:.1f}s")
+                        sim_logger.debug(f"Using simulation time from controller: {simulation_time:.1f}s")
                     except Exception as e:
                         logger.warning(f"Could not get simulation time: {e}")
                         simulation_time = 0.0
@@ -3477,7 +3486,7 @@ def update_dashboards(
                     driver_options=driver_options
                 )
                 dashboards.append(telemetry_content)
-                logger.info("Telemetry dashboard rendered successfully")
+                telem_logger.info("Telemetry dashboard rendered successfully")
                 
             except Exception as e:
                 logger.error(f"Error creating telemetry dashboard: {e}", exc_info=True)
@@ -3691,7 +3700,7 @@ def toggle_play_pause(n_clicks):
     
     # Toggle play/pause state (simulation always starts from 0)
     is_playing = simulation_controller.toggle_play_pause()
-    logger.info(f"Play/Pause toggled: is_playing={is_playing}")
+    sim_logger.info(f"Play/Pause toggled: is_playing={is_playing}")
     
     if is_playing:
         return "⏸️", "warning", False, "Pause simulation"
@@ -3738,9 +3747,8 @@ def change_speed(speed):
     if simulation_controller:
         try:
             simulation_controller.set_speed(float(speed))
-            logger.info(
-                f"Simulation speed changed to {speed}x, "
-                f"interval adjusted to {optimal_interval}ms"
+            sim_logger.debug(
+                f"Speed changed to {speed}x, interval={optimal_interval}ms"
             )
             return speed, optimal_interval
         except ValueError as e:
@@ -3771,10 +3779,10 @@ def handle_lap_jumps(back_clicks, forward_clicks, current_time_data):
     
     if triggered == 'back-btn':
         simulation_controller.jump_backward(90)  # ~90 seconds per lap
-        logger.info("Jumped to previous lap")
+        sim_logger.debug("Jumped to previous lap")
     elif triggered == 'forward-btn':
         simulation_controller.jump_forward(90)  # ~90 seconds per lap
-        logger.info("Jumped to next lap")
+        sim_logger.debug("Jumped to next lap")
     else:
         raise PreventUpdate
     
@@ -3782,7 +3790,7 @@ def handle_lap_jumps(back_clicks, forward_clicks, current_time_data):
     new_time = simulation_controller.get_elapsed_seconds()
     new_lap = simulation_controller.get_current_lap()
     
-    logger.info(f"Lap jump: {old_lap} -> {new_lap} (time={new_time:.1f}s)")
+    sim_logger.debug(f"Lap jump: {old_lap} -> {new_lap} (time={new_time:.1f}s)")
     
     return {
         'time': new_time,
@@ -3801,7 +3809,7 @@ def update_simulation_progress(n_intervals, session_data):
     """Update the simulation progress display in real-time."""
     global simulation_controller
     
-    logger.info(f"update_simulation_progress called: n_intervals={n_intervals}, controller={'present' if simulation_controller else 'None'}")
+    sim_logger.debug(f"update_simulation_progress: n_intervals={n_intervals}")
     
     if simulation_controller is None:
         return "⏱️ Not started"
@@ -3809,15 +3817,12 @@ def update_simulation_progress(n_intervals, session_data):
     try:
         # Update simulation time
         simulation_controller.update()
-        logger.info("Controller updated successfully")
         
         # Get progress information
         remaining = simulation_controller.get_remaining_time()
-        logger.info(f"Remaining time: {remaining}")
         
         # Get EXACT current lap from simulation controller (no estimation)
         current_lap = simulation_controller.get_current_lap()
-        logger.info(f"Current lap (OpenF1 internal): {current_lap}")
         
         # Convert to VISUAL racing lap
         # OpenF1 has 2 laps before racing starts (lap 3 = racing lap 1)
@@ -3825,7 +3830,7 @@ def update_simulation_progress(n_intervals, session_data):
         # Get total_laps from session_data (calculated from actual race data)
         total_laps = session_data.get('total_laps', 57) if session_data else 57
         
-        logger.info(f"Visual racing lap: {visual_lap}/{total_laps}")
+        sim_logger.debug(f"Lap {visual_lap}/{total_laps}, remaining: {remaining}")
         
         # Format remaining time
         remaining_minutes = int(remaining.total_seconds() // 60)
@@ -3835,7 +3840,6 @@ def update_simulation_progress(n_intervals, session_data):
         speed = simulation_controller.speed_multiplier
         
         progress_text = f"⏱️ Lap {int(visual_lap)}/{int(total_laps)} | ⏳ {remaining_minutes}m {remaining_seconds}s left | 🚀 {speed}x"
-        logger.info(f"Progress text: {progress_text}")
         
         return progress_text
     except Exception as e:
@@ -4928,7 +4932,7 @@ def generate_ai_response(
 )
 def update_telemetry_comparison(comparison_driver):
     """Update the comparison driver for telemetry dashboard."""
-    logger.info(f"Telemetry comparison driver changed to: {comparison_driver}")
+    telem_logger.debug(f"Telemetry comparison driver: {comparison_driver}")
     return {'driver': comparison_driver}
 
 

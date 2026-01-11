@@ -25,7 +25,10 @@ from dash import dcc, html
 import dash_bootstrap_components as dbc
 from plotly.subplots import make_subplots
 
-logger = logging.getLogger(__name__)
+from src.utils.logging_config import get_logger, LogCategory
+
+# Use categorized logger for weather
+logger = get_logger(LogCategory.WEATHER)
 
 
 def _degrees_to_cardinal(degrees: float) -> str:

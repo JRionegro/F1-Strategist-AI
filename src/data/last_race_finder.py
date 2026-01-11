@@ -9,11 +9,14 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, TYPE_CHECKING
 
+from src.utils.logging_config import get_logger, LogCategory
+
 if TYPE_CHECKING:
     from src.data.openf1_data_provider import OpenF1DataProvider
     from src.session.global_session import RaceContext
 
-logger = logging.getLogger(__name__)
+# Use categorized logger for data operations
+logger = get_logger(LogCategory.DATA)
 
 
 def get_last_completed_race(

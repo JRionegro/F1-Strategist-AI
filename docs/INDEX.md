@@ -1,6 +1,6 @@
 # F1 Strategist AI - Documentation Index
 
-**Last Updated**: January 10, 2026  
+**Last Updated**: January 11, 2026  
 **Project Status**: Production Ready ✅
 
 ---
@@ -53,7 +53,7 @@ are located in the [project_development/](project_development/) folder.
 
 | Document | Description |
 |----------|-------------|
-| [DEVELOPMENT_GUIDE.md](project_development/DEVELOPMENT_GUIDE.md) | Development workflow |
+| [DEVELOPMENT_GUIDE.md](project_development/DEVELOPMENT_GUIDE.md) | Development workflow and logging system |
 | [PYTHON_ENVIRONMENTS.md](project_development/PYTHON_ENVIRONMENTS.md) | Python 3.13 setup |
 | [PROJECT_STATUS.md](project_development/PROJECT_STATUS.md) | Current status and progress |
 
@@ -87,6 +87,7 @@ are located in the [project_development/](project_development/) folder.
 - **Technology choices** → [TECH_STACK_FINAL.md](project_development/TECH_STACK_FINAL.md)
 - **Architecture decisions** → [ARCHITECTURE_DECISIONS.md](project_development/ARCHITECTURE_DECISIONS.md)
 - **UI/UX design** → [UI_UX_SPECIFICATION.md](project_development/UI_UX_SPECIFICATION.md)
+- **Logging & Debugging** → [DEVELOPMENT_GUIDE.md#logging-system](project_development/DEVELOPMENT_GUIDE.md#logging-system)
 
 ---
 
