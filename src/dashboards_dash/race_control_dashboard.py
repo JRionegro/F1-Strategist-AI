@@ -329,6 +329,7 @@ class RaceControlDashboard:
                 
                 # === SMART DRIVER DETECTION ===
                 # Avoid false positives like "SECTOR 14", "TURN 14", "LAP 14"
+                # Also avoid matching "4" in "44" - use strict word boundaries
                 # Only match driver numbers in driver-specific contexts
                 
                 search_patterns = []
@@ -336,13 +337,13 @@ class RaceControlDashboard:
                 if driver_number:
                     num = re.escape(driver_number)
                     # Positive patterns - contexts where number IS a driver reference
+                    # Use (?<!\d) and (?!\d) to prevent matching "4" inside "44"
                     search_patterns.extend([
-                        rf"\({num}\)",              # (14) - parentheses around number
-                        rf"CAR\s*{num}\b",          # CAR 14, CAR14
-                        rf"CARS?\s+.*{num}\b",      # CARS 14 AND 44
-                        rf"NO\.?\s*{num}\b",        # NO 14, NO. 14
-                        rf"#{num}\b",               # #14
-                        rf"DRIVER\s*{num}\b",       # DRIVER 14
+                        rf"\((?<!\d){num}(?!\d)\)",     # (4) but NOT (44)
+                        rf"CAR\s*(?<!\d){num}(?!\d)",   # CAR 4 but NOT CAR 44
+                        rf"NO\.?\s*(?<!\d){num}(?!\d)", # NO 4 but NOT NO 44
+                        rf"#(?<!\d){num}(?!\d)",        # #4 but NOT #44
+                        rf"DRIVER\s*(?<!\d){num}(?!\d)", # DRIVER 4 but NOT DRIVER 44
                     ])
                     
                     # Match number only if NOT preceded by false-positive words
@@ -388,21 +389,23 @@ class RaceControlDashboard:
                 # Check for driver number with additional validation
                 if not is_focused_driver and driver_number:
                     num = re.escape(driver_number)
-                    # Check if number appears in message
-                    if re.search(rf"\b{num}\b", message_upper):
+                    # Check if number appears in message as EXACT number
+                    # Use (?<!\d) and (?!\d) to prevent matching "4" inside "44"
+                    exact_num_pattern = rf"(?<!\d){num}(?!\d)"
+                    if re.search(exact_num_pattern, message_upper):
                         # Exclude if preceded by false-positive context words
                         false_positives = [
-                            rf"SECTOR\s*{num}",
-                            rf"TURN\s*{num}",
-                            rf"LAP\s*{num}",
-                            rf"T{num}\b",           # T14 = Turn 14
-                            rf"S{num}\b",           # S14 = Sector 14
-                            rf"DRS\s*ZONE\s*{num}",
-                            rf"CORNER\s*{num}",
-                            rf"ZONE\s*{num}",
-                            rf"ROUND\s*{num}",
-                            rf"STAGE\s*{num}",
-                            rf"SESSION\s*{num}",
+                            rf"SECTOR\s*(?<!\d){num}(?!\d)",
+                            rf"TURN\s*(?<!\d){num}(?!\d)",
+                            rf"LAP\s*(?<!\d){num}(?!\d)",
+                            rf"T(?<!\d){num}(?!\d)",           # T14 = Turn 14
+                            rf"S(?<!\d){num}(?!\d)",           # S14 = Sector 14
+                            rf"DRS\s*ZONE\s*(?<!\d){num}(?!\d)",
+                            rf"CORNER\s*(?<!\d){num}(?!\d)",
+                            rf"ZONE\s*(?<!\d){num}(?!\d)",
+                            rf"ROUND\s*(?<!\d){num}(?!\d)",
+                            rf"STAGE\s*(?<!\d){num}(?!\d)",
+                            rf"SESSION\s*(?<!\d){num}(?!\d)",
                         ]
                         
                         is_false_positive = any(
