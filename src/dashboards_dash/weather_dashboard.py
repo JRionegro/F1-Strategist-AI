@@ -657,7 +657,7 @@ def render_weather_content(session_key: Optional[int] = None, simulation_time: O
                     ),
                 ], className="mb-2 border border-secondary", style={"backgroundColor": "#1e1e1e"}),
             ])
-        ], className="mb-3", style={"height": "620px", "overflow": "auto"})
+        ], className="mb-3 h-100", style={"overflow": "hidden"})
         
     except Exception as e:
         logger.error(f"Error rendering weather content: {e}", exc_info=True)

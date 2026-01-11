@@ -144,7 +144,7 @@ class RaceControlDashboard:
                     html.Hr(className="my-2"),
                     messages_timeline
                 ], className="p-2", style={"backgroundColor": "#1e1e1e"})
-            ], className="mb-3", style={"height": "620px", "overflow": "auto"})
+            ], className="mb-3 h-100", style={"overflow": "hidden"})
 
         except Exception as e:
             logger.error(f"Error rendering Race Control Dashboard: {e}", exc_info=True)

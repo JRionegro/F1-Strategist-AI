@@ -958,7 +958,7 @@ class RaceOverviewDashboard:
             style_table={
                 "overflowX": "auto",
                 "backgroundColor": "#1e1e1e",
-                "height": "450px",
+                "height": "calc(50vh - 20px)",
                 "overflowY": "auto"
             },
             style_header={

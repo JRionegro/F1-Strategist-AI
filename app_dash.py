@@ -921,6 +921,8 @@ def create_main_content():
 # APP LAYOUT
 # ============================================================================
 
+# Responsive CSS is loaded from assets/responsive_grid.css automatically by Dash
+
 app.layout = dbc.Container([
     # Store components for state management
     dcc.Store(id='session-store', data={}),
@@ -3325,51 +3327,38 @@ def update_dashboards(
     if len(dashboards) == 0:
         return html.Div("No dashboards selected", className="text-center text-muted p-5")
     
-    # Wrap all dashboards in standardized columns with fixed height
+    # Wrap all dashboards in responsive columns
+    # CSS handles the layout switching between landscape (3 cols) and portrait (2 cols)
     wrapped_dashboards = []
     for idx, dash in enumerate(dashboards):
-        # Add border-right to all columns except every 3rd one (for visual separation)
-        border_style = {} if (idx + 1) % 3 == 0 else {"borderRight": "1px solid #000"}
+        # Border style for visual separation
+        border_style = {"borderRight": "1px solid #333"}
         
         if isinstance(dash, dbc.Col):
-            # Already wrapped (e.g., weather) - recreate with height constraint
+            # Already wrapped (e.g., weather) - recreate with responsive class
             wrapped_dashboards.append(
-                dbc.Col(
+                html.Div(
                     dash.children,
-                    width=4,
-                    style={"height": "50vh", "overflow": "hidden", "maxWidth": "31.5%", **border_style},
-                    className="mb-2"
+                    className="dashboard-grid-col",
+                    style={**border_style}
                 )
             )
         else:
-            # Wrap in 4-column (31.5% to avoid horizontal scroll) with fixed height
+            # Wrap with responsive class
             wrapped_dashboards.append(
-                dbc.Col(
-                    dash, 
-                    width=4, 
-                    style={"height": "50vh", "overflow": "hidden", "maxWidth": "31.5%", **border_style},
-                    className="mb-2"
+                html.Div(
+                    dash,
+                    className="dashboard-grid-col",
+                    style={**border_style}
                 )
             )
     
-    # Create grid: 3 dashboards per row
-    rows = []
-    for i in range(0, len(wrapped_dashboards), 3):
-        row_dashboards = wrapped_dashboards[i:i+3]
-        rows.append(
-            dbc.Row(
-                row_dashboards, 
-                className="g-0",
-                style={"height": "50vh"}
-            )
-        )
-    
+    # Return flex container - CSS handles responsive layout
+    # Landscape: wraps at 3 items per row (33% each)
+    # Portrait: wraps at 2 items per row (50% each)
     return html.Div(
-        rows,
-        style={
-            "height": "100%",
-            "overflowY": "hidden"
-        }
+        wrapped_dashboards,
+        className="dashboard-grid-container"
     )
 
 

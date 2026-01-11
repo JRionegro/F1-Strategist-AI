@@ -70,10 +70,10 @@ class CircuitMapDashboard:
                     id='circuit-map-graph',
                     figure=fig,
                     config={'displayModeBar': False},
-                    style={'height': '600px'}
+                    style={'height': 'calc(100% - 10px)'}
                 )
-            ])
-        ], className="mb-3")
+            ], style={'height': 'calc(100% - 45px)', 'padding': '5px'})
+        ], className="mb-3 h-100", style={"overflow": "hidden"})
     
     @staticmethod
     def _create_circuit_figure(session_obj, current_time=None):

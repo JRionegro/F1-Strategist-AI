@@ -158,7 +158,7 @@ class AIAssistantDashboard:
                     )
                 ], className="d-flex justify-content-between")
             ], style={"padding": "0.5rem"})
-        ], className="mb-3", style={"height": "560px", "overflow": "hidden"})
+        ], className="mb-3 h-100", style={"overflow": "hidden"})
     
     @staticmethod
     def render_messages(messages: List[Dict]) -> List[html.Div]:

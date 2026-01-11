@@ -1,0 +1,99 @@
+/* Responsive Dashboard Grid Layout
+ * - Landscape (horizontal): 2 rows x 3 columns (33% width, 50% height)
+ * - Portrait (vertical): 3 rows x 2 columns (50% width, 33% height)
+ * - User can resize dashboards by dragging edges/corners (interact.js)
+ */
+
+/* Landscape mode (default): 3 columns per row, 50vh height */
+.dashboard-grid-col {
+    flex: 0 0 33.33%;
+    max-width: 33.33%;
+    height: 50vh;
+    overflow: hidden;
+    padding: 0 2px;
+    min-width: 250px;
+    min-height: 200px;
+    /* Visual indicator for resizable */
+    position: relative;
+    box-sizing: border-box;
+    touch-action: none; /* For interact.js touch support */
+}
+
+/* Make h-100 work inside flex containers */
+.dashboard-grid-col > div,
+.dashboard-grid-col > .card {
+    height: 100% !important;
+    max-height: 100%;
+    overflow: hidden;
+}
+
+/* Card body should fill remaining space */
+.dashboard-grid-col .card-body {
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Resize handle indicator in corner */
+.dashboard-grid-col::after {
+    content: '⋮⋮';
+    position: absolute;
+    bottom: 4px;
+    right: 8px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.4);
+    pointer-events: none;
+    transform: rotate(-45deg);
+    z-index: 10;
+}
+
+/* Highlight border on hover to show it's resizable */
+.dashboard-grid-col:hover {
+    outline: 1px dashed rgba(255,255,255,0.3);
+    outline-offset: -2px;
+}
+
+/* Cursor indicators for edges */
+.dashboard-grid-col:hover {
+    cursor: default;
+}
+
+.dashboard-grid-row {
+    height: 50vh;
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.dashboard-grid-container {
+    display: flex;
+    flex-wrap: wrap;
+    height: 100%;
+    overflow-y: auto;  /* Allow scroll when dashboards are resized larger */
+    overflow-x: hidden;
+}
+
+/* Portrait mode: 2 columns per row, 33vh height */
+/* Triggers when screen is taller than wide (aspect-ratio < 1) */
+@media screen and (max-aspect-ratio: 1/1) {
+    .dashboard-grid-col {
+        flex: 0 0 50%;
+        max-width: 50%;
+        height: 33.33vh;
+    }
+    
+    .dashboard-grid-row {
+        height: auto;
+    }
+}
+
+/* Also handle monitors in near-portrait mode (aspect ratio < 1.2) */
+@media screen and (max-aspect-ratio: 12/10) {
+    .dashboard-grid-col {
+        flex: 0 0 50%;
+        max-width: 50%;
+        height: 33.33vh;
+    }
+    
+    .dashboard-grid-row {
+        height: auto;
+    }
+}
