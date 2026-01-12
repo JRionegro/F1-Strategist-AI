@@ -10,7 +10,9 @@ import json
 import logging
 import os
 import sys
+import math
 import importlib
+import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 
@@ -3114,31 +3116,26 @@ def handle_document_editor(
     Output('dashboard-container', 'children'),
     Input('dashboard-selector', 'value'),
     Input('session-store', 'data'),
-    Input('simulation-time-store', 'data'),  # Real-time updates
-    Input('telemetry-comparison-store', 'data'),  # Telemetry comparison driver
-    State('chat-messages-store', 'data'),  # Chat messages - as State to avoid re-render
-    State('driver-selector', 'value'),
-    State('circuit-selector', 'value'),
+    Input('driver-selector', 'value'),
+    Input('circuit-selector', 'value'),
+    Input('session-selector', 'value'),
+    State('telemetry-comparison-store', 'data'),  # Telemetry comparison driver
     State('circuit-selector', 'options'),
-    State('session-selector', 'value'),
     prevent_initial_call=False
 )
 def update_dashboards(
     selected_dashboards,
     session_data,
-    simulation_time_data,
-    telemetry_comparison_data,
-    chat_messages,
     focused_driver,
     selected_circuit,
+    selected_session,
+    telemetry_comparison_data,
     circuit_options,
-    selected_session
 ):
     """Update visible dashboards based on selection."""
     global current_session_obj
     global _cached_weather_component, _cached_weather_lap, _cached_weather_session_key
     global _cached_telemetry_component, _cached_telemetry_key
-    global _cached_ai_component, _cached_ai_sig
     global _cached_race_control_component, _cached_race_control_sig
     
     if not selected_dashboards:
@@ -3158,54 +3155,8 @@ def update_dashboards(
     
     for dashboard_id in selected_dashboards:
         if dashboard_id == "ai":
-            # AI Assistant Dashboard - use sidebar values directly
-            # Get circuit name from dropdown label
-            circuit_name = 'Unknown Circuit'
-            if selected_circuit and circuit_options:
-                for opt in circuit_options:
-                    if opt['value'] == selected_circuit:
-                        # Extract clean name from "R24 - Abu Dhabi" -> "Abu Dhabi"
-                        label = opt['label']
-                        if ' - ' in label:
-                            circuit_name = label.split(' - ', 1)[1]
-                        else:
-                            circuit_name = label
-                        break
-            
-            # Session type from dropdown
-            session_type = selected_session if selected_session else 'Race'
-            
-            # Extract driver code from focused_driver (e.g., "RUS_2025_63" -> "RUS")
-            driver_code = None
-            if focused_driver and focused_driver != 'none':
-                parts = focused_driver.split('_')
-                driver_code = parts[0] if parts else focused_driver
-            
-            # Cache AI render to avoid re-rendering on simulation ticks
-            ai_payload = {
-                "messages": chat_messages or [],
-                "focused_driver": driver_code,
-                "race_name": circuit_name,
-                "session_type": session_type
-            }
-            try:
-                ai_sig = hash(json.dumps(ai_payload, sort_keys=True, default=str))
-            except Exception:
-                ai_sig = None
-
-            if _cached_ai_component is not None and ai_sig is not None and ai_sig == _cached_ai_sig:
-                dashboards.append(_cached_ai_component)
-            else:
-                ai_component = AIAssistantDashboard.create_layout(
-                    focused_driver=driver_code,
-                    race_name=circuit_name,
-                    session_type=session_type,
-                    messages=chat_messages or []
-                )
-                _cached_ai_component = ai_component
-                _cached_ai_sig = ai_sig
-                dashboards.append(ai_component)
-        
+            # Placeholder; real rendering happens in dedicated callback to avoid re-mounts
+            dashboards.append(html.Div(id='ai-dashboard-slot'))
         elif dashboard_id == "race_overview":
             # Race Overview Dashboard (Leaderboard + Circuit Map)
             if not session_loaded:
@@ -3248,18 +3199,19 @@ def update_dashboards(
                     
                     if current_session_obj and hasattr(current_session_obj, 'session_key'):
                         session_key = current_session_obj.session_key
-                    
-                    # Get simulation time from callback parameter or controller
-                    if simulation_time_data and 'time' in simulation_time_data:
-                        simulation_time = simulation_time_data.get('time', 0.0)
-                        sim_logger.debug(f"Using simulation time from store: {simulation_time:.1f}s")
-                    elif simulation_controller is not None:
+
+                    if simulation_controller is not None:
                         try:
                             simulation_time = simulation_controller.get_elapsed_seconds()
-                            sim_logger.debug(f"Using simulation time from controller: {simulation_time:.1f}s")
-                        except Exception as e:
-                            logger.warning(f"Could not get simulation time: {e}")
+                            sim_logger.debug(
+                                "Race overview using controller time: %.1fs",
+                                simulation_time
+                            )
+                        except Exception as exc:
+                            logger.warning("Could not get simulation time: %s", exc)
                             simulation_time = 0.0
+                    else:
+                        simulation_time = 0.0
                     
                     # Get session start time from controller
                     session_start_time = None
@@ -3332,118 +3284,70 @@ def update_dashboards(
             if not session_loaded:
                 dash_logger.debug("Race control: session not yet loaded")
                 dashboards.append(
-                    dbc.Card([
-                        dbc.CardHeader(html.H5(" Race Control", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
-                        dbc.CardBody([
-                            dcc.Loading(
-                                html.Div([
-                                    html.P("Loading session data...", className="text-center p-5 text-muted"),
-                                    html.P("Please wait while we load the race control information.",
-                                           className="text-center text-muted small")
-                                ]),
-                                type="circle",
-                                color="#e10600"
-                            )
-                        ], className="p-2")
-                    ], className="mb-3", style={"height": "620px"})
+                    html.Div(
+                        dbc.Card([
+                            dbc.CardHeader(html.H5(" Race Control", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
+                            dbc.CardBody([
+                                dcc.Loading(
+                                    html.Div([
+                                        html.P("Loading session data...", className="text-center p-5 text-muted"),
+                                        html.P("Please wait while we load the race control information.",
+                                               className="text-center text-muted small")
+                                    ]),
+                                    type="circle",
+                                    color="#e10600"
+                                )
+                            ], className="p-2")
+                        ], className="mb-3", style={"height": "620px"}),
+                        id="race-control-wrapper"
+                    )
                 )
                 continue
-            
+
             try:
                 if current_session_obj is None:
                     logger.warning("Race control requested but no session loaded")
                     dashboards.append(
-                        dbc.Card([
-                            dbc.CardHeader(html.H5(" Race Control", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
-                            dbc.CardBody([
-                                html.P("No session loaded. Please select a race session from the sidebar.",
-                                       className="text-muted text-center p-5")
-                            ], className="p-2")
-                        ], className="mb-3", style={"height": "620px"})
+                        html.Div(
+                            dbc.Card([
+                                dbc.CardHeader(html.H5(" Race Control", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
+                                dbc.CardBody([
+                                    html.P("No session loaded. Please select a race session from the sidebar.",
+                                           className="text-muted text-center p-5")
+                                ], className="p-2")
+                            ], className="mb-3", style={"height": "620px"}),
+                            id="race-control-wrapper"
+                        )
                     )
                 else:
-                    control_logger.info("Rendering race control dashboard...")
-                    session_key = None
-                    simulation_time = None
-                    
-                    if current_session_obj and hasattr(current_session_obj, 'session_key'):
-                        session_key = current_session_obj.session_key
-                    
-                    if simulation_time_data and 'time' in simulation_time_data:
-                        simulation_time = simulation_time_data.get('time', 0.0)
-                        sim_logger.debug(f"Using simulation time from store: {simulation_time:.1f}s")
-                    elif simulation_controller is not None:
-                        try:
-                            simulation_time = simulation_controller.get_elapsed_seconds()
-                            sim_logger.debug(f"Using simulation time from controller: {simulation_time:.1f}s")
-                        except Exception as e:
-                            logger.warning(f"Could not get simulation time: {e}")
-                            simulation_time = 0.0
-                    
-                    session_start_time = None
-                    if simulation_controller is not None:
-                        session_start_time = pd.Timestamp(simulation_controller.start_time)
-                    
-                    # Calculate current lap
-                    current_lap = None
-                    if simulation_controller is not None:
-                        try:
-                            # Get OpenF1 internal lap
-                            openf1_lap = simulation_controller.get_current_lap()
-                            # Convert to visual racing lap (OpenF1 lap 3 = racing lap 1)
-                            current_lap = max(1, openf1_lap - 2) if openf1_lap > 2 else 1
-                            sim_logger.debug(f"Current lap from controller: OpenF1 {openf1_lap} → Racing {current_lap}")
-                        except Exception as e:
-                            logger.warning(f"Could not get lap from controller: {e}")
-                            current_lap = None
-                    
-                    rc_signature = race_control_dashboard.get_signature(
-                        session_key=session_key,
-                        simulation_time=simulation_time,
-                        session_start_time=session_start_time,
-                        focused_driver=focused_driver if focused_driver != 'none' else None
+                    control_logger.info("Rendering race control dashboard (static mount)...")
+                    race_control_component = _render_race_control(
+                        focused_driver=focused_driver,
+                        use_store_time=False,
                     )
+                    dashboards.append(html.Div(race_control_component, id="race-control-wrapper"))
+                    control_logger.info("Race control dashboard mounted")
 
-                    if (
-                        _cached_race_control_component is not None
-                        and rc_signature is not None
-                        and rc_signature == _cached_race_control_sig
-                    ):
-                        control_logger.info(
-                            "Race control unchanged; reusing cached component"
-                        )
-                        dashboards.append(_cached_race_control_component)
-                        continue
-
-                    control_content = race_control_dashboard.render(
-                        session_key=session_key,
-                        simulation_time=simulation_time,
-                        session_start_time=session_start_time,
-                        focused_driver=focused_driver if focused_driver != 'none' else None,
-                        current_lap=current_lap
-                    )
-                    _cached_race_control_component = control_content
-                    _cached_race_control_sig = rc_signature
-                    dashboards.append(control_content)
-                    control_logger.info("Race control dashboard rendered successfully")
-                    
             except Exception as e:
                 logger.error(f"Error creating race control dashboard: {e}", exc_info=True)
                 dashboards.append(
-                    dbc.Card([
-                        dbc.CardHeader(html.H5(" Race Control", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
-                        dbc.CardBody([
-                            html.P(f"Error loading race control: {str(e)}", className="text-danger")
-                        ], className="p-2")
-                    ], className="mb-3", style={"height": "620px"})
+                    html.Div(
+                        dbc.Card([
+                            dbc.CardHeader(html.H5(" Race Control", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
+                            dbc.CardBody([
+                                html.P(f"Error loading race control: {str(e)}", className="text-danger")
+                            ], className="p-2")
+                        ], className="mb-3", style={"height": "620px"}),
+                        id="race-control-wrapper"
+                    )
                 )
-        
+
         elif dashboard_id == "weather":
             # Weather Dashboard (Phase 1 MVP) - Compact 33% width
             if not session_loaded:
                 dash_logger.info("Weather dashboard requested but session not yet loaded")
                 dashboards.append(
-                    dbc.Col([
+                    html.Div(
                         dbc.Card([
                             dbc.CardHeader(html.H5("🌤️ Weather", className="mb-0"), className="py-1"),
                             dbc.CardBody([
@@ -3455,174 +3359,65 @@ def update_dashboards(
                                     color="#e10600"
                                 )
                             ], className="p-2")
-                        ], className="mb-3 h-100")
-                    ], width=4, className="d-flex")
+                        ], className="mb-3 h-100"),
+                        id="weather-wrapper"
+                    )
                 )
             else:
-                dash_logger.info("Rendering weather dashboard...")
+                dash_logger.info("Rendering weather dashboard (static mount)...")
                 try:
-                    # Get simulation time
-                    simulation_time = None
-                    if simulation_time_data and 'time' in simulation_time_data:
-                        simulation_time = simulation_time_data.get('time', 0.0)
-                    elif simulation_controller is not None:
-                        try:
-                            simulation_time = simulation_controller.get_elapsed_seconds()
-                        except Exception:
-                            simulation_time = 0.0
-
-                    weather_session_key = current_session_obj.session_key if current_session_obj else None
-
-                    # Determine racing lap for weather throttling
-                    weather_lap = None
-                    if simulation_controller is not None:
-                        try:
-                            openf1_lap = simulation_controller.get_current_lap()
-                            weather_lap = max(1, openf1_lap - 2) if openf1_lap else None
-                        except Exception as exc:
-                            logger.debug(f"Weather lap read failed: {exc}")
-                            weather_lap = None
-                    
-                    # Generate weather content (cache by lap)
-                    if (
-                        _cached_weather_component is not None and
-                        weather_lap is not None and
-                        _cached_weather_lap == weather_lap and
-                        _cached_weather_session_key == weather_session_key
-                    ):
-                        dashboards.append(_cached_weather_component)
-                    else:
-                        session_start_time = None
-                        if simulation_controller is not None:
-                            try:
-                                session_start_time = pd.Timestamp(
-                                    simulation_controller.start_time
-                                )
-                            except Exception as exc:
-                                logger.debug(
-                                    "Weather start_time unavailable: %s", exc
-                                )
-
-                        weather_content = weather_dashboard.render_weather_content(
-                            session_key=weather_session_key,
-                            simulation_time=simulation_time,
-                            session_start_time=session_start_time
-                        )
-
-                        weather_component = dbc.Col([weather_content], width=4)
-                        _cached_weather_component = weather_component
-                        _cached_weather_lap = weather_lap
-                        _cached_weather_session_key = weather_session_key
-                        dashboards.append(weather_component)
+                    weather_component = _render_weather()
+                    dashboards.append(html.Div(weather_component, id="weather-wrapper"))
                 except Exception as e:
                     logger.error(f"Error rendering weather dashboard: {e}", exc_info=True)
                     dashboards.append(
-                        dbc.Col([
+                        html.Div(
                             dbc.Card([
                                 dbc.CardHeader(html.H5("🌤️ Weather", className="mb-0")),
                                 dbc.CardBody([
                                     html.P(f"Error: {str(e)}", className="text-danger text-center")
                                 ])
-                            ])
-                        ], width=4)
+                            ], className="mb-3 h-100"),
+                            id="weather-wrapper"
+                        )
                     )
-        
+
         elif dashboard_id == "telemetry":
             # Telemetry Dashboard - Speed, Throttle, Brake, Gear for focus driver
             try:
-                telem_logger.info("Rendering telemetry dashboard...")
-                
-                # Get session_key from loaded session
-                session_key = None
-                simulation_time = None
-                
-                if current_session_obj and hasattr(current_session_obj, 'session_key'):
-                    session_key = current_session_obj.session_key
-                
-                # Get simulation time from store or controller
-                if simulation_time_data and 'time' in simulation_time_data:
-                    simulation_time = simulation_time_data.get('time', 0.0)
-                    sim_logger.debug(f"Using simulation time from store: {simulation_time:.1f}s")
-                elif simulation_controller is not None:
-                    try:
-                        simulation_time = simulation_controller.get_elapsed_seconds()
-                        sim_logger.debug(f"Using simulation time from controller: {simulation_time:.1f}s")
-                    except Exception as e:
-                        logger.warning(f"Could not get simulation time: {e}")
-                        simulation_time = 0.0
-                
-                session_start_time = None
-                if simulation_controller is not None:
-                    session_start_time = pd.Timestamp(simulation_controller.start_time)
-                
-                # Calculate current lap
-                current_lap = None
-                if simulation_controller is not None:
-                    try:
-                        openf1_lap = simulation_controller.get_current_lap()
-                        current_lap = max(1, openf1_lap - 2) if openf1_lap > 2 else 1
-                    except Exception as e:
-                        logger.warning(f"Could not get lap: {e}")
-                        current_lap = None
-                
-                # Get comparison driver from store
-                comparison_driver = None
-                if telemetry_comparison_data:
-                    comparison_driver = telemetry_comparison_data.get('driver')
-                
-                # Build driver options for comparison dropdown
-                driver_options = []
-                if session_data and session_data.get('drivers'):
-                    drivers_dict = session_data.get('drivers', {})
-                    driver_options = [
-                        {'label': label, 'value': value}
-                        for value, label in drivers_dict.items()
-                    ]
-                
-                # Cache telemetry render by key (session, focus, compare, lap)
-                cache_key = (
-                    session_key,
-                    focused_driver if focused_driver != 'none' else None,
-                    comparison_driver,
-                    current_lap
-                )
+                telem_logger.info("Rendering telemetry dashboard (static mount)...")
 
-                if _cached_telemetry_component is not None and cache_key == _cached_telemetry_key:
-                    dashboards.append(_cached_telemetry_component)
-                else:
-                    telemetry_content = telemetry_dashboard.render(
-                        session_key=session_key,
-                        simulation_time=simulation_time,
-                        session_start_time=session_start_time,
-                        focused_driver=focused_driver if focused_driver != 'none' else None,
-                        comparison_driver=comparison_driver,
-                        current_lap=current_lap,
-                        driver_options=driver_options
-                    )
-                    _cached_telemetry_component = telemetry_content
-                    _cached_telemetry_key = cache_key
-                    dashboards.append(telemetry_content)
-                telem_logger.info("Telemetry dashboard rendered successfully")
-                
+                telemetry_component = _render_telemetry(
+                    focused_driver=focused_driver,
+                    telemetry_comparison_data=telemetry_comparison_data,
+                    session_data=session_data,
+                    use_store_time=False,
+                )
+                dashboards.append(html.Div(telemetry_component, id="telemetry-wrapper"))
+                telem_logger.info("Telemetry dashboard mounted")
+
             except Exception as e:
                 logger.error(f"Error creating telemetry dashboard: {e}", exc_info=True)
                 dashboards.append(
-                    dbc.Card([
-                        dbc.CardHeader(
-                            html.H5(
-                                "📊 Telemetry",
-                                className="mb-0",
-                                style={"fontSize": "1.2rem"}
+                    html.Div(
+                        dbc.Card([
+                            dbc.CardHeader(
+                                html.H5(
+                                    "📊 Telemetry",
+                                    className="mb-0",
+                                    style={"fontSize": "1.2rem"}
+                                ),
+                                className="py-1"
                             ),
-                            className="py-1"
-                        ),
-                        dbc.CardBody([
-                            html.P(
-                                f"Error loading telemetry: {str(e)}",
-                                className="text-danger"
-                            )
-                        ], className="p-2")
-                    ], className="mb-3", style={"height": "620px"})
+                            dbc.CardBody([
+                                html.P(
+                                    f"Error loading telemetry: {str(e)}",
+                                    className="text-danger"
+                                )
+                            ], className="p-2")
+                        ], className="mb-3", style={"height": "620px"}),
+                        id="telemetry-wrapper"
+                    )
                 )
         
         else:
@@ -3679,6 +3474,143 @@ def update_dashboards(
         wrapped_dashboards,
         className="dashboard-grid-container"
     )
+
+
+# Callback: Render AI dashboard independently to avoid refresh flicker
+@callback(
+    Output('ai-dashboard-slot', 'children'),
+    Input('chat-messages-store', 'data'),
+    Input('driver-selector', 'value'),
+    Input('circuit-selector', 'value'),
+    Input('session-selector', 'value'),
+    State('session-store', 'data'),
+    State('circuit-selector', 'options'),
+    prevent_initial_call=False
+)
+def render_ai_dashboard(
+    chat_messages: list[dict[str, Any]] | dict[str, Any] | None,
+    focused_driver: str | None,
+    selected_circuit: str | None,
+    selected_session: str | None,
+    session_data: dict[str, Any] | None,
+    circuit_options: list[dict[str, Any]] | None,
+):
+    """Render AI assistant without being driven by simulation ticks."""
+    global _cached_ai_component, _cached_ai_sig
+    # Circuit name from options label
+    circuit_name = 'Unknown Circuit'
+    if selected_circuit and circuit_options:
+        for opt in circuit_options:
+            if opt.get('value') == selected_circuit:
+                label = opt.get('label', '')
+                circuit_name = label.split(' - ', 1)[1] if ' - ' in label else label
+                break
+
+    session_type = selected_session if selected_session else 'Race'
+
+    driver_code = None
+    if focused_driver and focused_driver != 'none':
+        parts = focused_driver.split('_')
+        driver_code = parts[0] if parts else focused_driver
+
+    # Prefer sanitized incoming store; fall back to last known messages to avoid empties
+    effective_chat = _ensure_json_safe_messages(chat_messages)
+    if not effective_chat and _last_chat_messages:
+        try:
+            effective_chat = json.loads(json.dumps(_last_chat_messages))
+        except Exception:
+            effective_chat = _ensure_json_safe_messages(_last_chat_messages)
+
+    session_loaded = bool(session_data and session_data.get('loaded'))
+    ai_signature_payload = {
+        "messages": effective_chat,
+        "driver_code": driver_code,
+        "circuit_name": circuit_name,
+        "session_type": session_type,
+        "session_loaded": session_loaded,
+    }
+    ai_signature = json.dumps(ai_signature_payload, sort_keys=True, default=str)
+
+    # If layout was remounted (e.g., other dashboards refresh) re-serve cached AI
+    if _cached_ai_component is not None and _cached_ai_sig == ai_signature:
+        return _cached_ai_component
+
+    # Only allow proactive AI if session is loaded; otherwise show placeholder
+    if not session_loaded:
+        component = AIAssistantDashboard.create_layout(
+            focused_driver=driver_code,
+            race_name=circuit_name,
+            session_type=session_type,
+            messages=[]
+        )
+        _cached_ai_component = component
+        _cached_ai_sig = ai_signature
+        return component
+
+    component = AIAssistantDashboard.create_layout(
+        focused_driver=driver_code,
+        race_name=circuit_name,
+        session_type=session_type,
+        messages=effective_chat
+    )
+    _cached_ai_component = component
+    _cached_ai_sig = ai_signature
+    return component
+
+
+# Callback: Refresh race overview body using simulation time without re-rendering other dashboards
+@callback(
+    Output('race-overview-body', 'children'),
+    Input('simulation-time-store', 'data'),
+    State('dashboard-selector', 'value'),
+    State('session-store', 'data'),
+    prevent_initial_call=True
+)
+def refresh_race_overview_body(
+    simulation_time_data: dict[str, Any] | None,
+    selected_dashboards: list[str] | None,
+    session_data: dict[str, Any] | None,
+):
+    """Refresh the race overview content frequently without rebuilding all dashboards."""
+    global current_session_obj, simulation_controller
+
+    if not selected_dashboards or 'race_overview' not in selected_dashboards:
+        raise PreventUpdate
+    if not session_data or not session_data.get('loaded'):
+        raise PreventUpdate
+    if current_session_obj is None:
+        raise PreventUpdate
+
+    try:
+        session_key = getattr(current_session_obj, 'session_key', None)
+
+        simulation_time = 0.0
+        if simulation_time_data and 'time' in simulation_time_data:
+            simulation_time = simulation_time_data.get('time', 0.0)
+        elif simulation_controller is not None:
+            simulation_time = simulation_controller.get_elapsed_seconds()
+
+        session_start_time = None
+        if simulation_controller is not None:
+            session_start_time = pd.Timestamp(simulation_controller.start_time)
+
+        overview_current_lap = None
+        if simulation_controller is not None:
+            try:
+                overview_current_lap = simulation_controller.get_current_lap()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Could not read lap for overview refresh: %s", exc)
+
+        overview_content = race_overview_dashboard.render(
+            session_key=session_key,
+            simulation_time=simulation_time,
+            session_start_time=session_start_time,
+            current_lap=overview_current_lap
+        )
+        return overview_content
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Error refreshing race overview body: %s", exc, exc_info=True)
+        raise PreventUpdate
 
 
 # NOTE: Render callback REMOVED - chat callback writes directly to container
@@ -3983,6 +3915,289 @@ _cached_race_control_component = None
 _cached_race_control_sig = None  # (session_key, message_count, latest_time, focused_driver)
 
 
+def _render_race_control(
+    focused_driver: str | None,
+    use_store_time: bool,
+    simulation_time_data: dict | None = None,
+):
+    """Build Race Control dashboard content with optional store-based time."""
+    global current_session_obj, simulation_controller
+    global _cached_race_control_component, _cached_race_control_sig
+
+    if current_session_obj is None:
+        raise PreventUpdate
+
+    session_key = None
+    simulation_time = None
+
+    if current_session_obj and hasattr(current_session_obj, 'session_key'):
+        session_key = current_session_obj.session_key
+
+    if use_store_time and simulation_time_data and 'time' in simulation_time_data:
+        simulation_time = simulation_time_data.get('time', 0.0)
+        sim_logger.debug("Race control using simulation time from store: %.1fs", simulation_time)
+    elif simulation_controller is not None:
+        try:
+            simulation_time = simulation_controller.get_elapsed_seconds()
+            sim_logger.debug("Race control using controller time: %.1fs", simulation_time)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not get simulation time: %s", exc)
+            simulation_time = 0.0
+
+    session_start_time = None
+    if simulation_controller is not None:
+        session_start_time = pd.Timestamp(simulation_controller.start_time)
+
+    current_lap = None
+    if simulation_controller is not None:
+        try:
+            openf1_lap = simulation_controller.get_current_lap()
+            current_lap = max(1, openf1_lap - 2) if openf1_lap > 2 else 1
+            sim_logger.debug("Current lap from controller: OpenF1 %s → Racing %s", openf1_lap, current_lap)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not get lap from controller: %s", exc)
+            current_lap = None
+
+    rc_signature = race_control_dashboard.get_signature(
+        session_key=session_key,
+        simulation_time=simulation_time,
+        session_start_time=session_start_time,
+        focused_driver=focused_driver if focused_driver != 'none' else None
+    )
+
+    if (
+        _cached_race_control_component is not None
+        and rc_signature is not None
+        and rc_signature == _cached_race_control_sig
+    ):
+        control_logger.info("Race control unchanged; reusing cached component")
+        return _cached_race_control_component
+
+    control_content = race_control_dashboard.render(
+        session_key=session_key,
+        simulation_time=simulation_time,
+        session_start_time=session_start_time,
+        focused_driver=focused_driver if focused_driver != 'none' else None,
+        current_lap=current_lap
+    )
+    _cached_race_control_component = control_content
+    _cached_race_control_sig = rc_signature
+    return control_content
+
+
+def _render_weather(simulation_time_data: dict | None = None):
+    """Build Weather dashboard content with lap-aware caching."""
+    global current_session_obj, simulation_controller
+    global _cached_weather_component, _cached_weather_lap, _cached_weather_session_key
+
+    weather_session_key = current_session_obj.session_key if current_session_obj else None
+
+    if weather_session_key is None:
+        raise PreventUpdate
+
+    simulation_time = None
+    if simulation_time_data and 'time' in simulation_time_data:
+        simulation_time = simulation_time_data.get('time', 0.0)
+    elif simulation_controller is not None:
+        try:
+            simulation_time = simulation_controller.get_elapsed_seconds()
+        except Exception:  # noqa: BLE001
+            simulation_time = 0.0
+
+    weather_lap = None
+    if simulation_controller is not None:
+        try:
+            openf1_lap = simulation_controller.get_current_lap()
+            weather_lap = max(1, openf1_lap - 2) if openf1_lap else None
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Weather lap read failed: %s", exc)
+            weather_lap = None
+
+    if (
+        _cached_weather_component is not None
+        and weather_lap is not None
+        and _cached_weather_lap == weather_lap
+        and _cached_weather_session_key == weather_session_key
+    ):
+        return _cached_weather_component
+
+    session_start_time = None
+    if simulation_controller is not None:
+        try:
+            session_start_time = pd.Timestamp(simulation_controller.start_time)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Weather start_time unavailable: %s", exc)
+
+    weather_content = weather_dashboard.render_weather_content(
+        session_key=weather_session_key,
+        simulation_time=simulation_time,
+        session_start_time=session_start_time
+    )
+
+    _cached_weather_component = weather_content
+    _cached_weather_lap = weather_lap
+    _cached_weather_session_key = weather_session_key
+    return weather_content
+
+
+def _render_telemetry(
+    focused_driver: str | None,
+    telemetry_comparison_data: dict | None,
+    session_data: dict | None,
+    use_store_time: bool,
+    simulation_time_data: dict | None = None,
+):
+    """Build Telemetry dashboard content with caching."""
+    global current_session_obj, simulation_controller
+    global _cached_telemetry_component, _cached_telemetry_key
+
+    session_key = None
+    simulation_time = None
+
+    if current_session_obj and hasattr(current_session_obj, 'session_key'):
+        session_key = current_session_obj.session_key
+
+    if use_store_time and simulation_time_data and 'time' in simulation_time_data:
+        simulation_time = simulation_time_data.get('time', 0.0)
+        sim_logger.debug("Telemetry using simulation time from store: %.1fs", simulation_time)
+    elif simulation_controller is not None:
+        try:
+            simulation_time = simulation_controller.get_elapsed_seconds()
+            sim_logger.debug("Telemetry using controller time: %.1fs", simulation_time)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not get simulation time: %s", exc)
+            simulation_time = 0.0
+
+    session_start_time = None
+    if simulation_controller is not None:
+        session_start_time = pd.Timestamp(simulation_controller.start_time)
+
+    current_lap = None
+    if simulation_controller is not None:
+        try:
+            openf1_lap = simulation_controller.get_current_lap()
+            current_lap = max(1, openf1_lap - 2) if openf1_lap > 2 else 1
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not get lap: %s", exc)
+            current_lap = None
+
+    comparison_driver = None
+    if telemetry_comparison_data:
+        comparison_driver = telemetry_comparison_data.get('driver')
+
+    driver_options = []
+    if session_data and session_data.get('drivers'):
+        drivers_dict = session_data.get('drivers', {})
+        driver_options = [
+            {'label': label, 'value': value}
+            for value, label in drivers_dict.items()
+        ]
+
+    cache_key = (
+        session_key,
+        focused_driver if focused_driver != 'none' else None,
+        comparison_driver,
+        current_lap
+    )
+
+    if _cached_telemetry_component is not None and cache_key == _cached_telemetry_key:
+        return _cached_telemetry_component
+
+    telemetry_content = telemetry_dashboard.render(
+        session_key=session_key,
+        simulation_time=simulation_time,
+        session_start_time=session_start_time,
+        focused_driver=focused_driver if focused_driver != 'none' else None,
+        comparison_driver=comparison_driver,
+        current_lap=current_lap,
+        driver_options=driver_options
+    )
+    _cached_telemetry_component = telemetry_content
+    _cached_telemetry_key = cache_key
+    return telemetry_content
+
+
+@callback(
+    Output('race-control-wrapper', 'children', allow_duplicate=True),
+    Input('simulation-time-store', 'data'),
+    State('dashboard-selector', 'value'),
+    State('driver-selector', 'value'),
+    State('session-store', 'data'),
+    prevent_initial_call=True
+)
+def refresh_race_control_wrapper(
+    simulation_time_data: dict[str, Any] | None,
+    selected_dashboards: list[str] | None,
+    focused_driver: str | None,
+    session_data: dict[str, Any] | None,
+):
+    """Refresh Race Control without rebuilding the main grid or AI."""
+    if not selected_dashboards or 'race_control' not in selected_dashboards:
+        raise PreventUpdate
+    if not session_data or not session_data.get('loaded'):
+        raise PreventUpdate
+
+    return _render_race_control(
+        focused_driver=focused_driver,
+        use_store_time=True,
+        simulation_time_data=simulation_time_data,
+    )
+
+
+@callback(
+    Output('weather-wrapper', 'children', allow_duplicate=True),
+    Input('simulation-time-store', 'data'),
+    State('dashboard-selector', 'value'),
+    State('session-store', 'data'),
+    prevent_initial_call=True
+)
+def refresh_weather_wrapper(
+    simulation_time_data: dict[str, Any] | None,
+    selected_dashboards: list[str] | None,
+    session_data: dict[str, Any] | None,
+):
+    """Refresh Weather dashboard independently to avoid AI flicker."""
+    if not selected_dashboards or 'weather' not in selected_dashboards:
+        raise PreventUpdate
+    if not session_data or not session_data.get('loaded'):
+        raise PreventUpdate
+    if current_session_obj is None:
+        raise PreventUpdate
+
+    return _render_weather(simulation_time_data=simulation_time_data)
+
+
+@callback(
+    Output('telemetry-wrapper', 'children', allow_duplicate=True),
+    Input('simulation-time-store', 'data'),
+    State('dashboard-selector', 'value'),
+    State('driver-selector', 'value'),
+    State('session-store', 'data'),
+    State('telemetry-comparison-store', 'data'),
+    prevent_initial_call=True
+)
+def refresh_telemetry_wrapper(
+    simulation_time_data: dict[str, Any] | None,
+    selected_dashboards: list[str] | None,
+    focused_driver: str | None,
+    session_data: dict[str, Any] | None,
+    telemetry_comparison_data: dict[str, Any] | None,
+):
+    """Refresh Telemetry dashboard without remounting other panels."""
+    if not selected_dashboards or 'telemetry' not in selected_dashboards:
+        raise PreventUpdate
+    if not session_data or not session_data.get('loaded'):
+        raise PreventUpdate
+
+    return _render_telemetry(
+        focused_driver=focused_driver,
+        telemetry_comparison_data=telemetry_comparison_data,
+        session_data=session_data,
+        use_store_time=True,
+        simulation_time_data=simulation_time_data,
+    )
+
+
 @callback(
     Output('simulation-time-store', 'data'),
     Input('simulation-interval', 'n_intervals'),
@@ -4236,10 +4451,69 @@ def toggle_sidebar(n_clicks, is_visible):
 
 # Rate limiting for chat requests (prevent flooding LLM API)
 _last_chat_request_time: float = 0.0
+_last_chat_messages: list[dict[str, Any]] = []
+_last_render_signature: Optional[str] = None
+_cached_ai_component: Any | None = None
+_cached_ai_sig: Optional[str] = None
+
+
+def _ensure_json_safe_messages(raw_messages: Any) -> list[dict]:
+    """Convert incoming store data to a JSON-serializable list of messages."""
+    safe_list: list[dict] = []
+
+    # Normalize dict payloads (dcc.Store can send a dict when hydrated)
+    if isinstance(raw_messages, dict):
+        candidate_messages = [v for v in raw_messages.values() if v is not None]
+    elif isinstance(raw_messages, list):
+        candidate_messages = raw_messages
+    else:
+        candidate_messages = []
+
+    def _sanitize_value(value: Any) -> Any:
+        """Recursively sanitize values to make them JSON-safe."""
+        if isinstance(value, float):
+            if not math.isfinite(value):
+                return str(value)
+            return float(value)
+        if isinstance(value, (int, str, bool)) or value is None:
+            return value
+        if isinstance(value, dict):
+            return {str(k): _sanitize_value(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple, set)):
+            return [_sanitize_value(v) for v in value]
+        try:
+            json.dumps(value)  # type: ignore[arg-type]
+            return value
+        except Exception:
+            return str(value)
+
+    for msg in candidate_messages:
+        if not isinstance(msg, dict):
+            continue
+        safe_msg: dict[str, Any] = {}
+
+        safe_msg['type'] = str(msg.get('type', 'assistant'))
+        safe_msg['content'] = str(msg.get('content', ''))
+        safe_msg['timestamp'] = str(msg.get('timestamp', datetime.now().isoformat()))
+
+        metadata = msg.get('metadata', {})
+        if isinstance(metadata, dict):
+            safe_msg['metadata'] = _sanitize_value(metadata)
+        else:
+            safe_msg['metadata'] = {}
+
+        # Preserve optional priority if present
+        if 'priority' in msg:
+            safe_msg['priority'] = _sanitize_value(msg['priority'])
+
+        safe_list.append(safe_msg)
+
+    return safe_list
 
 
 @callback(
     Output('chat-messages-store', 'data', allow_duplicate=True),
+    Output('chat-messages-container', 'children', allow_duplicate=True),
     Input('chat-send-btn', 'n_clicks'),
     Input('chat-input', 'n_submit'),
     Input('quick-pit-btn', 'n_clicks'),
@@ -4266,11 +4540,12 @@ def handle_chat_send(
 ):
     """
     Handle user chat input and quick action buttons.
-    
     Adds user message and generates AI response.
     Simple rate limiting to prevent API quota exhaustion.
     """
-    global _last_chat_request_time
+    global _last_chat_request_time, _last_chat_messages
+
+    from src.dashboards_dash.ai_assistant_dashboard import AIAssistantDashboard
     
     if not ctx.triggered:
         raise PreventUpdate
@@ -4287,7 +4562,11 @@ def handle_chat_send(
     else:
         chat_logger.info(f"[CHAT] Callback triggered by: {triggered_id}")
     
-    messages = current_messages or []
+    # Normalize and JSON-sanitize incoming store data before appending
+    messages = _ensure_json_safe_messages(current_messages)
+    if not messages and _last_chat_messages:
+        # Restore history if store was unexpectedly empty
+        messages = json.loads(json.dumps(_last_chat_messages))
     
     # Simple rate limiting - only block very rapid clicks (< 0.5s)
     current_time = time.time()
@@ -4328,6 +4607,10 @@ def handle_chat_send(
         'content': query,
         'timestamp': timestamp
     })
+    history_for_ai = [
+        m for m in messages[-8:]
+        if not m.get('metadata', {}).get('thinking')
+    ]
     
     # Add "thinking" message immediately for visual feedback
     thinking_msg = {
@@ -4345,7 +4628,8 @@ def handle_chat_send(
             query=query,
             session_data=session_data,
             focused_driver=focused_driver,
-            sim_time_data=sim_time_data
+            sim_time_data=sim_time_data,
+            message_history=history_for_ai
         )
         
         chat_logger.info("[CHAT] Response received successfully")
@@ -4375,8 +4659,22 @@ def handle_chat_send(
     
     # Return updated messages to store ONLY
     # The sync_store_to_container callback will update the UI
-    chat_logger.info(f"[CHAT] Returning {len(messages)} messages to store")
-    return messages
+    # Ensure outgoing payload is JSON-safe to avoid silent client-side drops
+    safe_messages = _ensure_json_safe_messages(messages)
+    if not safe_messages and messages:
+        try:
+            safe_messages = json.loads(json.dumps(messages, default=str))
+            chat_logger.warning(
+                "[CHAT] Sanitizer produced empty list; using JSON-coerced fallback with %d messages",
+                len(safe_messages)
+            )
+        except Exception as fallback_exc:
+            chat_logger.error(f"[CHAT] Fallback serialization failed: {fallback_exc}")
+            safe_messages = []
+    _last_chat_messages = safe_messages
+    chat_logger.info(f"[CHAT] Returning {len(safe_messages)} messages to store")
+    rendered = AIAssistantDashboard.render_messages(safe_messages)
+    return safe_messages, rendered
 
 
 # Callback to sync store to container - THE ONLY writer to chat-messages-container
@@ -4394,13 +4692,41 @@ def sync_store_to_container(messages):
     It's the ONLY callback that writes to chat-messages-container.
     """
     from src.dashboards_dash.ai_assistant_dashboard import AIAssistantDashboard
+    global _last_chat_messages, _last_render_signature
     
     chat_logger.info(f"[SYNC] Called with messages type={type(messages)}, count={len(messages) if messages else 0}")
+
+    def _signature(payload: Any) -> Optional[str]:
+        try:
+            return hashlib.sha1(
+                json.dumps(payload, sort_keys=True, default=str).encode('utf-8')
+            ).hexdigest()
+        except Exception as exc:
+            chat_logger.debug(f"[SYNC] Signature generation failed: {exc}")
+            return None
+
+    # If we receive a JSON string, try to decode it
+    if isinstance(messages, str):
+        try:
+            decoded = json.loads(messages)
+            chat_logger.warning("[SYNC] Decoded messages from JSON string payload")
+            messages = decoded
+        except Exception as decode_exc:
+            chat_logger.error(f"[SYNC] Failed to decode string payload: {decode_exc}")
+            messages = []
     
-    # Handle None or empty
+    # Handle None or empty with fallback to last known messages
     if not messages:
+        if _last_chat_messages:
+            sig = _signature(_last_chat_messages)
+            if sig and sig == _last_render_signature:
+                chat_logger.debug("[SYNC] No content change; skipping render")
+                return no_update
+            _last_render_signature = sig
+            chat_logger.warning("[SYNC] Store empty; rendering last known chat messages (%d)", len(_last_chat_messages))
+            return AIAssistantDashboard.render_messages(_last_chat_messages)
         chat_logger.info("[SYNC] Rendering empty placeholder (no messages)")
-        return [
+        placeholder = [
             html.Div([
                 html.P([
                     html.I(className="bi bi-info-circle me-2"),
@@ -4409,6 +4735,10 @@ def sync_store_to_container(messages):
                 ], className="text-muted small text-center mb-0")
             ], style={"padding": "20px"})
         ]
+        if _last_render_signature != 'EMPTY_PLACEHOLDER':
+            _last_render_signature = 'EMPTY_PLACEHOLDER'
+            return placeholder
+        return no_update
     
     # Handle dict (dcc.Store serialization quirk)
     if isinstance(messages, dict):
@@ -4416,6 +4746,14 @@ def sync_store_to_container(messages):
     
     # Filter valid messages
     messages = [m for m in messages if m is not None and isinstance(m, dict)]
+
+    if messages:
+        sig = _signature(messages)
+        if sig and sig == _last_render_signature:
+            chat_logger.debug("[SYNC] No content change; skipping render")
+            return no_update
+        _last_render_signature = sig
+        _last_chat_messages = messages
     
     chat_logger.debug(f"[SYNC] Rendering {len(messages)} messages")
     return AIAssistantDashboard.render_messages(messages)
@@ -4430,6 +4768,8 @@ def clear_chat(n_clicks):
     """Clear all chat messages."""
     if not n_clicks:
         raise PreventUpdate
+    global _last_chat_messages
+    _last_chat_messages = []
     return []
 
 
@@ -4475,6 +4815,8 @@ def clear_chat_on_context_change(year, circuit, session_type, current_messages):
             f"[CHAT] Context changed - clearing chat "
             f"(year={year}, circuit={circuit}, session={session_type})"
         )
+        global _last_chat_messages
+        _last_chat_messages = []
         return []
     
     # No change - keep existing messages
@@ -4530,7 +4872,11 @@ def check_proactive_alerts(
         proactive_logger.debug("[PROACTIVE] No driver selected, skipping (select a driver to enable alerts)")
         raise PreventUpdate
     
-    messages = current_messages or []
+    global _last_chat_messages
+
+    messages = _ensure_json_safe_messages(current_messages)
+    if not messages and _last_chat_messages:
+        messages = json.loads(json.dumps(_last_chat_messages))
     last_lap = last_check_data.get('last_lap', 0) if last_check_data else 0
     
     try:
@@ -4610,7 +4956,9 @@ def check_proactive_alerts(
         # CRITICAL: Only update store if we actually added new events
         # This prevents overwriting chat messages added by other callbacks
         if events:
-            return messages, {'last_lap': current_lap}
+            safe_messages = _ensure_json_safe_messages(messages)
+            _last_chat_messages = safe_messages
+            return safe_messages, {'last_lap': current_lap}
         else:
             # No events - don't touch the store, just update last_lap tracking
             return no_update, {'last_lap': current_lap}
@@ -5073,7 +5421,8 @@ def generate_ai_response(
     query: str,
     session_data: Optional[Dict],
     focused_driver: Optional[str],
-    sim_time_data: Optional[Dict]
+    sim_time_data: Optional[Dict],
+    message_history: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
     """
     Generate AI response using RAG + LLM.
@@ -5085,6 +5434,20 @@ def generate_ai_response(
     4. If no LLM available, return informative message
     """
     query_lower = query.lower()
+
+    history_block = ""
+    if message_history:
+        trimmed_history = message_history[-8:]
+        history_lines = []
+        for msg in trimmed_history:
+            role = str(msg.get('type', 'assistant')).lower()
+            prefix = "User" if role == 'user' else "AI"
+            content = str(msg.get('content', '')).strip()
+            if len(content) > 280:
+                content = f"{content[:277]}..."
+            history_lines.append(f"- {prefix}: {content}")
+        if history_lines:
+            history_block = "Recent conversation:\n" + "\n".join(history_lines)
     
     # Get context info
     race_name = (
@@ -5177,14 +5540,20 @@ def generate_ai_response(
             system_prompt = base_prompt + "\n\nNote: Limited live data available. Use general F1 strategy knowledge."
         
         # Build concise user prompt
+        prompt_sections: list[str] = []
+        if history_block:
+            prompt_sections.append(history_block)
         if rag_context:
-            user_prompt = (
-                f"Context:\n{rag_context}\n\n"
+            prompt_sections.append(f"Context:\n{rag_context}")
+            prompt_sections.append(
                 f"Q: {query}\n\n"
                 f"Give a brief, specific answer using the context."
             )
         else:
-            user_prompt = f"Q: {query}\n\nAnswer briefly with available general F1 knowledge."
+            prompt_sections.append(
+                f"Q: {query}\n\nAnswer briefly with available general F1 knowledge."
+            )
+        user_prompt = "\n\n".join(prompt_sections)
         
         try:
             # Call LLM asynchronously
