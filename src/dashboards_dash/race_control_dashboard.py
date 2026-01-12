@@ -64,59 +64,16 @@ class RaceControlDashboard:
                 f"at simulation time {simulation_time}s"
             )
 
-            # Fetch/cache data
-            if (
-                self._cached_session_key != session_key or
-                self._cached_messages is None
-            ):
-                logger.info(f"Fetching race control messages for session {session_key}")
-                try:
-                    messages = self.provider.get_race_control_messages(
-                        session_key=session_key
-                    )
-                    drivers = self.provider.get_drivers(session_key=session_key)
+            messages, drivers = self._get_messages_and_drivers(session_key)
 
-                    if not messages.empty:
-                        self._cached_session_key = session_key
-                        self._cached_messages = messages
-                        self._cached_drivers = drivers
-                        logger.info(f"Cached {len(messages)} race control messages")
-                    else:
-                        logger.warning("Got empty race control data from API")
-                        if self._cached_messages is not None:
-                            messages = self._cached_messages
-                            drivers = self._cached_drivers
-                        else:
-                            return self._render_no_data()
+            if messages is None or drivers is None:
+                return self._render_no_data()
 
-                except Exception as e:
-                    logger.error(f"Error fetching race control data: {e}")
-                    if self._cached_messages is not None:
-                        messages = self._cached_messages
-                        drivers = self._cached_drivers
-                    else:
-                        return self._render_error(str(e))
-            else:
-                messages = self._cached_messages
-                drivers = self._cached_drivers
-
-            # Filter by simulation time
-            filtered_messages = messages
-            if simulation_time is not None and session_start_time is not None:
-                try:
-                    current_time = session_start_time + timedelta(seconds=simulation_time)
-                    filtered_messages = messages[messages['Time'] <= current_time].copy()
-
-                    if filtered_messages.empty:
-                        filtered_messages = messages
-                        logger.debug("No messages before current time, using all")
-                    else:
-                        logger.debug(
-                            f"Filtered to {len(filtered_messages)}/{len(messages)} messages"
-                        )
-                except Exception as e:
-                    logger.warning(f"Could not filter by simulation time: {e}")
-                    filtered_messages = messages
+            filtered_messages = self._filter_messages_by_time(
+                messages,
+                simulation_time,
+                session_start_time
+            )
 
             # Extract current status
             if current_lap is None:
@@ -152,6 +109,109 @@ class RaceControlDashboard:
         except Exception as e:
             logger.error(f"Error rendering Race Control Dashboard: {e}", exc_info=True)
             return self._render_error(str(e))
+
+    def get_signature(
+        self,
+        session_key: Optional[int],
+        simulation_time: Optional[float],
+        session_start_time: Optional[pd.Timestamp],
+        focused_driver: Optional[str] = None
+    ) -> Optional[Tuple[int, int, Optional[pd.Timestamp], Optional[str]]]:
+        """Build a lightweight signature for delta detection.
+
+        Signature uses the current session, filtered message count, latest message
+        timestamp within the filtered window, and focused driver context. When the
+        signature is unchanged, the UI can safely reuse the previous component.
+        """
+        if session_key is None:
+            return None
+
+        try:
+            messages, _ = self._get_messages_and_drivers(session_key)
+            if messages is None or messages.empty:
+                return None
+
+            filtered_messages = self._filter_messages_by_time(
+                messages,
+                simulation_time,
+                session_start_time
+            )
+
+            latest_time = None
+            if not filtered_messages.empty and 'Time' in filtered_messages.columns:
+                try:
+                    latest_time = filtered_messages['Time'].max()
+                except Exception as exc:
+                    logger.debug(
+                        "Could not compute latest Time for signature: %s", exc
+                    )
+
+            return (
+                session_key,
+                len(filtered_messages),
+                latest_time,
+                focused_driver
+            )
+        except Exception as exc:
+            logger.warning("Failed to compute race control signature: %s", exc)
+            return None
+
+    def _get_messages_and_drivers(
+        self,
+        session_key: int
+    ) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+        """Fetch race control messages and drivers with caching.
+
+        Returns cached data when available for the same session_key.
+        """
+        if self._cached_session_key == session_key and self._cached_messages is not None:
+            return self._cached_messages, self._cached_drivers
+
+        logger.info(f"Fetching race control messages for session {session_key}")
+        try:
+            messages = self.provider.get_race_control_messages(session_key=session_key)
+            drivers = self.provider.get_drivers(session_key=session_key)
+
+            if messages.empty:
+                logger.warning("Got empty race control data from API")
+                return self._cached_messages, self._cached_drivers
+
+            self._cached_session_key = session_key
+            self._cached_messages = messages
+            self._cached_drivers = drivers
+            logger.info(f"Cached {len(messages)} race control messages")
+            return messages, drivers
+        except Exception as exc:
+            logger.error(f"Error fetching race control data: {exc}")
+            return self._cached_messages, self._cached_drivers
+
+    def _filter_messages_by_time(
+        self,
+        messages: pd.DataFrame,
+        simulation_time: Optional[float],
+        session_start_time: Optional[pd.Timestamp]
+    ) -> pd.DataFrame:
+        """Filter messages to those occurring before the current simulation time."""
+        filtered_messages = messages
+        if simulation_time is None or session_start_time is None:
+            return filtered_messages
+
+        try:
+            current_time = session_start_time + timedelta(seconds=simulation_time)
+            filtered_messages = messages[messages['Time'] <= current_time].copy()
+
+            if filtered_messages.empty:
+                filtered_messages = messages
+                logger.debug("No messages before current time, using all")
+            else:
+                logger.debug(
+                    f"Filtered to {len(filtered_messages)}/{len(messages)} messages"
+                )
+        except Exception as exc:
+            logger.warning(f"Could not filter by simulation time: {exc}")
+            filtered_messages = messages
+
+        return filtered_messages
 
     def _create_status_panel(
         self,

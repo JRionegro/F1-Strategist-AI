@@ -621,7 +621,11 @@ def create_sidebar():
                         id="dashboard-selector",
                         options=[
                             {"label": " AI Assistant", "value": "ai"},
-                            {"label": " Race Overview", "value": "race_overview"},
+                            {
+                                "label": " Race Overview",
+                                "value": "race_overview",
+                                "disabled": True  # Must stay visible in sim/live
+                            },
                             {"label": " Race Control", "value": "race_control"},
                             {"label": " Weather", "value": "weather"},
                             {"label": " Telemetry", "value": "telemetry"},
@@ -1424,6 +1428,27 @@ def handle_mode_change(mode):
     else:
         # Simulation mode - unlock controls
         return False, False, False, 2025, None, None
+
+
+@callback(
+    Output('dashboard-selector', 'value'),
+    Input('dashboard-selector', 'value'),
+    State('mode-selector', 'value'),
+    prevent_initial_call=True
+)
+def enforce_race_overview(selected_dashboards, mode):
+    """Ensure Race Overview stays selected in simulation/live modes."""
+    required = {'race_overview'}
+    selected_set = set(selected_dashboards or [])
+
+    # If the required dashboard is missing, add it back preserving order
+    if mode in ('sim', 'live') and not required.issubset(selected_set):
+        base_order = ["ai", "race_overview", "race_control", "weather", "telemetry"]
+        selected_set.update(required)
+        fixed = [item for item in base_order if item in selected_set]
+        return fixed
+
+    raise PreventUpdate
 
 
 @callback(
@@ -3110,7 +3135,11 @@ def update_dashboards(
     selected_session
 ):
     """Update visible dashboards based on selection."""
-    global current_session_obj  # Declare at function start
+    global current_session_obj
+    global _cached_weather_component, _cached_weather_lap, _cached_weather_session_key
+    global _cached_telemetry_component, _cached_telemetry_key
+    global _cached_ai_component, _cached_ai_sig
+    global _cached_race_control_component, _cached_race_control_sig
     
     if not selected_dashboards:
         return html.Div([
@@ -3152,15 +3181,30 @@ def update_dashboards(
                 parts = focused_driver.split('_')
                 driver_code = parts[0] if parts else focused_driver
             
-            # Pass chat messages to preserve them during dashboard re-render
-            dashboards.append(
-                AIAssistantDashboard.create_layout(
+            # Cache AI render to avoid re-rendering on simulation ticks
+            ai_payload = {
+                "messages": chat_messages or [],
+                "focused_driver": driver_code,
+                "race_name": circuit_name,
+                "session_type": session_type
+            }
+            try:
+                ai_sig = hash(json.dumps(ai_payload, sort_keys=True, default=str))
+            except Exception:
+                ai_sig = None
+
+            if _cached_ai_component is not None and ai_sig is not None and ai_sig == _cached_ai_sig:
+                dashboards.append(_cached_ai_component)
+            else:
+                ai_component = AIAssistantDashboard.create_layout(
                     focused_driver=driver_code,
                     race_name=circuit_name,
                     session_type=session_type,
-                    messages=chat_messages or []  # Preserve chat history
+                    messages=chat_messages or []
                 )
-            )
+                _cached_ai_component = ai_component
+                _cached_ai_sig = ai_sig
+                dashboards.append(ai_component)
         
         elif dashboard_id == "race_overview":
             # Race Overview Dashboard (Leaderboard + Circuit Map)
@@ -3353,6 +3397,24 @@ def update_dashboards(
                             logger.warning(f"Could not get lap from controller: {e}")
                             current_lap = None
                     
+                    rc_signature = race_control_dashboard.get_signature(
+                        session_key=session_key,
+                        simulation_time=simulation_time,
+                        session_start_time=session_start_time,
+                        focused_driver=focused_driver if focused_driver != 'none' else None
+                    )
+
+                    if (
+                        _cached_race_control_component is not None
+                        and rc_signature is not None
+                        and rc_signature == _cached_race_control_sig
+                    ):
+                        control_logger.info(
+                            "Race control unchanged; reusing cached component"
+                        )
+                        dashboards.append(_cached_race_control_component)
+                        continue
+
                     control_content = race_control_dashboard.render(
                         session_key=session_key,
                         simulation_time=simulation_time,
@@ -3360,6 +3422,8 @@ def update_dashboards(
                         focused_driver=focused_driver if focused_driver != 'none' else None,
                         current_lap=current_lap
                     )
+                    _cached_race_control_component = control_content
+                    _cached_race_control_sig = rc_signature
                     dashboards.append(control_content)
                     control_logger.info("Race control dashboard rendered successfully")
                     
@@ -3406,16 +3470,38 @@ def update_dashboards(
                             simulation_time = simulation_controller.get_elapsed_seconds()
                         except Exception:
                             simulation_time = 0.0
+
+                    weather_session_key = current_session_obj.session_key if current_session_obj else None
+
+                    # Determine racing lap for weather throttling
+                    weather_lap = None
+                    if simulation_controller is not None:
+                        try:
+                            openf1_lap = simulation_controller.get_current_lap()
+                            weather_lap = max(1, openf1_lap - 2) if openf1_lap else None
+                        except Exception as exc:
+                            logger.debug(f"Weather lap read failed: {exc}")
+                            weather_lap = None
                     
-                    # Generate weather content
-                    weather_content = weather_dashboard.render_weather_content(
-                        session_key=current_session_obj.session_key if current_session_obj else None,
-                        simulation_time=simulation_time
-                    )
-                    
-                    dashboards.append(
-                        dbc.Col([weather_content], width=4)
-                    )
+                    # Generate weather content (cache by lap)
+                    if (
+                        _cached_weather_component is not None and
+                        weather_lap is not None and
+                        _cached_weather_lap == weather_lap and
+                        _cached_weather_session_key == weather_session_key
+                    ):
+                        dashboards.append(_cached_weather_component)
+                    else:
+                        weather_content = weather_dashboard.render_weather_content(
+                            session_key=weather_session_key,
+                            simulation_time=simulation_time
+                        )
+
+                        weather_component = dbc.Col([weather_content], width=4)
+                        _cached_weather_component = weather_component
+                        _cached_weather_lap = weather_lap
+                        _cached_weather_session_key = weather_session_key
+                        dashboards.append(weather_component)
                 except Exception as e:
                     logger.error(f"Error rendering weather dashboard: {e}", exc_info=True)
                     dashboards.append(
@@ -3481,16 +3567,29 @@ def update_dashboards(
                         for value, label in drivers_dict.items()
                     ]
                 
-                telemetry_content = telemetry_dashboard.render(
-                    session_key=session_key,
-                    simulation_time=simulation_time,
-                    session_start_time=session_start_time,
-                    focused_driver=focused_driver if focused_driver != 'none' else None,
-                    comparison_driver=comparison_driver,
-                    current_lap=current_lap,
-                    driver_options=driver_options
+                # Cache telemetry render by key (session, focus, compare, lap)
+                cache_key = (
+                    session_key,
+                    focused_driver if focused_driver != 'none' else None,
+                    comparison_driver,
+                    current_lap
                 )
-                dashboards.append(telemetry_content)
+
+                if _cached_telemetry_component is not None and cache_key == _cached_telemetry_key:
+                    dashboards.append(_cached_telemetry_component)
+                else:
+                    telemetry_content = telemetry_dashboard.render(
+                        session_key=session_key,
+                        simulation_time=simulation_time,
+                        session_start_time=session_start_time,
+                        focused_driver=focused_driver if focused_driver != 'none' else None,
+                        comparison_driver=comparison_driver,
+                        current_lap=current_lap,
+                        driver_options=driver_options
+                    )
+                    _cached_telemetry_component = telemetry_content
+                    _cached_telemetry_key = cache_key
+                    dashboards.append(telemetry_content)
                 telem_logger.info("Telemetry dashboard rendered successfully")
                 
             except Exception as e:
@@ -3856,6 +3955,20 @@ def update_simulation_progress(n_intervals, session_data):
 # Track last dashboard update time (real-world time) to throttle updates
 _last_dashboard_update_time = 0.0
 _DASHBOARD_UPDATE_INTERVAL = 2.0  # Update dashboard every 2 real seconds
+
+# Lightweight dashboard cache to avoid unnecessary re-renders
+_cached_weather_component = None
+_cached_weather_lap = None
+_cached_weather_session_key = None
+
+_cached_telemetry_component = None
+_cached_telemetry_key = None  # (session_key, focused_driver, comparison_driver, lap)
+
+_cached_ai_component = None
+_cached_ai_sig = None  # hash over messages + context
+
+_cached_race_control_component = None
+_cached_race_control_sig = None  # (session_key, message_count, latest_time, focused_driver)
 
 
 @callback(
