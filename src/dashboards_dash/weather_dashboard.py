@@ -127,7 +127,8 @@ def create_weather_dashboard() -> html.Div:
 
 
 def create_weather_conditions_panel(
-    weather_df: Optional[pd.DataFrame]
+    weather_df: Optional[pd.DataFrame],
+    session_timezone: Optional[Any] = None
 ) -> tuple[html.Div, str] | html.Div:
     """
     Create current weather conditions display panel.
@@ -158,6 +159,19 @@ def create_weather_conditions_panel(
 
     # Get latest weather reading
     latest = weather_df.iloc[-1]
+
+    # Align timestamp to session timezone to match race control timeline
+    latest_time = latest.get('Time')
+    if session_timezone is not None and pd.notna(latest_time):
+        try:
+            if getattr(latest_time, 'tzinfo', None) is None:
+                latest_time = pd.Timestamp(latest_time).tz_localize(session_timezone)
+            else:
+                latest_time = pd.Timestamp(latest_time).tz_convert(session_timezone)
+        except Exception as exc:
+            logger.debug("Could not align weather time to session timezone: %s", exc)
+    else:
+        latest_time = latest_time if pd.notna(latest_time) else None
 
     # Get wind direction and convert to cardinal + arrow
     wind_dir = latest.get('WindDirection', 0) or 0
@@ -198,7 +212,7 @@ def create_weather_conditions_panel(
         ]
     )
     
-    timestamp = latest['Time'].strftime('%H:%M')
+    timestamp = latest_time.strftime('%H:%M') if latest_time is not None else "--:--"
     
     return (conditions_content, timestamp)
 
@@ -520,7 +534,11 @@ __all__ = [
 ]
 
 
-def render_weather_content(session_key: Optional[int] = None, simulation_time: Optional[float] = None) -> dbc.Card:
+def render_weather_content(
+    session_key: Optional[int] = None,
+    simulation_time: Optional[float] = None,
+    session_start_time: Optional[pd.Timestamp] = None
+) -> dbc.Card:
     """
     Render complete Weather dashboard content with live data.
     
@@ -552,13 +570,27 @@ def render_weather_content(session_key: Optional[int] = None, simulation_time: O
                 ])
             ], className="mb-3", style={"height": "650px"})
         
+        # Normalize times to session timezone when available for display parity
+        weather_df = weather_df.copy()
+        if session_start_time is not None and pd.notna(session_start_time):
+            try:
+                session_tz = session_start_time.tzinfo
+                if session_tz is not None:
+                    time_series = weather_df['Time']
+                    if time_series.dt.tz is None:
+                        weather_df['Time'] = time_series.dt.tz_localize(session_tz)
+                    else:
+                        weather_df['Time'] = time_series.dt.tz_convert(session_tz)
+            except Exception as exc:
+                logger.debug("Could not normalize weather timestamps to session tz: %s", exc)
+
         # Filter data by simulation time if provided
         filtered_weather_df = weather_df
         if simulation_time is not None and not weather_df.empty:
             try:
                 from datetime import timedelta
-                # Get session start time from weather data
-                session_start = weather_df['Time'].min()
+                # Get session start time from weather data (aligned to session tz if provided)
+                session_start = session_start_time if session_start_time is not None else weather_df['Time'].min()
                 # Calculate current datetime from elapsed seconds
                 current_time_dt = session_start + timedelta(seconds=simulation_time)
                 
@@ -579,7 +611,11 @@ def render_weather_content(session_key: Optional[int] = None, simulation_time: O
                 filtered_weather_df = weather_df
         
         # Generate all components with filtered data
-        conditions_result = create_weather_conditions_panel(filtered_weather_df)
+        session_tz = session_start_time.tzinfo if session_start_time is not None else None
+        conditions_result = create_weather_conditions_panel(
+            filtered_weather_df,
+            session_timezone=session_tz
+        )
         
         # Unpack result - returns tuple (content, timestamp) or just content
         if isinstance(conditions_result, tuple):

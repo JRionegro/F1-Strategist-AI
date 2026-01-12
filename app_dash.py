@@ -3492,9 +3492,21 @@ def update_dashboards(
                     ):
                         dashboards.append(_cached_weather_component)
                     else:
+                        session_start_time = None
+                        if simulation_controller is not None:
+                            try:
+                                session_start_time = pd.Timestamp(
+                                    simulation_controller.start_time
+                                )
+                            except Exception as exc:
+                                logger.debug(
+                                    "Weather start_time unavailable: %s", exc
+                                )
+
                         weather_content = weather_dashboard.render_weather_content(
                             session_key=weather_session_key,
-                            simulation_time=simulation_time
+                            simulation_time=simulation_time,
+                            session_start_time=session_start_time
                         )
 
                         weather_component = dbc.Col([weather_content], width=4)
