@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 
 import dash
-from dash import Dash, html, dcc, Input, Output, State, callback, ctx, Patch, ALL
+from dash import Dash, html, dcc, Input, Output, State, callback, ctx, Patch, ALL, no_update
 from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
 import pandas as pd
@@ -113,8 +113,9 @@ api_logger = get_logger(LogCategory.API)  # API calls
 chat_logger = get_logger(LogCategory.CHAT)  # Chat/AI
 proactive_logger = get_logger(LogCategory.PROACTIVE)  # Proactive AI alerts
 
-# Enable PROACTIVE debugging by default for development
+# Enable PROACTIVE and CHAT debugging by default for development
 enable_category(LogCategory.PROACTIVE)
+enable_category(LogCategory.CHAT)
 
 # Uncomment to enable specific debugging:
 # enable_category(LogCategory.SIMULATION)  # See simulation updates
@@ -3089,8 +3090,8 @@ def handle_document_editor(
     Input('dashboard-selector', 'value'),
     Input('session-store', 'data'),
     Input('simulation-time-store', 'data'),  # Real-time updates
-    Input('chat-messages-store', 'data'),  # Chat messages for AI dashboard
     Input('telemetry-comparison-store', 'data'),  # Telemetry comparison driver
+    State('chat-messages-store', 'data'),  # Chat messages - as State to avoid re-render
     State('driver-selector', 'value'),
     State('circuit-selector', 'value'),
     State('circuit-selector', 'options'),
@@ -3101,8 +3102,8 @@ def update_dashboards(
     selected_dashboards,
     session_data,
     simulation_time_data,
-    chat_messages,
     telemetry_comparison_data,
+    chat_messages,
     focused_driver,
     selected_circuit,
     circuit_options,
@@ -3569,19 +3570,8 @@ def update_dashboards(
     )
 
 
-@callback(
-    Output('chat-messages-container', 'children'),
-    Input('chat-messages-store', 'data'),
-    prevent_initial_call=False
-)
-def update_chat_messages_display(chat_messages):
-    """
-    Update chat messages display independently from dashboard re-rendering.
-    This prevents message loss during rapid simulation updates.
-    """
-    from src.dashboards_dash.ai_assistant_dashboard import AIAssistantDashboard
-    
-    return AIAssistantDashboard.render_messages(chat_messages or [])
+# NOTE: Render callback REMOVED - chat callback writes directly to container
+# This avoids Dash callback conflicts with allow_duplicate=True
 
 
 # Callback: Hide/Show Playback based on Mode
@@ -4119,6 +4109,10 @@ def toggle_sidebar(n_clicks, is_visible):
 # AI CHAT CALLBACKS
 # ============================================================================
 
+# Rate limiting for chat requests (prevent flooding LLM API)
+_last_chat_request_time: float = 0.0
+
+
 @callback(
     Output('chat-messages-store', 'data', allow_duplicate=True),
     Input('chat-send-btn', 'n_clicks'),
@@ -4149,17 +4143,43 @@ def handle_chat_send(
     Handle user chat input and quick action buttons.
     
     Adds user message and generates AI response.
-    Returns updated chat UI to prevent conflicts with main dashboard render.
+    Simple rate limiting to prevent API quota exhaustion.
     """
+    global _last_chat_request_time
+    
     if not ctx.triggered:
         raise PreventUpdate
     
     triggered_id = ctx.triggered_id
+    
+    # Ignore chat-input triggers unless they have actual content
+    # This prevents the callback firing on every keystroke/focus change
+    if triggered_id == 'chat-input':
+        if not user_input or not user_input.strip():
+            raise PreventUpdate
+        # Only log actual submissions
+        chat_logger.info(f"[CHAT] Text submitted via Enter: {user_input[:30]}...")
+    else:
+        chat_logger.info(f"[CHAT] Callback triggered by: {triggered_id}")
+    
     messages = current_messages or []
+    
+    # Simple rate limiting - only block very rapid clicks (< 0.5s)
+    current_time = time.time()
+    time_since_last = current_time - _last_chat_request_time
+    
+    chat_logger.info(f"[CHAT] Time since last: {time_since_last:.2f}s")
+    
+    if time_since_last < 0.5 and _last_chat_request_time > 0:
+        chat_logger.info("[CHAT] Rate limited - ignoring rapid click")
+        raise PreventUpdate  # Silently ignore rapid double-clicks
+    
+    _last_chat_request_time = current_time
     
     # Determine the query based on what was triggered
     if triggered_id in ['chat-send-btn', 'chat-input']:
         if not user_input or not user_input.strip():
+            chat_logger.debug("[CHAT] Empty input, preventing update")
             raise PreventUpdate
         query = user_input.strip()
     elif triggered_id == 'quick-pit-btn':
@@ -4171,7 +4191,10 @@ def handle_chat_send(
         driver = focused_driver if focused_driver != 'none' else 'our driver'
         query = f"What are the gaps around {driver}? Any overtake opportunities?"
     else:
+        chat_logger.debug(f"[CHAT] Unknown trigger: {triggered_id}")
         raise PreventUpdate
+    
+    chat_logger.info(f"[CHAT] Processing query: {query[:50]}...")
     
     # Add user message
     timestamp = datetime.now().isoformat()
@@ -4181,7 +4204,17 @@ def handle_chat_send(
         'timestamp': timestamp
     })
     
+    # Add "thinking" message immediately for visual feedback
+    thinking_msg = {
+        'type': 'assistant',
+        'content': '🤔 Analyzing race data...',
+        'timestamp': datetime.now().isoformat(),
+        'metadata': {'thinking': True}
+    }
+    messages.append(thinking_msg)
+    
     # Generate AI response
+    chat_logger.info("[CHAT] Calling generate_ai_response...")
     try:
         response = generate_ai_response(
             query=query,
@@ -4190,6 +4223,10 @@ def handle_chat_send(
             sim_time_data=sim_time_data
         )
         
+        chat_logger.info("[CHAT] Response received successfully")
+        
+        # Remove the "thinking" message and add real response
+        messages = [m for m in messages if not m.get('metadata', {}).get('thinking')]
         messages.append({
             'type': 'assistant',
             'content': response['content'],
@@ -4197,7 +4234,10 @@ def handle_chat_send(
             'metadata': response.get('metadata', {})
         })
     except Exception as e:
+        chat_logger.error(f"[CHAT] AI response failed: {e}")
         logger.error(f"AI response generation failed: {e}", exc_info=True)
+        # Remove thinking message and add error
+        messages = [m for m in messages if not m.get('metadata', {}).get('thinking')]
         messages.append({
             'type': 'assistant',
             'content': (
@@ -4208,7 +4248,52 @@ def handle_chat_send(
             'metadata': {'error': str(e)}
         })
     
+    # Return updated messages to store ONLY
+    # The sync_store_to_container callback will update the UI
+    chat_logger.info(f"[CHAT] Returning {len(messages)} messages to store")
     return messages
+
+
+# Callback to sync store to container - THE ONLY writer to chat-messages-container
+# This ensures the container always reflects the store state
+@callback(
+    Output('chat-messages-container', 'children', allow_duplicate=True),
+    Input('chat-messages-store', 'data'),
+    prevent_initial_call='initial_duplicate'
+)
+def sync_store_to_container(messages):
+    """
+    Sync chat-messages-store to chat-messages-container.
+    
+    This callback fires whenever the store changes (new message added).
+    It's the ONLY callback that writes to chat-messages-container.
+    """
+    from src.dashboards_dash.ai_assistant_dashboard import AIAssistantDashboard
+    
+    chat_logger.info(f"[SYNC] Called with messages type={type(messages)}, count={len(messages) if messages else 0}")
+    
+    # Handle None or empty
+    if not messages:
+        chat_logger.info("[SYNC] Rendering empty placeholder (no messages)")
+        return [
+            html.Div([
+                html.P([
+                    html.I(className="bi bi-info-circle me-2"),
+                    "AI will send proactive alerts during the race. ",
+                    "You can also ask questions anytime."
+                ], className="text-muted small text-center mb-0")
+            ], style={"padding": "20px"})
+        ]
+    
+    # Handle dict (dcc.Store serialization quirk)
+    if isinstance(messages, dict):
+        messages = [v for v in messages.values() if v is not None]
+    
+    # Filter valid messages
+    messages = [m for m in messages if m is not None and isinstance(m, dict)]
+    
+    chat_logger.debug(f"[SYNC] Rendering {len(messages)} messages")
+    return AIAssistantDashboard.render_messages(messages)
 
 
 @callback(
@@ -4223,18 +4308,52 @@ def clear_chat(n_clicks):
     return []
 
 
+# Store to track last known context for chat clearing
+_last_chat_context = {'year': None, 'circuit': None, 'session': None}
+
+
 @callback(
     Output('chat-messages-store', 'data', allow_duplicate=True),
     Input('year-selector', 'value'),
     Input('circuit-selector', 'value'),
     Input('session-selector', 'value'),
-    Input('driver-selector', 'value'),
+    State('chat-messages-store', 'data'),
     prevent_initial_call=True
 )
-def clear_chat_on_context_change(year, circuit, session_type, driver):
-    """Clear chat history when year, circuit, session or driver changes."""
-    # This ensures a fresh conversation for each new context
-    return []
+def clear_chat_on_context_change(year, circuit, session_type, current_messages):
+    """Clear chat history when year, circuit or session changes.
+    
+    Only clears when there's a REAL context change, not on every trigger.
+    Driver changes don't clear chat (user may be comparing drivers).
+    """
+    global _last_chat_context
+    
+    # Check if this is a real context change
+    context_changed = (
+        _last_chat_context['year'] is not None and (
+            year != _last_chat_context['year'] or
+            circuit != _last_chat_context['circuit'] or
+            session_type != _last_chat_context['session']
+        )
+    )
+    
+    # Update stored context
+    _last_chat_context = {
+        'year': year,
+        'circuit': circuit,
+        'session': session_type
+    }
+    
+    # Only clear if there was a real change AND we had previous context
+    if context_changed:
+        chat_logger.info(
+            f"[CHAT] Context changed - clearing chat "
+            f"(year={year}, circuit={circuit}, session={session_type})"
+        )
+        return []
+    
+    # No change - keep existing messages
+    raise PreventUpdate
 
 
 @callback(
@@ -4363,7 +4482,13 @@ def check_proactive_alerts(
                 }
             })
         
-        return messages, {'last_lap': current_lap}
+        # CRITICAL: Only update store if we actually added new events
+        # This prevents overwriting chat messages added by other callbacks
+        if events:
+            return messages, {'last_lap': current_lap}
+        else:
+            # No events - don't touch the store, just update last_lap tracking
+            return no_update, {'last_lap': current_lap}
         
     except PreventUpdate:
         raise  # Re-raise PreventUpdate without logging

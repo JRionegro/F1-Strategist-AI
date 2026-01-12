@@ -65,7 +65,9 @@ class RaceEventDetector:
             'last_pit_lap': {},  # driver_number -> last pit lap
             'last_sc_time': None,
             'last_alert_lap': 0,
-            'alerted_events': set()  # (event_type, lap) tuples to avoid duplicates
+            'alerted_events': set(),  # (event_type, lap) tuples to avoid duplicates
+            'last_positions': {},  # driver_number -> position
+            'gap_history': {}  # driver_number -> list of (lap, gap) tuples
         }
     
     def detect_events(
@@ -92,15 +94,24 @@ class RaceEventDetector:
         events = []
         
         try:
-            # Only check every 2 laps to avoid spam
-            if current_lap <= self._last_checked['last_alert_lap'] + 1:
-                # Still check for safety car (urgent)
-                logger.debug(f"[DETECT] Checking SC only (same lap window)")
-                sc_event = self._check_safety_car(
-                    session_key, current_time
+            # Always check for safety car (highest priority, every interval)
+            sc_event = self._check_safety_car(session_key, current_time)
+            if sc_event:
+                events.append(sc_event)
+            
+            # Always check position changes (important for user awareness)
+            if focused_driver:
+                position_event = self._check_position_change(
+                    session_key, current_time, current_lap, focused_driver
                 )
-                if sc_event:
-                    events.append(sc_event)
+                if position_event:
+                    events.append(position_event)
+            
+            # Other checks every 2 laps to avoid spam
+            if current_lap <= self._last_checked['last_alert_lap'] + 1:
+                logger.debug(
+                    f"[DETECT] Lap {current_lap} - SC/Position only (throttled)"
+                )
                 return events
             
             self._last_checked['last_alert_lap'] = current_lap
@@ -128,11 +139,20 @@ class RaceEventDetector:
                 )
                 if deg_event:
                     events.append(deg_event)
-            
-            # Always check safety car (highest priority)
-            sc_event = self._check_safety_car(session_key, current_time)
-            if sc_event:
-                events.append(sc_event)
+                
+                # Check DRS train
+                drs_event = self._check_drs_train(
+                    session_key, current_time, current_lap, focused_driver
+                )
+                if drs_event:
+                    events.append(drs_event)
+                
+                # Check gap trend
+                gap_event = self._check_gap_trend(
+                    session_key, current_time, current_lap, focused_driver
+                )
+                if gap_event:
+                    events.append(gap_event)
             
         except Exception as e:
             logger.warning(f"Event detection error: {e}")
@@ -539,5 +559,377 @@ class RaceEventDetector:
             'last_pit_lap': {},
             'last_sc_time': None,
             'last_alert_lap': 0,
-            'alerted_events': set()
+            'alerted_events': set(),
+            'last_positions': {},  # driver_number -> position
+            'gap_history': {}  # driver_number -> list of (lap, gap) tuples
         }
+
+    def _check_position_change(
+        self,
+        session_key: int,
+        current_time: datetime,
+        current_lap: int,
+        focused_driver: int
+    ) -> Optional[RaceEvent]:
+        """
+        Detect position changes for the focused driver.
+        
+        Alerts when:
+        - Focused driver gains a position (overtake)
+        - Focused driver loses a position (overtaken)
+        """
+        try:
+            # Get position data
+            position_df = self.provider.get_positions(
+                session_key=session_key,
+                driver_number=focused_driver
+            )
+            
+            if position_df.empty:
+                return None
+            
+            # Filter to data before current_time
+            time_col = 'Time' if 'Time' in position_df.columns else 'Date'
+            if time_col in position_df.columns:
+                position_df = position_df[
+                    pd.to_datetime(position_df[time_col]) <= current_time
+                ]
+            
+            if position_df.empty:
+                return None
+            
+            # Get current position
+            current_pos = position_df.iloc[-1].get('Position')
+            if current_pos is None:
+                return None
+            
+            current_pos = int(current_pos)
+            
+            # Get last known position
+            last_pos = self._last_checked['last_positions'].get(focused_driver)
+            
+            # Update stored position
+            self._last_checked['last_positions'][focused_driver] = current_pos
+            
+            if last_pos is None:
+                return None
+            
+            # Detect position change
+            if current_pos < last_pos:
+                # Gained position(s)
+                positions_gained = last_pos - current_pos
+                event_key = ('position_gain', current_lap)
+                
+                if event_key in self._last_checked['alerted_events']:
+                    return None
+                    
+                self._last_checked['alerted_events'].add(event_key)
+                
+                return RaceEvent(
+                    event_type='position_gain',
+                    priority=3,
+                    message=(
+                        f"🏆 POSITION GAINED! Driver {focused_driver} moved from "
+                        f"P{last_pos} to P{current_pos} (+{positions_gained} position"
+                        f"{'s' if positions_gained > 1 else ''})!"
+                    ),
+                    data={
+                        'old_position': last_pos,
+                        'new_position': current_pos,
+                        'positions_gained': positions_gained
+                    },
+                    timestamp=current_time,
+                    driver_number=focused_driver
+                )
+            
+            elif current_pos > last_pos:
+                # Lost position(s)
+                positions_lost = current_pos - last_pos
+                event_key = ('position_loss', current_lap)
+                
+                if event_key in self._last_checked['alerted_events']:
+                    return None
+                    
+                self._last_checked['alerted_events'].add(event_key)
+                
+                return RaceEvent(
+                    event_type='position_loss',
+                    priority=4,
+                    message=(
+                        f"⚠️ POSITION LOST! Driver {focused_driver} dropped from "
+                        f"P{last_pos} to P{current_pos} (-{positions_lost} position"
+                        f"{'s' if positions_lost > 1 else ''})."
+                    ),
+                    data={
+                        'old_position': last_pos,
+                        'new_position': current_pos,
+                        'positions_lost': positions_lost
+                    },
+                    timestamp=current_time,
+                    driver_number=focused_driver
+                )
+            
+        except Exception as e:
+            logger.debug(f"Position change check failed: {e}")
+        
+        return None
+
+    def _check_drs_train(
+        self,
+        session_key: int,
+        current_time: datetime,
+        current_lap: int,
+        focused_driver: int
+    ) -> Optional[RaceEvent]:
+        """
+        Detect if focused driver is stuck in a DRS train.
+        
+        A DRS train is when multiple cars are within 1 second of each other,
+        making overtaking difficult due to everyone having DRS.
+        
+        This should NOT trigger if:
+        - The focused driver is the race leader (P1)
+        - The focused driver has clear air ahead (>1.5s gap)
+        """
+        try:
+            event_key = ('drs_train', current_lap // 3)
+            if event_key in self._last_checked['alerted_events']:
+                return None
+            
+            # Get intervals data
+            intervals_df = self.provider.get_intervals(
+                session_key=session_key
+            )
+            
+            if intervals_df.empty:
+                return None
+            
+            # Filter to data before current_time
+            time_col = 'Time' if 'Time' in intervals_df.columns else 'Date'
+            if time_col in intervals_df.columns:
+                intervals_df = intervals_df[
+                    pd.to_datetime(intervals_df[time_col]) <= current_time
+                ]
+            
+            if intervals_df.empty:
+                return None
+            
+            # Get latest intervals for all drivers
+            latest_intervals = intervals_df.groupby('DriverNumber').last()
+            
+            # Get focused driver's data
+            if focused_driver not in latest_intervals.index:
+                return None
+            
+            focused_data = latest_intervals.loc[focused_driver]
+            
+            # Check if focused driver is the LEADER
+            # Leader has GapToLeader = 0 or None/NaN
+            gap_to_leader = focused_data.get('GapToLeader')
+            try:
+                gap_val = float(str(gap_to_leader).replace('+', '').replace('LAP', '999'))
+            except (ValueError, TypeError):
+                gap_val = 0.0
+            
+            # If driver is leader (gap_to_leader ~= 0), no DRS train possible
+            if gap_val < 0.5:
+                logger.debug(
+                    f"[DRS_TRAIN] Driver {focused_driver} is leader "
+                    f"(gap={gap_val:.1f}s), skipping DRS train check"
+                )
+                return None
+            
+            # Check focused driver's interval to car ahead
+            focused_interval = focused_data.get('Interval')
+            try:
+                interval_ahead = float(
+                    str(focused_interval).replace('+', '').replace('LAP', '999')
+                )
+            except (ValueError, TypeError):
+                interval_ahead = 999.0
+            
+            # If more than 1.5s to car ahead, not in a DRS train
+            if interval_ahead > 1.5:
+                return None
+            
+            # Count cars in the train (close to each other)
+            cars_in_train = 1  # Start with focused driver
+            
+            for drv_num in latest_intervals.index:
+                if drv_num == focused_driver:
+                    continue
+                    
+                drv_data = latest_intervals.loc[drv_num]
+                drv_gap = drv_data.get('GapToLeader')
+                
+                try:
+                    drv_gap_val = float(
+                        str(drv_gap).replace('+', '').replace('LAP', '999')
+                    )
+                except (ValueError, TypeError):
+                    continue
+                
+                # Check if this driver is within 2s of focused driver's gap
+                if abs(drv_gap_val - gap_val) < 2.0:
+                    cars_in_train += 1
+            
+            # DRS train if 3+ cars within close proximity
+            if cars_in_train >= 3:
+                self._last_checked['alerted_events'].add(event_key)
+                
+                return RaceEvent(
+                    event_type='drs_train',
+                    priority=2,
+                    message=(
+                        f"🚂 DRS TRAIN: Driver {focused_driver} is in a group of "
+                        f"{cars_in_train} cars within 2s. Overtaking is difficult - "
+                        f"consider pit stop to break free or hold position."
+                    ),
+                    data={
+                        'cars_in_train': cars_in_train,
+                        'current_lap': current_lap,
+                        'gap_to_leader': gap_val,
+                        'interval_ahead': interval_ahead
+                    },
+                    timestamp=current_time,
+                    driver_number=focused_driver
+                )
+            
+        except Exception as e:
+            logger.debug(f"DRS train check failed: {e}")
+        
+        return None
+
+    def _check_gap_trend(
+        self,
+        session_key: int,
+        current_time: datetime,
+        current_lap: int,
+        focused_driver: int
+    ) -> Optional[RaceEvent]:
+        """
+        Analyze gap trend to car ahead/behind.
+        
+        Alerts when gap is consistently decreasing (catching) or 
+        increasing (losing ground).
+        """
+        try:
+            # Get intervals
+            intervals_df = self.provider.get_intervals(
+                session_key=session_key
+            )
+            
+            if intervals_df.empty:
+                return None
+            
+            # Filter to data before current_time
+            time_col = 'Time' if 'Time' in intervals_df.columns else 'Date'
+            if time_col in intervals_df.columns:
+                intervals_df = intervals_df[
+                    pd.to_datetime(intervals_df[time_col]) <= current_time
+                ]
+            
+            if intervals_df.empty:
+                return None
+            
+            # Get focused driver intervals
+            driver_intervals = intervals_df[
+                intervals_df['DriverNumber'] == focused_driver
+            ]
+            
+            if driver_intervals.empty:
+                return None
+            
+            # Get latest interval to car ahead
+            latest = driver_intervals.iloc[-1]
+            gap_ahead = latest.get('Interval')
+            
+            if gap_ahead is None or gap_ahead == '':
+                return None
+            
+            try:
+                gap_value = float(str(gap_ahead).replace('+', '').replace('LAP', '999'))
+                if gap_value > 100:  # Lapped, skip
+                    return None
+            except (ValueError, TypeError):
+                return None
+            
+            # Store gap history
+            if focused_driver not in self._last_checked.get('gap_history', {}):
+                self._last_checked['gap_history'] = self._last_checked.get(
+                    'gap_history', {}
+                )
+                self._last_checked['gap_history'][focused_driver] = []
+            
+            gap_history = self._last_checked['gap_history'][focused_driver]
+            gap_history.append((current_lap, gap_value))
+            
+            # Keep only last 5 entries
+            if len(gap_history) > 5:
+                gap_history.pop(0)
+            
+            # Need at least 3 data points
+            if len(gap_history) < 3:
+                return None
+            
+            # Analyze trend
+            gaps = [g[1] for g in gap_history[-3:]]
+            
+            # Check if consistently closing
+            if all(gaps[i] > gaps[i+1] for i in range(len(gaps)-1)):
+                gap_closed = gaps[0] - gaps[-1]
+                
+                event_key = ('gap_closing', current_lap // 5)
+                if event_key in self._last_checked['alerted_events']:
+                    return None
+                    
+                self._last_checked['alerted_events'].add(event_key)
+                
+                return RaceEvent(
+                    event_type='gap_closing',
+                    priority=2,
+                    message=(
+                        f"📈 CATCHING! Driver {focused_driver} closing on car ahead: "
+                        f"{gaps[0]:.1f}s → {gaps[-1]:.1f}s "
+                        f"(gained {gap_closed:.1f}s over {len(gaps)} checks). "
+                        f"Overtake opportunity approaching!"
+                    ),
+                    data={
+                        'gap_history': gaps,
+                        'gap_closed': gap_closed
+                    },
+                    timestamp=current_time,
+                    driver_number=focused_driver
+                )
+            
+            # Check if consistently losing
+            if all(gaps[i] < gaps[i+1] for i in range(len(gaps)-1)):
+                gap_lost = gaps[-1] - gaps[0]
+                
+                event_key = ('gap_losing', current_lap // 5)
+                if event_key in self._last_checked['alerted_events']:
+                    return None
+                    
+                self._last_checked['alerted_events'].add(event_key)
+                
+                return RaceEvent(
+                    event_type='gap_losing',
+                    priority=2,
+                    message=(
+                        f"📉 LOSING GROUND: Driver {focused_driver} falling behind: "
+                        f"{gaps[0]:.1f}s → {gaps[-1]:.1f}s "
+                        f"(lost {gap_lost:.1f}s over {len(gaps)} checks). "
+                        f"May need strategy adjustment."
+                    ),
+                    data={
+                        'gap_history': gaps,
+                        'gap_lost': gap_lost
+                    },
+                    timestamp=current_time,
+                    driver_number=focused_driver
+                )
+            
+        except Exception as e:
+            logger.debug(f"Gap trend check failed: {e}")
+        
+        return None

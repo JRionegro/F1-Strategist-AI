@@ -29,8 +29,9 @@ class AIAssistantDashboard:
     - Visual distinction: user (blue), AI response (gray), alerts (amber)
     """
 
-    @staticmethod
+    @classmethod
     def create_layout(
+        cls,
         focused_driver: Optional[str] = None,
         race_name: str = "Race",
         session_type: str = "Race",
@@ -48,8 +49,28 @@ class AIAssistantDashboard:
         Returns:
             Dash component tree
         """
-        # Render messages from store
-        rendered_messages = AIAssistantDashboard.render_messages(messages or [])
+        # Render messages if provided, otherwise show placeholder
+        if messages:
+            # Handle dict (dcc.Store serialization quirk)
+            if isinstance(messages, dict):
+                messages = [v for v in messages.values() if v is not None]
+            # Filter valid messages
+            messages = [m for m in messages if m is not None and isinstance(m, dict)]
+            initial_content = cls.render_messages(messages) if messages else None
+        else:
+            initial_content = None
+        
+        # Default placeholder if no messages
+        if not initial_content:
+            initial_content = [
+                html.Div([
+                    html.P([
+                        html.I(className="bi bi-info-circle me-2"),
+                        "AI will send proactive alerts during the race. ",
+                        "You can also ask questions anytime."
+                    ], className="text-muted small text-center mb-0")
+                ], style={"padding": "20px"})
+            ]
         
         return dbc.Card([
             dbc.CardHeader([
@@ -87,10 +108,10 @@ class AIAssistantDashboard:
                     )
                 ], className="mb-2"),
                 
-                # Chat messages area - renders from store (auto-scrolls to bottom)
+                # Chat messages area - populated from messages parameter
                 html.Div(
                     id='chat-messages-container',
-                    children=rendered_messages,
+                    children=initial_content,
                     style={
                         'overflow-y': 'auto',
                         'padding': '8px',
@@ -176,6 +197,15 @@ class AIAssistantDashboard:
         Returns:
             List of rendered message components (newest first)
         """
+        # Ensure messages is a list and filter None values
+        if messages is None:
+            messages = []
+        elif isinstance(messages, dict):
+            messages = [v for v in messages.values() if v is not None]
+        
+        # Filter out any None or non-dict values
+        messages = [m for m in messages if m is not None and isinstance(m, dict)]
+        
         if not messages:
             return [
                 html.Div([

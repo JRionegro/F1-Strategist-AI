@@ -1088,11 +1088,19 @@ class RaceOverviewDashboard:
                 if not driver_stints.empty:
                     current_stint = None
                     for _, stint in driver_stints.iterrows():
-                        if stint['StintStart'] <= current_lap:
+                        stint_start = stint['StintStart']
+                        # Skip if StintStart is None or current_lap is None
+                        if stint_start is None or current_lap is None:
+                            continue
+                        if stint_start <= current_lap:
                             current_stint = stint
                     
                     if current_stint is not None:
-                        age = current_lap - current_stint['StintStart']
+                        stint_start_val = current_stint['StintStart']
+                        if stint_start_val is not None and current_lap is not None:
+                            age = current_lap - stint_start_val
+                        else:
+                            age = 0
                         tire_data[driver_num] = {
                             'compound': current_stint['Compound'],
                             'age': age,
