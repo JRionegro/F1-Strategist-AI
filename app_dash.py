@@ -3137,6 +3137,11 @@ def update_dashboards(
     global _cached_weather_component, _cached_weather_lap, _cached_weather_session_key
     global _cached_telemetry_component, _cached_telemetry_key
     global _cached_race_control_component, _cached_race_control_sig
+
+    driver_code = None
+    if focused_driver and focused_driver != 'none':
+        parts = focused_driver.split('_')
+        driver_code = parts[0] if parts else focused_driver
     
     if not selected_dashboards:
         return html.Div([
@@ -3234,7 +3239,8 @@ def update_dashboards(
                         session_key=session_key,
                         simulation_time=simulation_time,
                         session_start_time=session_start_time,
-                        current_lap=overview_current_lap
+                        current_lap=overview_current_lap,
+                        focused_driver_code=driver_code
                     )
                     
                     # Build lap info for header
@@ -3562,12 +3568,14 @@ def render_ai_dashboard(
 @callback(
     Output('race-overview-body', 'children'),
     Input('simulation-time-store', 'data'),
+    Input('driver-selector', 'value'),
     State('dashboard-selector', 'value'),
     State('session-store', 'data'),
     prevent_initial_call=True
 )
 def refresh_race_overview_body(
     simulation_time_data: dict[str, Any] | None,
+    focused_driver: str | None,
     selected_dashboards: list[str] | None,
     session_data: dict[str, Any] | None,
 ):
@@ -3583,6 +3591,11 @@ def refresh_race_overview_body(
 
     try:
         session_key = getattr(current_session_obj, 'session_key', None)
+
+        driver_code = None
+        if focused_driver and focused_driver != 'none':
+            parts = focused_driver.split('_')
+            driver_code = parts[0] if parts else focused_driver
 
         simulation_time = 0.0
         if simulation_time_data and 'time' in simulation_time_data:
@@ -3605,7 +3618,8 @@ def refresh_race_overview_body(
             session_key=session_key,
             simulation_time=simulation_time,
             session_start_time=session_start_time,
-            current_lap=overview_current_lap
+            current_lap=overview_current_lap,
+            focused_driver_code=driver_code
         )
         return overview_content
     except Exception as exc:  # noqa: BLE001

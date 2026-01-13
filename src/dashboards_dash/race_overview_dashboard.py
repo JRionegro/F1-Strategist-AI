@@ -64,7 +64,8 @@ class RaceOverviewDashboard:
         session_key: Optional[int] = None,
         simulation_time: Optional[float] = None,
         session_start_time: Optional[pd.Timestamp] = None,
-        current_lap: Optional[int] = None
+        current_lap: Optional[int] = None,
+        focused_driver_code: Optional[str] = None,
     ):
         """
         Render the Race Overview Dashboard with real-time leaderboard.
@@ -74,6 +75,7 @@ class RaceOverviewDashboard:
             simulation_time: Current simulation time in seconds from session start
             session_start_time: Session start timestamp from SimulationController
             current_lap: Current lap from SimulationController (OpenF1 format)
+            focused_driver_code: Driver code to highlight in the table
 
         Returns:
             Dash component tree for the dashboard
@@ -791,7 +793,8 @@ class RaceOverviewDashboard:
 
             # Build leaderboard table
             leaderboard_table = self._build_leaderboard_table(
-                leaderboard_data
+                leaderboard_data,
+                focused_driver_code=focused_driver_code,
             )
 
             # Session info is embedded in the data
@@ -834,7 +837,11 @@ class RaceOverviewDashboard:
                 className="text-center p-5",
             )
 
-    def _build_leaderboard_table(self, leaderboard_data: pd.DataFrame):
+    def _build_leaderboard_table(
+        self,
+        leaderboard_data: pd.DataFrame,
+        focused_driver_code: Optional[str] = None,
+    ):
         """
         Build leaderboard table with positions, gaps, and tire info.
 
@@ -941,6 +948,14 @@ class RaceOverviewDashboard:
                     "column_id": "Driver"
                 },
                 "color": color,
+                "fontWeight": "bold",
+            })
+
+        if focused_driver_code:
+            style_conditional.append({
+                "if": {"filter_query": f"{{Driver}} = '{focused_driver_code}'"},
+                "backgroundColor": "rgba(225, 6, 0, 0.18)",
+                "borderLeft": "4px solid #e10600",
                 "fontWeight": "bold",
             })
 
