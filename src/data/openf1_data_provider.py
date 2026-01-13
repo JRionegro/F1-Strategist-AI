@@ -559,7 +559,7 @@ class OpenF1DataProvider:
         Returns:
             DataFrame with car telemetry data
         """
-        params = {"session_key": session_key}
+        params: Dict[str, Any] = {"session_key": session_key}
         if driver_number:
             params["driver_number"] = driver_number
         if date_start:

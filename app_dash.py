@@ -89,6 +89,7 @@ from src.llm.claude_provider import ClaudeProvider
 from src.llm.gemini_provider import GeminiProvider
 from src.llm.provider import LLMProvider
 from src.llm.models import LLMConfig, LLMResponse
+from src.llm.config import get_claude_config, get_gemini_config
 
 # Centralized logging configuration
 from src.utils.logging_config import (
@@ -344,19 +345,14 @@ def get_llm_provider() -> Optional[LLMProvider]:
     try:
         # Case 1: Both keys - use HybridRouter for smart routing
         if claude_api_key and gemini_api_key:
-            claude_config = LLMConfig(
-                model_name="claude-3-5-sonnet-20241022",
-                api_key=claude_api_key,
-                max_tokens=2048,
-                temperature=0.7
-            )
-            gemini_config = LLMConfig(
-                model_name="gemini-2.0-flash-exp",
-                api_key=gemini_api_key,
-                max_tokens=2048,
-                temperature=0.7,
-                extra_params={"enable_thinking": False}
-            )
+            claude_config = get_claude_config()
+            claude_config.max_tokens = 2048
+            claude_config.temperature = 0.7
+
+            gemini_config = get_gemini_config()
+            gemini_config.max_tokens = 2048
+            gemini_config.temperature = 0.7
+            gemini_config.extra_params["enable_thinking"] = False
             _llm_provider = HybridRouter(
                 claude_config=claude_config,
                 gemini_config=gemini_config
@@ -369,25 +365,19 @@ def get_llm_provider() -> Optional[LLMProvider]:
         
         # Case 2: Only Claude key
         elif claude_api_key:
-            claude_config = LLMConfig(
-                model_name="claude-3-5-sonnet-20241022",
-                api_key=claude_api_key,
-                max_tokens=2048,
-                temperature=0.7
-            )
+            claude_config = get_claude_config()
+            claude_config.max_tokens = 2048
+            claude_config.temperature = 0.7
             _llm_provider = ClaudeProvider(claude_config)
             _llm_provider_type = 'claude'
             logger.info("LLM initialized: Claude only")
         
         # Case 3: Only Gemini key
         elif gemini_api_key:
-            gemini_config = LLMConfig(
-                model_name="gemini-2.0-flash-exp",
-                api_key=gemini_api_key,
-                max_tokens=2048,
-                temperature=0.7,
-                extra_params={"enable_thinking": False}
-            )
+            gemini_config = get_gemini_config()
+            gemini_config.max_tokens = 2048
+            gemini_config.temperature = 0.7
+            gemini_config.extra_params["enable_thinking"] = False
             _llm_provider = GeminiProvider(gemini_config)
             _llm_provider_type = 'gemini'
             logger.info("LLM initialized: Gemini only")
