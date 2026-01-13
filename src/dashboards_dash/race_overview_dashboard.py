@@ -659,51 +659,16 @@ class RaceOverviewDashboard:
                         if current_stint is None:
                             current_stint = driver_stints.iloc[-1]
                         
-                        # Calculate tire age using REAL lap numbers from OpenF1
-                        # Note: Formation lap (lap 1) does wear tires
-                        # Internal calculation uses actual OpenF1 lap numbers
-                        tyre_age_at_start = max(
-                            0, int(current_stint.get('TyreAge', 1)) - 1
-                        )
+                        # Calculate tire age using controller lap (no formation lap in OpenF1)
+                        tyre_age_at_start = int(current_stint.get('TyreAge', 0) or 0)
                         stint_start_lap = int(current_stint.get('StintStart', 1))
                         stint_end_lap = current_stint.get('StintEnd', 'N/A')
                         stint_number = int(current_stint.get('StintNumber', 1))
-                        
-                        # Calculate COMPLETED laps in this stint (not just started)
-                        # A lap is completed ONLY if its LapEndTime has passed
-                        completed_laps_in_stint = 0
-                        
-                        # Only calculate if we have valid timestamps (fix Pylance errors)
-                        if (
-                            session_start_time is not None 
-                            and simulation_time is not None
-                            and not driver_laps.empty
-                        ):
-                            sim_timestamp = session_start_time + pd.Timedelta(
-                                seconds=float(simulation_time)
-                            )
-                        
-                            for lap_num in range(stint_start_lap, driver_current_lap + 1):
-                                lap_row = driver_laps[
-                                    driver_laps['LapNumber'] == lap_num
-                                ]
-                                if not lap_row.empty:
-                                    lap_end = lap_row.iloc[0].get('LapEndTime', pd.NaT)
-                                    # Count as completed ONLY if LapEndTime exists and has passed
-                                    if pd.notna(lap_end) and lap_end <= sim_timestamp:
-                                        completed_laps_in_stint += 1
-                        
-                        # INTERNAL tire age (uses COMPLETED laps only)
-                        tire_age_internal = max(
-                            0,
-                            tyre_age_at_start + completed_laps_in_stint
-                        )
-                        
-                        # VISUAL tire age: In first stint, formation lap is already counted
-                        # in tyre_age_at_start (which is 0 + formation = starts at 0 after -1 adjustment)
-                        # So tire_age_visual = tire_age_internal (formation lap already counted)
-                        tire_age = tire_age_internal
-                        
+
+                        # Age grows by laps started since stint start; lap 2 shows age 1
+                        laps_since_stint_start = max(0, driver_current_lap - stint_start_lap)
+                        tire_age = max(0, tyre_age_at_start + laps_since_stint_start)
+
                         compound = current_stint.get('Compound', 'UNKNOWN')
                         
                         # DETAILED LOGGING FOR ALONSO
@@ -720,13 +685,13 @@ class RaceOverviewDashboard:
                                 f"Tyre Age at Start of this stint: {tyre_age_at_start}"
                             )
                             logger.info(
-                                f"Laps COMPLETED in this stint: {completed_laps_in_stint} (NOT just started)"
+                                f"Laps since stint start: {laps_since_stint_start}"
                             )
                             logger.info(f"Current Compound: {compound}")
                             logger.info(f"🏁 TIRE AGE (includes formation lap): {tire_age}")
                             logger.info(
                                 f"Formula: {tyre_age_at_start} + "
-                                f"{completed_laps_in_stint} COMPLETED laps = {tire_age}"
+                                f"{laps_since_stint_start} laps = {tire_age}"
                             )
                             logger.info(f"\nAll stints summary:")
                             for _, s in driver_stints.iterrows():

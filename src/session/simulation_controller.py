@@ -328,9 +328,20 @@ class SimulationController:
             logger.debug(f"[SimController] First lap start: {valid_laps['LapStartTime'].min()}")
             
             # At start of race (before any lap has started)
+            earliest_started_lap = int(valid_laps['LapNumber'].min())
+            formation_row = leader_laps[leader_laps['LapNumber'] == 1]
+            formation_untimed = not formation_row.empty and formation_row['LapStartTime'].isna().any()
+
             if current_time <= valid_laps['LapStartTime'].min():
-                self.current_lap = int(valid_laps['LapNumber'].min())
-                logger.debug(f"[SimController] Before race start, returning lap {self.current_lap}")
+                # If lap 1 has no timing, show it explicitly as the untimed first lap
+                if formation_untimed:
+                    self.current_lap = 1
+                    logger.debug("[SimController] Before race start, returning untimed lap 1")
+                else:
+                    self.current_lap = earliest_started_lap
+                    logger.debug(
+                        f"[SimController] Before race start, returning lap {self.current_lap}"
+                    )
                 return self.current_lap
             
             # Filter laps that have started

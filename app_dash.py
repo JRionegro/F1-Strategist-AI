@@ -302,9 +302,8 @@ def _calculate_total_laps(session_obj, circuit_name: Optional[str] = None) -> in
             # Priority 3: Calculate from actual lap data (historical only)
             if hasattr(session_obj, 'laps') and not session_obj.laps.empty:
                 max_lap = session_obj.laps['LapNumber'].max()
-                if pd.notna(max_lap) and max_lap > 10:
-                    # Subtract 2 for formation laps
-                    calculated = max(1, int(max_lap) - 2)
+                if pd.notna(max_lap) and max_lap > 0:
+                    calculated = int(max_lap)
                     logger.info(
                         f"Calculated total_laps from data: {calculated}"
                     )
@@ -1755,10 +1754,9 @@ def update_drivers(session, circuit_key, year):
                 first_lap_end = laps['LapEndTime_seconds'].min()
                 last_lap_end = laps['LapEndTime_seconds'].max()
                 
-                # Convert seconds to timedelta and add to session date
-                if pd.notna(first_lap_end) and pd.notna(last_lap_end):
-                    # Start simulation FROM first lap completion time
-                    start_time = session_date + timedelta(seconds=float(first_lap_end))
+                # Convert seconds to timedelta and anchor simulation at session start
+                if pd.notna(last_lap_end):
+                    start_time = session_date  # begin at session start to include untimed lap 1
                     end_time = session_date + timedelta(seconds=float(last_lap_end))
                     
                     # Prepare lap data with absolute timestamps for accurate lap tracking
@@ -1767,15 +1765,17 @@ def update_drivers(session, circuit_key, year):
                         # Use LEADER's laps (DriverNumber=1) for race lap count
                         leader_laps = laps[laps['DriverNumber'] == 1].copy()
                         if not leader_laps.empty:
-                            # Convert LapStartTime (timedelta from session start) to absolute datetime
                             lap_timing_data = leader_laps[['LapNumber', 'LapStartTime', 'DriverNumber']].copy()
-                            # Drop rows with NaT LapStartTime
-                            lap_timing_data = lap_timing_data.dropna(subset=['LapStartTime'])
-                            # LapStartTime is a timedelta from session start, convert to absolute datetime
-                            lap_timing_data['LapStartTime'] = session_date + lap_timing_data['LapStartTime']
-                            logger.info(f"Prepared lap timing data from LEADER: {len(lap_timing_data)} laps with absolute timestamps")
-                            logger.info(f"First lap timestamp: {lap_timing_data['LapStartTime'].min()}")
-                            logger.info(f"Last lap timestamp: {lap_timing_data['LapStartTime'].max()}")
+                            # Convert LapStartTime (timedelta from session start) to absolute datetime when present
+                            lap_timing_data.loc[lap_timing_data['LapStartTime'].notna(), 'LapStartTime'] = (
+                                session_date + lap_timing_data.loc[
+                                    lap_timing_data['LapStartTime'].notna(), 'LapStartTime'
+                                ]
+                            )
+                            # Preserve NaT for formation/untimed lap 1 so UI can mark it
+                            logger.info(
+                                f"Prepared lap timing data from LEADER: {len(lap_timing_data)} laps (including untimed lap 1 if present)"
+                            )
                         else:
                             logger.warning("No laps found for leader (DriverNumber=1)")
                     
@@ -1789,7 +1789,7 @@ def update_drivers(session, circuit_key, year):
                     
                     logger.info(
                         f"SimulationController initialized: {start_time} -> {end_time} "
-                        f"(first lap at {first_lap_end:.1f}s, last lap at {last_lap_end:.1f}s)"
+                        f"(first lap end at {first_lap_end:.1f}s, last lap at {last_lap_end:.1f}s)"
                     )
                 else:
                     logger.warning("Could not extract lap times for simulation")
@@ -3235,8 +3235,11 @@ def update_dashboards(
                     
                     # Build lap info for header
                     total_laps = session_data.get('total_laps', 57) if session_data else 57
-                    racing_lap = max(1, overview_current_lap - 2) if overview_current_lap else 1
-                    lap_info_text = f"Lap {racing_lap}/{total_laps}"
+                    display_lap = overview_current_lap if overview_current_lap and overview_current_lap > 0 else 1
+                    lap_info_text = (
+                        f"Lap 1 (untimed)/{total_laps}" if display_lap == 1
+                        else f"Lap {display_lap}/{total_laps}"
+                    )
                     
                     dashboards.append(
                         dbc.Card([
@@ -3864,14 +3867,15 @@ def update_simulation_progress(n_intervals, session_data):
         
         # Get EXACT current lap from simulation controller (no estimation)
         current_lap = simulation_controller.get_current_lap()
-        
-        # Convert to VISUAL racing lap
-        # OpenF1 has 2 laps before racing starts (lap 3 = racing lap 1)
-        visual_lap = max(1, current_lap - 2)
+
+        # Keep raw lap count; if first lap has no timing (NaT), display as untimed
+        display_lap = current_lap if current_lap and current_lap > 0 else 1
+        is_untimed_lap = display_lap == 1
+
         # Get total_laps from session_data (calculated from actual race data)
         total_laps = session_data.get('total_laps', 57) if session_data else 57
-        
-        sim_logger.debug(f"Lap {visual_lap}/{total_laps}, remaining: {remaining}")
+
+        sim_logger.debug(f"Lap {display_lap}/{total_laps}, remaining: {remaining}")
         
         # Format remaining time
         remaining_minutes = int(remaining.total_seconds() // 60)
@@ -3880,7 +3884,11 @@ def update_simulation_progress(n_intervals, session_data):
         # Get current speed multiplier
         speed = simulation_controller.speed_multiplier
         
-        progress_text = f"⏱️ Lap {int(visual_lap)}/{int(total_laps)} | ⏳ {remaining_minutes}m {remaining_seconds}s left | 🚀 {speed}x"
+        lap_label = f"Lap {int(display_lap)}" if not is_untimed_lap else "Lap 1 (untimed)"
+        progress_text = (
+            f"⏱️ {lap_label}/{int(total_laps)} | "
+            f"⏳ {remaining_minutes}m {remaining_seconds}s left | 🚀 {speed}x"
+        )
         
         return progress_text
     except Exception as e:
@@ -3956,8 +3964,8 @@ def _render_race_control(
     if simulation_controller is not None:
         try:
             openf1_lap = simulation_controller.get_current_lap()
-            current_lap = max(1, openf1_lap - 2) if openf1_lap > 2 else 1
-            sim_logger.debug("Current lap from controller: OpenF1 %s → Racing %s", openf1_lap, current_lap)
+            current_lap = openf1_lap if openf1_lap and openf1_lap > 0 else 1
+            sim_logger.debug("Current lap from controller: OpenF1 %s", openf1_lap)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Could not get lap from controller: %s", exc)
             current_lap = None
@@ -4013,7 +4021,7 @@ def _render_weather(simulation_time_data: dict | None = None):
     if simulation_controller is not None:
         try:
             openf1_lap = simulation_controller.get_current_lap()
-            weather_lap = max(1, openf1_lap - 2) if openf1_lap else None
+            weather_lap = openf1_lap if openf1_lap and openf1_lap > 0 else 1
         except Exception as exc:  # noqa: BLE001
             logger.debug("Weather lap read failed: %s", exc)
             weather_lap = None
@@ -4081,7 +4089,7 @@ def _render_telemetry(
     if simulation_controller is not None:
         try:
             openf1_lap = simulation_controller.get_current_lap()
-            current_lap = max(1, openf1_lap - 2) if openf1_lap > 2 else 1
+            current_lap = openf1_lap if openf1_lap and openf1_lap > 0 else 1
         except Exception as exc:  # noqa: BLE001
             logger.warning("Could not get lap: %s", exc)
             current_lap = None
@@ -4282,16 +4290,17 @@ def update_current_lap_store(n_intervals, session_data):
         raise PreventUpdate
     
     try:
-        # Get current lap from controller
+        # Get current lap from controller (raw count)
         current_lap = simulation_controller.get_current_lap()
         total_laps = session_data.get('total_laps', 57) if session_data else 57
-        
-        # Convert OpenF1 lap to racing lap (lap 3 = racing lap 1)
-        racing_lap = max(1, current_lap - 2) if current_lap else 1
-        
+
+        display_lap = current_lap if current_lap and current_lap > 0 else 1
+        is_untimed_lap = display_lap == 1
+
         return {
-            'lap': racing_lap,
+            'lap': display_lap,
             'total': total_laps,
+            'untimed': is_untimed_lap,
             'timestamp': n_intervals
         }
     except Exception as e:
@@ -4312,7 +4321,10 @@ def update_lap_badge(lap_data):
     
     lap = lap_data.get('lap', 1)
     total = lap_data.get('total', 57)
-    
+    untimed = lap_data.get('untimed', False)
+
+    if untimed:
+        return f"Lap 1 (untimed)/{total}"
     return f"Lap {lap}/{total}"
 
 
@@ -5468,9 +5480,12 @@ def generate_ai_response(
     current_lap = None
     if simulation_controller:
         openf1_lap = simulation_controller.get_current_lap()
-        current_lap = max(1, openf1_lap - 2) if openf1_lap > 2 else 1
+        current_lap = openf1_lap if openf1_lap and openf1_lap > 0 else 1
     
-    lap_info = f"Lap {current_lap}" if current_lap else "Pre-race"
+    if current_lap:
+        lap_info = "Lap 1 (untimed)" if current_lap == 1 else f"Lap {current_lap}"
+    else:
+        lap_info = "Pre-race"
     
     # Search RAG for context
     rag_manager = get_rag_manager()
@@ -5659,7 +5674,7 @@ if __name__ == '__main__':
     logger.info("F1 STRATEGIST AI - DASH VERSION")
     logger.info("="*60)
     logger.info("Starting application...")
-    logger.info("Open: http://localhost:8502")
+    logger.info("Open: http://localhost:8501")
     logger.info("="*60)
 
     # Initialize session with last completed race (dynamic from OpenF1)
@@ -5671,4 +5686,4 @@ if __name__ == '__main__':
     )
 
     # debug=False to ensure logs appear in terminal
-    app.run(debug=False, port=8502)
+    app.run(debug=False, port=8501)

@@ -177,9 +177,9 @@ class TelemetryDashboard:
             # Get driver info for display
             driver_info = self._get_driver_info(focus_driver_num)
             driver_name = driver_info.get('name', f"Driver {focus_driver_num}")
-            # Convert OpenF1 lap to racing lap (OpenF1 lap 3 = racing lap 1)
-            openf1_lap = lap_data.get('LapNumber', 3)
-            racing_lap = max(1, openf1_lap - 2) if openf1_lap else 1
+            # Use OpenF1 lap directly to keep UI aligned with controller
+            openf1_lap = lap_data.get('LapNumber', 1)
+            racing_lap = max(1, int(openf1_lap)) if openf1_lap else 1
 
             # Create visualization (pass racing_lap for DRS rule validation)
             fig = self._create_telemetry_figure(drivers_to_plot, racing_lap)
@@ -475,23 +475,37 @@ class TelemetryDashboard:
             f"{len(driver_laps)} laps"
         )
 
-        # Filter by simulation time if available
-        if simulation_time is not None and session_start_time is not None:
+        # Prefer the previous completed lap based on controller lap
+        if current_lap is not None and current_lap > 1:
+            target_lap = int(current_lap) - 1
+            target_rows = driver_laps[driver_laps['LapNumber'] == target_lap]
+            if not target_rows.empty:
+                driver_laps = target_rows
+            else:
+                earlier_laps = driver_laps[driver_laps['LapNumber'] < current_lap]
+                if not earlier_laps.empty:
+                    driver_laps = earlier_laps
+
+        # If still not narrowed, use simulation time window
+        if (
+            simulation_time is not None and
+            session_start_time is not None and
+            driver_laps is not None
+        ):
             current_time = session_start_time + timedelta(seconds=simulation_time)
-            
-            # Filter to laps that have ended before current simulation time
+
             if 'LapEndTime' in driver_laps.columns:
                 completed_laps = driver_laps[
                     pd.notna(driver_laps['LapEndTime']) &
                     (driver_laps['LapEndTime'] <= current_time)
                 ]
                 logger.debug(
-                    f"📋 TELEMETRY: Completed laps: {len(completed_laps)}"
+                    f"📋 TELEMETRY: Completed laps (time filter): {len(completed_laps)}"
                 )
                 if not completed_laps.empty:
                     driver_laps = completed_laps
 
-        # Get the last lap
+        # Final fallback: pick the closest lap to target, otherwise earliest
         if 'LapNumber' in driver_laps.columns:
             driver_laps = driver_laps.sort_values('LapNumber', ascending=False)
 
