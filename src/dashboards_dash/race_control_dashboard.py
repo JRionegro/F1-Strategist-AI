@@ -8,6 +8,7 @@ Synchronized with simulation time for historical playback.
 import logging
 from typing import Optional, Tuple
 from datetime import datetime, timedelta
+import re
 
 import dash_bootstrap_components as dbc
 import pandas as pd
@@ -84,7 +85,10 @@ class RaceControlDashboard:
                     session_start_time,
                     filtered_messages
                 )
-            current_flag, sc_status = self._extract_current_status(filtered_messages)
+            current_flag, sc_status = self._extract_current_status(
+                filtered_messages,
+                current_lap=current_lap,
+            )
 
             # Build UI components
             status_panel = self._create_status_panel(
@@ -115,13 +119,14 @@ class RaceControlDashboard:
         session_key: Optional[int],
         simulation_time: Optional[float],
         session_start_time: Optional[pd.Timestamp],
-        focused_driver: Optional[str] = None
-    ) -> Optional[Tuple[int, int, Optional[pd.Timestamp], Optional[str]]]:
+        focused_driver: Optional[str] = None,
+        current_lap: Optional[int] = None,
+    ) -> Optional[Tuple[int, int, Optional[pd.Timestamp], Optional[str], Optional[int]]]:
         """Build a lightweight signature for delta detection.
 
         Signature uses the current session, filtered message count, latest message
-        timestamp within the filtered window, and focused driver context. When the
-        signature is unchanged, the UI can safely reuse the previous component.
+        timestamp within the filtered window, focused driver context, and current lap.
+        Including the lap prevents stale headers when only the lap changes.
         """
         if session_key is None:
             return None
@@ -148,9 +153,10 @@ class RaceControlDashboard:
 
             return (
                 session_key,
-                len(filtered_messages),
+                int(len(filtered_messages)),
                 latest_time,
-                focused_driver
+                focused_driver,
+                current_lap,
             )
         except Exception as exc:
             logger.warning("Failed to compute race control signature: %s", exc)
@@ -226,7 +232,8 @@ class RaceControlDashboard:
             "YELLOW": "warning",
             "RED": "danger",
             "SC": "warning",
-            "VSC": "warning"
+            "VSC": "warning",
+            "CHEQUERED": "secondary",
         }.get(current_flag, "secondary")
 
         flag_icon = {
@@ -234,12 +241,14 @@ class RaceControlDashboard:
             "YELLOW": "🟡",
             "RED": "🔴",
             "SC": "🚗",
-            "VSC": "🟡"
+            "VSC": "🟡",
+            "CHEQUERED": "🏁",
         }.get(current_flag, "🏁")
 
         flag_text = {
             "SC": "SAFETY CAR",
-            "VSC": "VIRTUAL SC"
+            "VSC": "VIRTUAL SC",
+            "CHEQUERED": "SESSION ENDED",
         }.get(current_flag, current_flag)
 
         return dbc.Card([
@@ -716,7 +725,8 @@ class RaceControlDashboard:
 
     def _extract_current_status(
         self,
-        messages: pd.DataFrame
+        messages: pd.DataFrame,
+        current_lap: Optional[int] = None,
     ) -> Tuple[str, Optional[str]]:
         """
         Extract current flag and SC status from latest messages.
@@ -730,28 +740,84 @@ class RaceControlDashboard:
         # Check last 10 messages for current status
         recent_messages = messages.tail(10)
 
-        # Look for SC/VSC
+        status_flag = "GREEN"
+        status_detail: Optional[str] = None
+        sc_end_lap_hint: Optional[int] = None
+
+        # Look for SC/VSC and session end/flags
         for idx, row in recent_messages.iloc[::-1].iterrows():
             message = str(row.get('Message', '')).upper()
+
+            end_tokens = (
+                'CHEQUERED FLAG',
+                'CHEQUEREDFLAG',
+                'SESSION FINISH',
+                'SESSION FINISHED',
+                'SESSION END',
+                'SESSION ENDED',
+                'END OF SESSION',
+                'SESSION COMPLETE',
+                'RACE FINISH',
+                'RACE FINISHED',
+                'QUALIFYING FINISH',
+                'QUALIFYING ENDED',
+                'PRACTICE FINISH',
+                'PRACTICE FINISHED',
+                'FINISH FLAG'
+            )
+
+            lap_hint = None
+            lap_match = re.search(r"LAP\s*(\d+)", message)
+            if lap_match:
+                try:
+                    lap_hint = int(lap_match.group(1))
+                except ValueError:
+                    lap_hint = None
+
+            if any(token in message for token in end_tokens):
+                return "CHEQUERED", "Session Ended"
 
             if 'SAFETY CAR DEPLOYED' in message:
-                return "SC", "SC Active"
-            elif 'SAFETY CAR IN THIS LAP' in message or 'SC ENDING' in message:
-                return "GREEN", "SC Ending"
-            elif 'VIRTUAL SAFETY CAR' in message and 'ENDING' not in message:
-                return "VSC", "VSC Active"
-            elif 'VSC ENDING' in message:
-                return "GREEN", "VSC Ending"
-            elif 'RED FLAG' in message:
-                return "RED", "Session Suspended"
+                status_flag, status_detail = "SC", "SC Active"
+                break
+            if 'SAFETY CAR IN THIS LAP' in message or 'SC ENDING' in message:
+                status_flag, status_detail = "GREEN", "SC Ending"
+                sc_end_lap_hint = lap_hint if lap_hint is not None else current_lap
+                break
+            if 'VIRTUAL SAFETY CAR' in message and 'ENDING' not in message:
+                status_flag, status_detail = "VSC", "VSC Active"
+                break
+            if 'VSC ENDING' in message:
+                status_flag, status_detail = "GREEN", "VSC Ending"
+                sc_end_lap_hint = lap_hint if lap_hint is not None else current_lap
+                break
+            if 'RED FLAG' in message:
+                status_flag, status_detail = "RED", "Session Suspended"
+                break
 
-        # Check for yellow flags
-        for idx, row in recent_messages.iloc[::-1].iterrows():
-            message = str(row.get('Message', '')).upper()
-            if 'YELLOW FLAG' in message:
-                return "YELLOW", None
+        # Check for yellow flags if nothing else matched
+        if status_flag == "GREEN" and status_detail is None:
+            for idx, row in recent_messages.iloc[::-1].iterrows():
+                message = str(row.get('Message', '')).upper()
+                if 'YELLOW FLAG' in message and 'INFRINGEMENT' not in message:
+                    status_flag, status_detail = "YELLOW", None
+                    break
 
-        return "GREEN", None
+        # Clear "SC/VSC Ending" indicator once the lap has advanced
+        if (
+            status_flag == "GREEN"
+            and status_detail in {"SC Ending", "VSC Ending"}
+            and current_lap is not None
+        ):
+            # If we have a lap hint for the ending message, hide after the next lap
+            if sc_end_lap_hint is not None and current_lap > sc_end_lap_hint:
+                return "GREEN", None
+            # If no lap hint, assume it should clear after current lap advances by 1
+            # (current_lap passed in reflects the active lap)
+            if sc_end_lap_hint is None:
+                return "GREEN", None
+
+        return status_flag, status_detail
 
     def _render_no_session(self):
         """Render placeholder when no session is loaded."""

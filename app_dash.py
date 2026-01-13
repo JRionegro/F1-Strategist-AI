@@ -3926,7 +3926,7 @@ _cached_ai_component = None
 _cached_ai_sig = None  # hash over messages + context
 
 _cached_race_control_component = None
-_cached_race_control_sig = None  # (session_key, message_count, latest_time, focused_driver)
+_cached_race_control_sig = None  # (session_key, message_count, latest_time, focused_driver, lap)
 
 
 def _render_race_control(
@@ -3976,7 +3976,8 @@ def _render_race_control(
         session_key=session_key,
         simulation_time=simulation_time,
         session_start_time=session_start_time,
-        focused_driver=focused_driver if focused_driver != 'none' else None
+        focused_driver=focused_driver if focused_driver != 'none' else None,
+        current_lap=current_lap,
     )
 
     if (
