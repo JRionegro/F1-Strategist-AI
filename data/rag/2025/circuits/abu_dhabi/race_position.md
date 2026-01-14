@@ -3,7 +3,7 @@
 ## Executive Summary
 
 Circuit: {Yas Marina Circuit} ({Modern twilight circuit})
-Analysis Date: {2026-01-10 19:02}
+Analysis Date: {2026-01-14 17:08}
 Overtaking Difficulty: N/A/10
 Track Position Value: N/A/10
 
@@ -241,5 +241,5 @@ Position battle scenarios:
 
 ---
 
-*Document generated: {2026-01-10 19:02}*
+*Document generated: {2026-01-14 17:08}*
 *Data source: OpenF1 API + Position Analytics*

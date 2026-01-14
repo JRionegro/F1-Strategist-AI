@@ -1,7 +1,7 @@
 # Phase 4 - Predictive AI Roadmap (Incremental)
 
 **Last Updated**: January 14, 2026  
-**Status**: Planned (not implemented)
+**Status**: Started (zero-touch starter implemented)
 
 ---
 
@@ -14,6 +14,36 @@ Build predictive capabilities that:
 - Are testable end-to-end (data → features → model → inference → UI).
 
 This plan assumes no predictive phase is complete yet.
+
+---
+
+## Current status (as of January 14, 2026)
+
+### Implemented (zero-touch starter, Option B)
+
+Implemented an isolated predictive package focused on **Option B: suggested pit window**. It is not imported by the Dash app or agents.
+
+- New package: `src/predictive/`
+  - `schemas.py`: strict dataset contract + label coherence validation
+  - `features.py`: deterministic feature helpers
+  - `labels.py`: label builder based on next pit lap (center) + configurable window
+  - `dataset_builder.py`: builds a DataFrame with a fixed column set
+- New tests: `tests/predictive/`
+  - Contract test validates:
+    - stable columns
+    - determinism (same input -> same output)
+    - label ranges are in the future and internally consistent
+  - F541 lint test ensures no placeholder-free f-strings in `src/predictive/`
+
+### Test result
+
+- `python -m pytest -q tests/predictive` -> PASS
+
+### Not implemented yet
+
+- No training pipeline, no model artifact, no backtesting.
+- No adapters from OpenF1/session objects.
+- No UI integration.
 
 ---
 

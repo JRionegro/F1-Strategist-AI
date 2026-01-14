@@ -300,4 +300,4 @@ KEY METRICS:
 ---
 
 *Generated from template. Data: OpenF1 API, FIA Regulations, Historical Analysis*
-*Last updated: 2026-01-10 19:02*
+*Last updated: 2026-01-14 17:08*

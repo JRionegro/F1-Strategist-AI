@@ -1899,7 +1899,7 @@ def update_drivers(session, circuit_key, year):
 
 def _format_doc_list(docs: list, category: str = "unknown") -> list:
     """
-    Format document list for display in sidebar with edit buttons.
+    Format document list for display in sidebar with edit and delete buttons.
     
     Args:
         docs: List of document dicts or strings
@@ -1927,23 +1927,165 @@ def _format_doc_list(docs: list, category: str = "unknown") -> list:
         btn_index = f"{category}|{idx}|{encoded_path}"
         
         items.append(
-            html.Div([
-                html.I(className="bi bi-file-earmark-text me-1"),
-                dbc.Button(
-                    filename,
-                    id={"type": "doc-edit-btn", "index": btn_index},
-                    color="link",
-                    size="sm",
-                    className="p-0 text-start",
-                    style={
-                        "textDecoration": "underline dotted",
-                        "color": "#6ea8fe",
-                        "fontSize": "inherit"
-                    }
-                ),
-            ], className="small d-flex align-items-center mb-1")
+            html.Div(
+                [
+                    html.I(className="bi bi-file-earmark-text me-1"),
+                    dbc.Button(
+                        filename,
+                        id={"type": "doc-edit-btn", "index": btn_index},
+                        color="link",
+                        size="sm",
+                        className="p-0 text-start flex-grow-1",
+                        style={
+                            "textDecoration": "underline dotted",
+                            "color": "#6ea8fe",
+                            "fontSize": "inherit",
+                        },
+                    ),
+                    dbc.Button(
+                        "✖",
+                        id={"type": "doc-delete-btn", "index": btn_index},
+                        color="danger",
+                        outline=True,
+                        size="sm",
+                        className="ms-2",
+                        title="Delete document",
+                        style={
+                            "padding": "0px 4px",
+                            "lineHeight": "1.15",
+                            "fontSize": "0.5rem",
+                        },
+                    ),
+                ],
+                className="small d-flex align-items-center mb-1",
+            )
         )
     return items
+
+
+@callback(
+    Output('rag-reload-status', 'children', allow_duplicate=True),
+    Output('rag-status', 'children', allow_duplicate=True),
+    Output('rag-doc-count', 'children', allow_duplicate=True),
+    Output('rag-global-docs', 'children', allow_duplicate=True),
+    Output('rag-strategy-docs', 'children', allow_duplicate=True),
+    Output('rag-weather-docs', 'children', allow_duplicate=True),
+    Output('rag-performance-docs', 'children', allow_duplicate=True),
+    Output('rag-race-control-docs', 'children', allow_duplicate=True),
+    Output('rag-race-position-docs', 'children', allow_duplicate=True),
+    Output('rag-fia-docs', 'children', allow_duplicate=True),
+    Input({'type': 'doc-delete-btn', 'index': ALL}, 'n_clicks'),
+    prevent_initial_call=True
+)
+def delete_rag_document(_delete_clicks):
+    """Delete a RAG document from disk and remove its chunks from ChromaDB."""
+    import base64
+    from pathlib import Path
+
+    triggered = ctx.triggered_id
+    if not triggered or not isinstance(triggered, dict):
+        raise PreventUpdate
+
+    # Guard: ignore initial render when no delete button was actually clicked
+    if not ctx.triggered or ctx.triggered[0].get('value') in (None, 0):
+        raise PreventUpdate
+
+    btn_index = triggered.get('index', '')
+    try:
+        _category, _idx, encoded_path = btn_index.split('|', 2)
+    except ValueError:
+        logger.warning("Invalid delete button index: %s", btn_index)
+        raise PreventUpdate
+
+    try:
+        decoded_path = base64.b64decode(encoded_path.encode()).decode() if encoded_path else ""
+        if not decoded_path:
+            raise ValueError("Missing document path")
+
+        rag_manager = get_rag_manager()
+        base_path = Path(rag_manager.document_loader.base_path).resolve()
+        file_path = Path(decoded_path).resolve()
+
+        if not file_path.exists():
+            status_msg = "⚠️ Document not found on disk"
+        else:
+            try:
+                relative_source = file_path.relative_to(base_path)
+            except ValueError:
+                logger.warning("Refusing to delete path outside base_path: %s", file_path)
+                return (
+                    "❌ Refused: invalid path",
+                    dash.no_update,
+                    dash.no_update,
+                    dash.no_update,
+                    dash.no_update,
+                    dash.no_update,
+                    dash.no_update,
+                    dash.no_update,
+                    dash.no_update,
+                    dash.no_update,
+                )
+
+            # Remove from vector store (delete all chunks for this source)
+            source = str(relative_source)
+            all_docs = rag_manager.vector_store.get_all_documents()
+            ids_to_delete = [
+                doc["id"]
+                for doc in all_docs
+                if doc.get("metadata", {}).get("source") == source
+            ]
+            rag_manager.vector_store.delete(ids_to_delete)
+
+            # Remove file from disk
+            file_path.unlink(missing_ok=True)
+
+            status_msg = f"✅ Deleted: {file_path.name} ({len(ids_to_delete)} chunks)"
+
+        # Refresh sidebar lists from current vector store state
+        stats = rag_manager.vector_store.get_collection_stats()
+        chunk_count = int(stats.get("document_count", 0))
+        docs = rag_manager.list_documents()
+
+        # Update cached context counts if context exists
+        if rag_manager.current_context is not None:
+            rag_manager.current_context.chunk_count = chunk_count
+            rag_manager.current_context.document_count = sum(
+                len(v) for v in docs.values() if isinstance(v, list)
+            )
+            rag_manager.current_context.categories = {
+                k: len(v) for k, v in docs.items() if isinstance(v, list)
+            }
+
+        status = "🟢 Loaded" if chunk_count > 0 else "🟡 No docs"
+        doc_count_text = f"({chunk_count} chunks)" if chunk_count > 0 else ""
+
+        return (
+            status_msg,
+            status,
+            doc_count_text,
+            _format_doc_list(docs.get("global", []), "global"),
+            _format_doc_list(docs.get("strategy", []), "strategy"),
+            _format_doc_list(docs.get("weather", []), "weather"),
+            _format_doc_list(docs.get("performance", []), "performance"),
+            _format_doc_list(docs.get("race_control", []), "race_control"),
+            _format_doc_list(docs.get("race_position", []), "race_position"),
+            _format_doc_list(docs.get("fia", []), "fia"),
+        )
+
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Error deleting RAG document: %s", exc, exc_info=True)
+        return (
+            "❌ Error deleting document",
+            dash.no_update,
+            dash.no_update,
+            dash.no_update,
+            dash.no_update,
+            dash.no_update,
+            dash.no_update,
+            dash.no_update,
+            dash.no_update,
+            dash.no_update,
+        )
 
 
 def _get_circuit_name_for_rag(meeting_key: int, year: int) -> str:

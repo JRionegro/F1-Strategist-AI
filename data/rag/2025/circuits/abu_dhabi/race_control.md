@@ -3,7 +3,7 @@
 ## Executive Summary
 
 Circuit: {Yas Marina Circuit} ({Modern twilight circuit})
-Analysis Date: {2026-01-10 19:02}
+Analysis Date: {2026-01-14 17:08}
 Safety Rating: N/A/10
 Historical Incident Rate: N/A%
 
@@ -221,5 +221,5 @@ Key precedents at this circuit:
 
 ---
 
-*Document generated: {2026-01-10 19:02}*
+*Document generated: {2026-01-14 17:08}*
 *Data source: OpenF1 API + FIA Race Director Guidelines*
