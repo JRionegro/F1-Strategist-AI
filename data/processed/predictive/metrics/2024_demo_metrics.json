@@ -1,0 +1,13 @@
+{
+  "race": "demo",
+  "year": 2024,
+  "version": "0.1.0",
+  "metrics": {
+    "auc": NaN,
+    "brier": 0.0022290095674876082,
+    "positive_rate": 0.0,
+    "n_train": 5,
+    "n_test": 3
+  },
+  "row_count": 8
+}

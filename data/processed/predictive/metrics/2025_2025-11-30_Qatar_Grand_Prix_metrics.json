@@ -1,0 +1,13 @@
+{
+  "race": "2025-11-30_Qatar_Grand_Prix",
+  "year": 2025,
+  "version": "0.1.0",
+  "metrics": {
+    "auc": 0.6821350762527233,
+    "brier": 0.39799492536806585,
+    "positive_rate": 0.04672897196261682,
+    "n_train": 749,
+    "n_test": 321
+  },
+  "row_count": 1070
+}

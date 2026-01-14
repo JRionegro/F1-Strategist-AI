@@ -1,0 +1,18 @@
+{
+  "version": "0.1.0",
+  "trained_on": "2025:2025-11-30_Qatar_Grand_Prix",
+  "feature_columns": [
+    "stint_lap",
+    "last_lap_time_s",
+    "rolling_lap_time_s",
+    "gap_ahead_s",
+    "gap_behind_s",
+    "position"
+  ],
+  "n_train": 749,
+  "n_test": 321,
+  "auc": 0.6821350762527233,
+  "brier": 0.39799492536806585,
+  "positive_rate": 0.04672897196261682,
+  "created_at": "2026-01-14T19:15:30.024767+00:00"
+}

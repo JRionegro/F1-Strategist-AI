@@ -21,23 +21,18 @@ This plan assumes no predictive phase is complete yet.
 
 ### Implemented (Phase 4A–4C groundwork)
 
-- Pit policy bootstrap (Phase 4A): `bootstrap_pit_policy_context()` runs a single RAG lookup for `strategy.md`,
   returns a typed `PitPolicyContext`, and falls back to an empty-but-valid context when RAG is missing. Tested with
   `tests/predictive/test_bootstrap.py`.
-- Option B pit-window dataset builder (Phase 4B): from lap/pit frames → deterministic supervised table via
   `build_pit_window_dataset_from_frames()`, including rolling lap-time feature, stint lap, and pit window labels.
   Sorted persistence for reproducibility. Tested with `tests/predictive/test_dataset_builder_from_frames.py` and
   `tests/predictive/test_dataset_contract.py`.
-- Contracts and helpers: `schemas.py` (PitPolicyContext, PitWindowRow), `features.py`, `labels.py`,
   `dataset_builder.py`, `bootstrap.py`.
-- Lint guard: `tests/predictive/test_flake8_f541.py` prevents placeholder-free f-strings.
-- Baseline model + backtest (Phase 4C): logistic regression baseline (`PitStopBaselineModel`) with deterministic
   time-ordered split and metrics (AUC, Brier). Backtest harness `backtest_pit_baseline()` and deterministic split
   `time_order_split()`. Tests: `tests/predictive/test_modeling.py`, `tests/predictive/test_backtesting.py`.
 
+- Added scoring utility to apply saved pit baseline artifacts to pit-window CSVs: scripts/score_pit_window.py input.csv artifact.joblib [--output ...] writes <input>_scored.csv with pit_stop_proba.
 ### Test result
 
-- `python -m pytest -q tests/predictive` → PASS (unit + contract + lint)
 
 ### Not implemented yet
 
