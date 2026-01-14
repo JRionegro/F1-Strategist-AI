@@ -8,7 +8,7 @@ F1-related documents organized by year and circuit.
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 from .chromadb_store import ChromaDBStore
 from .document_loader import DocumentLoader, Document
@@ -236,6 +236,42 @@ class RAGManager:
         self.vector_store.clear()
         logger.info("RAG collection cleared")
 
+    def _build_filters(self, *, category: Optional[str], year: Optional[int], circuit: Optional[str]) -> list[dict]:
+        """Build a list of Chroma filters to cover global/year + circuit scope.
+
+        Chroma's filters are AND-only. To include both global/year docs and
+        circuit docs, we issue multiple queries (one per filter) and merge.
+        """
+        filters: list[dict] = []
+
+        # Base filter for category if provided
+        base = {"category": category} if category else {}
+
+        def _where(clause: dict[str, Any]) -> dict[str, Any]:
+            """Convert a flat dict into a valid Chroma where clause.
+
+            Chroma requires exactly one operator. If multiple fields are present,
+            wrap them into an $and array. If only one, return as-is.
+            """
+            if len(clause) <= 1:
+                return clause
+            return {"$and": [{k: v} for k, v in clause.items()]}
+
+        # Always include global docs (no year/circuit)
+        filters.append(_where({**base, "scope": "global"}))
+
+        # Year-level docs when a year is set
+        if year is not None:
+            filters.append(_where({**base, "scope": "year", "year": year}))
+
+        # Circuit-specific docs when circuit is set
+        if circuit:
+            filters.append(
+                _where({**base, "scope": "circuit", "circuit": circuit.lower()})
+            )
+
+        return filters
+
     def search(
         self,
         query: str,
@@ -253,28 +289,56 @@ class RAGManager:
         Returns:
             List of search results with content, metadata, and score
         """
-        # Build filter
-        filter_metadata = None
-        if category:
-            filter_metadata = {"category": category}
+        year = self._current_context.year if self._current_context else None
+        circuit = self._current_context.circuit if self._current_context else None
 
-        # Search vector store
-        results = self.vector_store.search(
-            query=query,
-            k=k,
-            filter_metadata=filter_metadata,
-        )
+        # If no context loaded, fall back to global-only filter
+        if year is None and circuit is None:
+            results = self.vector_store.search(
+                query=query,
+                k=k,
+                filter_metadata={"category": category} if category else None,
+            )
+            return [
+                {
+                    "content": r.content,
+                    "metadata": r.metadata,
+                    "score": r.score,
+                    "id": r.id,
+                }
+                for r in results
+            ]
 
-        # Convert to dict format
-        return [
-            {
-                "content": r.content,
-                "metadata": r.metadata,
-                "score": r.score,
-                "id": r.id,
-            }
-            for r in results
-        ]
+        filters = self._build_filters(category=category, year=year, circuit=circuit)
+
+        merged: list[dict] = []
+        seen_ids: set[str] = set()
+
+        for flt in filters:
+            results = self.vector_store.search(
+                query=query,
+                k=k,
+                filter_metadata=flt,
+            )
+
+            for r in results:
+                if r.id in seen_ids:
+                    continue
+                seen_ids.add(r.id)
+                merged.append(
+                    {
+                        "content": r.content,
+                        "metadata": r.metadata,
+                        "score": r.score,
+                        "id": r.id,
+                    }
+                )
+
+        # Sort by score desc to stabilize
+        merged.sort(key=lambda x: x.get("score", 0), reverse=True)
+
+        # Trim to k overall
+        return merged[:k]
 
     def get_stats(self) -> RAGStats:
         """
