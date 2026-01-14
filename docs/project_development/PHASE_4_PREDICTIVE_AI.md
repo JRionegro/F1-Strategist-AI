@@ -1,7 +1,7 @@
 # Phase 4 - Predictive AI Roadmap (Incremental)
 
 **Last Updated**: January 14, 2026  
-**Status**: Started (zero-touch starter implemented)
+**Status**: Phase 4A–4B foundations implemented (offline only)
 
 ---
 
@@ -19,31 +19,28 @@ This plan assumes no predictive phase is complete yet.
 
 ## Current status (as of January 14, 2026)
 
-### Implemented (zero-touch starter, Option B)
+### Implemented (Phase 4A–4B groundwork)
 
-Implemented an isolated predictive package focused on **Option B: suggested pit window**. It is not imported by the Dash app or agents.
-
-- New package: `src/predictive/`
-  - `schemas.py`: strict dataset contract + label coherence validation
-  - `features.py`: deterministic feature helpers
-  - `labels.py`: label builder based on next pit lap (center) + configurable window
-  - `dataset_builder.py`: builds a DataFrame with a fixed column set
-- New tests: `tests/predictive/`
-  - Contract test validates:
-    - stable columns
-    - determinism (same input -> same output)
-    - label ranges are in the future and internally consistent
-  - F541 lint test ensures no placeholder-free f-strings in `src/predictive/`
+- Pit policy bootstrap (Phase 4A): `bootstrap_pit_policy_context()` runs a single RAG lookup for `strategy.md`,
+  returns a typed `PitPolicyContext`, and falls back to an empty-but-valid context when RAG is missing. Tested with
+  `tests/predictive/test_bootstrap.py`.
+- Option B pit-window dataset builder (Phase 4B): from lap/pit frames → deterministic supervised table via
+  `build_pit_window_dataset_from_frames()`, including rolling lap-time feature, stint lap, and pit window labels.
+  Sorted persistence for reproducibility. Tested with `tests/predictive/test_dataset_builder_from_frames.py` and
+  `tests/predictive/test_dataset_contract.py`.
+- Contracts and helpers: `schemas.py` (PitPolicyContext, PitWindowRow), `features.py`, `labels.py`,
+  `dataset_builder.py`, `bootstrap.py`.
+- Lint guard: `tests/predictive/test_flake8_f541.py` prevents placeholder-free f-strings.
 
 ### Test result
 
-- `python -m pytest -q tests/predictive` -> PASS
+- `python -m pytest -q tests/predictive` → PASS (unit + contract + lint)
 
 ### Not implemented yet
 
 - No training pipeline, no model artifact, no backtesting.
 - No adapters from OpenF1/session objects.
-- No UI integration.
+- No UI integration; predictive package remains offline-only.
 
 ---
 
@@ -66,14 +63,17 @@ A feature is considered predictive if it:
 
 ---
 
-## Phase 4A — Prediction Targets + Data Contracts
+### Phase 4A — Prediction Targets + Data Contracts
+
+**Status: Implemented (bootstrap + contracts in code, offline)**
 
 ### Objective
 Define exactly what we predict, what inputs are allowed at inference time, and how the ground truth is built.
 
 ### One-time RAG bootstrap (simulation start)
 - At the start of each simulation, run a **single RAG lookup** against `strategy.md` to collect the textual rules used for pit/no-pit decisions.
-- Cache the result for the whole simulation; **no repeated RAG calls** during the run.
+- Cache the result for the whole simulation; **no repeated RAG calls** during the run. Implemented via
+  `bootstrap_pit_policy_context()` which falls back gracefully if the file or context is missing.
 - Expected fields in the bootstrap payload (immutable for the run):
   - `pit_policy_notes`: general pit decision principles and thresholds.
   - `undercut_overcut_rules`: conditions where undercut/overcut is preferred.
@@ -82,12 +82,14 @@ Define exactly what we predict, what inputs are allowed at inference time, and h
   - `safety_car_overrides`: SC/VSC-specific pit guidance.
   - `weather_overrides`: rain/temperature rules affecting pit timing.
   - `fuel_energy_notes`: any fuel/ERS considerations tied to pit timing.
-- Store in a typed structure (e.g., `PitPolicyContext`) so predictive logic can reference it deterministically.
-- If `strategy.md` is missing, log a warning and return an empty-but-well-formed structure.
+- Store in a typed structure (`PitPolicyContext`) so predictive logic can reference it deterministically. Currently,
+  the bootstrap populates `pit_policy_notes` and `source`; other fields remain empty placeholders until richer
+  parsing is added.
+- If `strategy.md` is missing, log a warning and return an empty-but-well-formed structure (implemented).
 
 ### Deliverables
 - `docs/project_development/PHASE_4_PREDICTIVE_AI.md` (this document) updated with final target definitions.
-- A minimal schema for time-indexed “race state” records.
+- A minimal schema for time-indexed “race state” records (`RaceStateRecord` in code).
 
 ### Candidate prediction targets (MVP first)
 1. **Pit stop probability**: $P(\text{pit in next } N \text{ laps})$ per driver.
@@ -113,54 +115,55 @@ Later targets (Phase 4C+)
   - Clear allowed inputs at inference time.
 - RAG bootstrap for `strategy.md` executes exactly once per simulation start, produces the typed `PitPolicyContext`, and is available to predictive components without additional RAG queries.
 
-### Phase 4A implementation plan (updated)
-1) **Define contracts**
-  - Add `PitPolicyContext` schema with the fields above; ensure optional but present keys (empty lists/strings allowed).
-  - Add `RaceStateRecord` minimal schema for inference-time inputs (lap, compound, stint age, gaps, SC/VSC flag, weather summary).
-2) **Implement bootstrap**
-  - Add a `bootstrap_pit_policy_context()` function that queries RAG once (filtering for `strategy.md`), normalizes text into the contract, and caches per simulation.
-  - Wire it to the simulation start hook (before first predictive decision).
-3) **Tests**
-  - Unit: bootstrap returns well-formed defaults when `strategy.md` absent; deterministic output for a fixed fixture.
-  - Integration: simulation start triggers exactly one RAG call; subsequent predictive calls use cached context.
-4) **Acceptance check**
-  - Run a dry simulation and confirm the pit policy context is populated and reused (no repeated RAG queries in logs).
+### Phase 4A implementation plan (status)
+1) **Define contracts** — DONE
+  - `PitPolicyContext` schema with the fields above; keys exist even when empty.
+  - `RaceStateRecord` minimal schema for inference-time inputs (lap, compound, stint age, gaps, SC/VSC flag, weather summary).
+2) **Implement bootstrap** — DONE (offline)
+  - `bootstrap_pit_policy_context()` queries RAG once for `strategy.md`, normalizes text into the contract, and returns cached data to callers.
+  - Not yet wired into simulation start; to be integrated when predictive loop is added.
+3) **Tests** — DONE
+  - Unit: bootstrap returns well-formed defaults when `strategy.md` absent; deterministic for a fixed fixture.
+  - Integration with simulation pending wiring.
+4) **Acceptance check** — PENDING
+  - Wire into a dry simulation and confirm the pit policy context is populated and reused (no repeated RAG queries in logs).
 
 ---
 
 ## Phase 4B — Dataset Builder (Ground Truth + Features)
 
+**Status: Implemented (offline, deterministic tables)**
+
 ### Objective
 Create a reproducible pipeline that converts cached races into supervised learning tables.
 
-### Proposed structure
-- `src/predictive/` (new package)
-  - `dataset_builder.py` (race → rows)
-  - `features.py` (feature functions)
-  - `labels.py` (target labeling)
-  - `schemas.py` (TypedDict / pydantic models)
-- `data/processed/predictive/` (outputs)
+### Implemented structure
+- `src/predictive/`
+  - `dataset_builder.py` (lap/pit frames → supervised rows; persistence sorted for determinism)
+  - `features.py` (rolling mean, stint lap helpers)
+  - `labels.py` (pit window label builder)
+  - `schemas.py` (pydantic models / contracts)
+  - `bootstrap.py` (pit policy bootstrap)
+- `data/processed/predictive/` (outputs, created on persist)
 
-### Feature set (MVP)
-- Driver state: compound, stint age (laps), last pit lap.
-- Pace proxies: last-lap time, rolling mean (last 3/5 laps).
-- Gap/traffic: gap to car ahead/behind, position. Estimated position after pit.
-- Track state: lap number, session time, SC/VSC flag (if available).
+### Feature set (MVP, implemented)
+- Driver state: compound, stint age (laps via `compute_stint_lap`), last pit lap.
+- Pace proxies: last-lap time, rolling mean (configurable window, default 3).
+- Gap/traffic: gap to car ahead/behind, position.
+- Track state: lap number. (SC/VSC hooks reserved in `RaceStateRecord` but not yet wired.)
 
 ### Test plan (Phase 4B)
-- **Unit tests**
-  - Feature functions: deterministic outputs for fixed inputs.
-  - Label functions: known pit events produce correct labels.
-  - Ensure all features are numeric or categorical with explicit encoding.
-- **Integration tests**
-  - Build dataset for 1–2 races from `cache/` and persist to `data/processed/`.
-  - Validate:
-    - No NaNs in required columns (or controlled NaN policy).
-    - Stable column set (contract) across races.
+- **Unit tests** — DONE
+  - Feature functions deterministic; labels coherent (see `tests/predictive/test_dataset_contract.py`).
+- **Integration-style tests** — DONE (offline frames fixture)
+  - `tests/predictive/test_dataset_builder_from_frames.py` builds twice to assert determinism, contract, and persistence.
+  - Core identifiers non-null; rolling window configurable.
+- **Pending**
+  - Full-race integration from cached data.
 
 ### Acceptance criteria
-- Running the pipeline twice on the same input yields identical output (byte-for-byte or row-hash).
-- Dataset contains at least one full race worth of samples.
+- Running the pipeline twice on the same input yields identical output (met in tests with deterministic frames).
+- Dataset contains at least one full race worth of samples (pending full-race integration).
 
 ---
 

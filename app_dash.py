@@ -3914,10 +3914,19 @@ def save_api_keys(n_clicks, claude_key, gemini_key, openf1_key):
 )
 def toggle_play_pause(n_clicks):
     """Toggle play/pause for simulation."""
-    global simulation_controller, current_session_obj
+    global simulation_controller, current_session_obj, _pit_policy_context
     
     if simulation_controller is None:
         return "▶️", "success", True, "Play simulation"
+
+    if _pit_policy_context is None:
+        try:
+            rag_manager = get_rag_manager()
+            _pit_policy_context = bootstrap_pit_policy_context(rag_manager)
+            logger.info("Pit policy context initialized on play")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Pit policy bootstrap failed on play: %s", exc)
+            _pit_policy_context = PitPolicyContext()
     
     # If simulation ended, restart from the beginning before playing
     if simulation_controller.is_at_end():

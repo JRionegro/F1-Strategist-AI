@@ -13,9 +13,89 @@ from typing import Any, Optional
 
 import pandas as pd
 
+from src.data.cache_config import DataType
+from src.data.cache_manager import CacheManager
+
 from .features import compute_stint_lap, rolling_mean
 from .labels import make_pit_window_label
 from .schemas import PIT_WINDOW_REQUIRED_COLUMNS, PitWindowRow
+
+
+def _normalize_lap_frames_for_dataset(laps: pd.DataFrame) -> pd.DataFrame:
+    """Normalize lap frames into the schema expected by the dataset builder."""
+
+    if laps is None or laps.empty:
+        raise ValueError("laps data is empty")
+
+    df = laps.copy()
+
+    driver_col = None
+    for candidate in ("driver_id", "Driver", "Abbreviation", "DriverNumber"):
+        if candidate in df.columns:
+            driver_col = candidate
+            break
+    if driver_col is None:
+        raise ValueError("laps missing driver identifier")
+
+    lap_col = "LapNumber" if "LapNumber" in df.columns else "lap_number" if "lap_number" in df.columns else None
+    if lap_col is None:
+        raise ValueError("laps missing lap number column")
+
+    def _lap_time_seconds(frame: pd.DataFrame) -> pd.Series:
+        if "lap_time_s" in frame.columns:
+            return frame["lap_time_s"]
+        if "LapTime_seconds" in frame.columns:
+            return frame["LapTime_seconds"]
+        if "LapTime" in frame.columns:
+            return pd.to_timedelta(frame["LapTime"]).dt.total_seconds()
+        return pd.Series([None] * len(frame))
+
+    normalized = pd.DataFrame(
+        {
+            "driver_id": df[driver_col].astype(str).str.strip(),
+            "lap_number": df[lap_col].astype(int),
+            "compound": df.get("Compound", df.get("compound")),
+            "lap_time_s": _lap_time_seconds(df).astype(float, errors="ignore"),
+            "gap_ahead_s": df.get("GapAhead", df.get("gap_ahead_s")),
+            "gap_behind_s": df.get("GapBehind", df.get("gap_behind_s")),
+            "position": df.get("Position", df.get("position", df.get("PositionOrder"))),
+        }
+    )
+
+    return normalized
+
+
+def _normalize_pit_events(pits: Optional[pd.DataFrame], laps: pd.DataFrame) -> pd.DataFrame:
+    """Normalize pit events into driver/lap pairs."""
+
+    if pits is not None and not pits.empty:
+        driver_col = None
+        for candidate in ("driver_id", "Driver", "Abbreviation", "DriverNumber"):
+            if candidate in pits.columns:
+                driver_col = candidate
+                break
+
+        lap_col = None
+        for candidate in ("LapNumber", "lap_number"):
+            if candidate in pits.columns:
+                lap_col = candidate
+                break
+
+        if driver_col is not None and lap_col is not None:
+            normalized = pits[[driver_col, lap_col]].copy()
+            normalized.columns = ["driver_id", "lap_number"]
+            normalized["driver_id"] = normalized["driver_id"].astype(str).str.strip()
+            normalized["lap_number"] = normalized["lap_number"].astype(int)
+            return normalized
+
+    if {"PitOutTime", "LapNumber"}.issubset(laps.columns):
+        fallback = laps[laps["PitOutTime"].notna()][["LapNumber", "Driver"]].copy()
+        fallback.columns = ["lap_number", "driver_id"]
+        fallback["driver_id"] = fallback["driver_id"].astype(str).str.strip()
+        fallback["lap_number"] = fallback["lap_number"].astype(int)
+        return fallback
+
+    return pd.DataFrame(columns=["driver_id", "lap_number"])
 
 
 def build_pit_window_dataset(
@@ -188,6 +268,71 @@ def build_pit_window_dataset_from_frames(
         horizon_laps=horizon_laps,
         rolling_window=rolling_window,
     )
+
+
+def build_pit_window_dataset_from_cache(
+    cache_manager: CacheManager,
+    year: int,
+    race_name: str,
+    *,
+    window_half_width: int = 0,
+    horizon_laps: Optional[int] = None,
+    rolling_window: int = 3,
+    output_path: Optional[str | Path] = None,
+    persist: bool = False,
+) -> pd.DataFrame:
+    """Build a pit-window dataset from cached race data.
+
+    Args:
+        cache_manager: Cache manager configured for historical data.
+        year: Season year.
+        race_name: Race identifier (matches cache naming).
+        window_half_width: Label window half-width.
+        horizon_laps: Optional prediction horizon.
+        rolling_window: Window for rolling lap time feature.
+        output_path: Optional path to persist the dataset.
+        persist: Persist to disk using output_path or the default processed path.
+
+    Returns:
+        DataFrame with the pit-window dataset.
+
+    Raises:
+        ValueError: If cached lap data is missing.
+    """
+
+    laps_df = cache_manager.get_cached_race_data(year, race_name, DataType.LAP_TIMES)
+    if laps_df is None or laps_df.empty:
+        raise ValueError("cached laps not found for race")
+
+    pits_df = cache_manager.get_cached_race_data(year, race_name, DataType.PIT_STOPS)
+
+    normalized_laps = _normalize_lap_frames_for_dataset(laps_df)
+    normalized_pits = _normalize_pit_events(pits_df, laps_df)
+
+    dataset = build_pit_window_dataset_from_frames(
+        normalized_laps,
+        pit_events=normalized_pits if not normalized_pits.empty else None,
+        window_half_width=window_half_width,
+        horizon_laps=horizon_laps,
+        rolling_window=rolling_window,
+    )
+
+    resolved_output: Optional[Path] = None
+    if persist:
+        resolved_output = (
+            Path(output_path)
+            if output_path is not None
+            else cache_manager.config.processed_dir
+            / "predictive"
+            / f"{year}_{race_name}_pit_window.csv"
+        )
+    elif output_path is not None:
+        resolved_output = Path(output_path)
+
+    if resolved_output is not None:
+        persist_dataset(dataset, resolved_output)
+
+    return dataset
 
 
 def persist_dataset(df: pd.DataFrame, output_path: str | Path) -> Path:
