@@ -66,6 +66,7 @@ are located in the [project_development/](project_development/) folder.
 | [PHASE_2D_ARCHITECTURE_PLANNING.md](project_development/PHASE_2D_ARCHITECTURE_PLANNING.md) | Architecture planning |
 | [PHASE_3B_IMPLEMENTATION.md](project_development/PHASE_3B_IMPLEMENTATION.md) | Multi-agent implementation |
 | [PHASE_3B_MULTIAGENT.md](project_development/PHASE_3B_MULTIAGENT.md) | Multi-agent system details |
+| [PHASE_4_PREDICTIVE_AI.md](project_development/PHASE_4_PREDICTIVE_AI.md) | Predictive AI roadmap with test gates |
 
 ---
 

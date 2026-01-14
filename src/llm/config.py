@@ -8,9 +8,9 @@ from dotenv import load_dotenv
 
 from .models import LLMConfig
 
-# Load environment variables from config/ directory
+# Centralized environment file lives in config/.env
 config_dir = Path(__file__).parent.parent.parent / "config"
-load_dotenv(config_dir / ".env")
+load_dotenv(config_dir / ".env", override=True)
 
 
 def get_claude_config(model_override: Optional[str] = None) -> LLMConfig:
@@ -89,7 +89,7 @@ def get_gemini_config() -> LLMConfig:
     return LLMConfig(
         model_name=os.getenv(
             "GEMINI_MODEL",
-            "gemini-2.0-flash-thinking-exp-1219"
+            "gemini-2.0-flash-exp"
         ),
         api_key=api_key,
         max_tokens=int(os.getenv("GEMINI_MAX_TOKENS", "8192")),
@@ -99,7 +99,7 @@ def get_gemini_config() -> LLMConfig:
         extra_params={
             "enable_thinking": os.getenv(
                 "GEMINI_ENABLE_THINKING",
-                "true"
+                "false"
             ).lower() == "true"
         }
     )

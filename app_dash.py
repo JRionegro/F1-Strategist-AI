@@ -13,6 +13,7 @@ import sys
 import math
 import importlib
 import hashlib
+from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 
@@ -97,8 +98,8 @@ from src.utils.logging_config import (
     enable_category, disable_category, apply_debug_profile
 )
 
-# Load environment variables for API keys
-load_dotenv()
+# Load environment variables for API keys from centralized config/.env
+load_dotenv(Path(__file__).parent / "config" / ".env", override=True)
 
 # Initialize centralized logging system
 # By default: only STARTUP and critical messages are shown
@@ -118,6 +119,13 @@ proactive_logger = get_logger(LogCategory.PROACTIVE)  # Proactive AI alerts
 
 # Enable PROACTIVE and CHAT debugging by default for development
 enable_category(LogCategory.PROACTIVE)
+
+# Log which LLM keys are visible after loading env
+logger.info(
+    "Env keys present -> Claude: %s, Gemini: %s",
+    bool(os.getenv("ANTHROPIC_API_KEY")),
+    bool(os.getenv("GOOGLE_API_KEY"))
+)
 enable_category(LogCategory.CHAT)
 
 # Uncomment to enable specific debugging:
@@ -3652,7 +3660,7 @@ def save_api_keys(n_clicks, claude_key, gemini_key, openf1_key):
         raise PreventUpdate
     
     try:
-        env_path = '.env'
+        env_path = Path(__file__).parent / 'config' / '.env'
         lines = []
         
         # Read existing .env file if it exists

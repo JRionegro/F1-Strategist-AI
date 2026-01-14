@@ -7,6 +7,7 @@ Multi-dashboard F1 strategy platform with live and simulation modes.
 import asyncio
 import logging
 import os
+from pathlib import Path
 from datetime import datetime
 from typing import Any, Dict, Optional, List, Tuple
 
@@ -54,8 +55,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from centralized config/.env
+load_dotenv(Path(__file__).parent / "config" / ".env", override=True)
 
 # Page configuration
 st.set_page_config(
