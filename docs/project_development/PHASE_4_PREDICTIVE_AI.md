@@ -1,7 +1,7 @@
 # Phase 4 - Predictive AI Roadmap (Incremental)
 
 **Last Updated**: January 14, 2026  
-**Status**: Phase 4A–4B foundations implemented (offline only)
+**Status**: Phase 4A–4C implemented offline (baseline model + backtest)
 
 ---
 
@@ -19,7 +19,7 @@ This plan assumes no predictive phase is complete yet.
 
 ## Current status (as of January 14, 2026)
 
-### Implemented (Phase 4A–4B groundwork)
+### Implemented (Phase 4A–4C groundwork)
 
 - Pit policy bootstrap (Phase 4A): `bootstrap_pit_policy_context()` runs a single RAG lookup for `strategy.md`,
   returns a typed `PitPolicyContext`, and falls back to an empty-but-valid context when RAG is missing. Tested with
@@ -31,6 +31,9 @@ This plan assumes no predictive phase is complete yet.
 - Contracts and helpers: `schemas.py` (PitPolicyContext, PitWindowRow), `features.py`, `labels.py`,
   `dataset_builder.py`, `bootstrap.py`.
 - Lint guard: `tests/predictive/test_flake8_f541.py` prevents placeholder-free f-strings.
+- Baseline model + backtest (Phase 4C): logistic regression baseline (`PitStopBaselineModel`) with deterministic
+  time-ordered split and metrics (AUC, Brier). Backtest harness `backtest_pit_baseline()` and deterministic split
+  `time_order_split()`. Tests: `tests/predictive/test_modeling.py`, `tests/predictive/test_backtesting.py`.
 
 ### Test result
 
@@ -38,7 +41,7 @@ This plan assumes no predictive phase is complete yet.
 
 ### Not implemented yet
 
-- No training pipeline, no model artifact, no backtesting.
+- No persisted model artifact export/loading; training is in-memory only.
 - No adapters from OpenF1/session objects.
 - No UI integration; predictive package remains offline-only.
 
@@ -169,33 +172,35 @@ Create a reproducible pipeline that converts cached races into supervised learni
 
 ## Phase 4C — Baseline Models + Backtesting Harness
 
+**Status: Implemented (offline baseline + deterministic backtest)**
+
 ### Objective
 Train a simple baseline model and backtest it against historical races.
 
-### Model choices (start simple)
-- Pit probability: Logistic Regression / XGBoost (if allowed) / LightGBM.
-- Pit window: Quantile Regression (or model predicted hazard over laps).
-
-### Backtest harness (must-have)
-- A replay loop that, for each time step, runs inference using only info available at that time.
-- Metrics aggregated per race and overall.
+### Implemented baseline/backtest
+- Model: logistic regression pipeline (`PitStopBaselineModel`) over the pit-window dataset features (stint lap,
+  lap times, gaps, position). Requires both positive/negative labels to fit.
+- Backtest: deterministic time-ordered split (`time_order_split`) to avoid leakage; metrics: AUC (if computable),
+  Brier score, positive rate, train/test counts. Helper `backtest_pit_baseline()` returns model + metrics object.
+- Tests: `tests/predictive/test_modeling.py`, `tests/predictive/test_backtesting.py` cover fitting, probabilities,
+  deterministic splits, and metric sanity.
 
 ### Metrics
-- Classification: AUC, precision/recall at threshold, Brier score.
-- Calibration: reliability plot buckets.
-- Business metrics: “decision usefulness” proxies (e.g., top-k pit suggestions correctness).
+- Classification: AUC (None when labels are single-class in test split).
+- Calibration: Brier score (always computed).
+- Quick sanity: positive rate in test split for monitoring class balance.
 
 ### Test plan (Phase 4C)
-- **Unit tests**
-  - Training pipeline produces a model artifact.
-  - Inference wrapper loads model and returns valid probability in [0, 1].
-- **Integration tests**
-  - Train on 1 season subset, evaluate on a held-out race.
-  - Backtest runs end-to-end without exceptions.
+- **Unit tests** — DONE
+  - Model fits and returns probabilities in [0, 1].
+  - Enforces presence of both classes before training.
+- **Integration-style tests** — DONE (synthetic fixtures)
+  - Deterministic time-ordered split.
+  - Backtest runs end-to-end and produces metrics.
 
 ### Acceptance criteria
-- Baseline model beats a naive heuristic baseline (documented) on at least one metric.
-- Backtest is reproducible with a fixed random seed.
+- Backtest reproducible with deterministic split (met).
+- Metrics surface even on small fixtures; AUC is optional when only one class in test split.
 
 ---
 

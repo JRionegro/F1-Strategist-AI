@@ -37,6 +37,7 @@ dash>=2.14.0
 streamlit>=1.29.0
 matplotlib>=3.8.0
 seaborn>=0.13.0
+scikit-learn>=1.3.0
 
 # MCP Server
 # mcp>=0.1.0  # Commented - install separately if needed
