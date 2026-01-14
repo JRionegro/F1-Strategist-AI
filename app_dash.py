@@ -166,6 +166,9 @@ app = Dash(
     serve_locally=True
 )
 
+# Ensure all @callback decorators bind to this app (avoid dangling global callbacks)
+callback = app.callback
+
 server = app.server
 server.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable Flask caching
 server.config['TEMPLATES_AUTO_RELOAD'] = True
