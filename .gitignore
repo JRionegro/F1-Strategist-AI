@@ -84,6 +84,8 @@ models/*.pth
 # ChromaDB
 chroma_data/
 data/chromadb/
+data/chromadb-debug/
+data/chromadb-test/
 *.chroma
 chroma.sqlite3
 *.sqlite3

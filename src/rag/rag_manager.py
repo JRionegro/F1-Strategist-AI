@@ -296,9 +296,20 @@ class RAGManager:
             current_context=self._current_context,
         )
 
-    def list_documents(self) -> dict[str, list[dict]]:
+    def list_documents(
+        self,
+        *,
+        year: Optional[int] = None,
+        circuit: Optional[str] = None,
+    ) -> dict[str, list[dict]]:
         """
-        List all loaded documents organized by category.
+        List loaded documents organized by category.
+
+        Args:
+            year: Optional filter; when provided, only documents whose metadata.year
+                matches (or global docs without a year) are returned.
+            circuit: Optional filter; when provided, only circuit-scoped documents
+                matching the circuit are returned, while global/year docs remain.
 
         Returns:
             Dict mapping category to list of document info dicts
@@ -328,6 +339,19 @@ class RAGManager:
         for doc in all_docs:
             metadata = doc.get("metadata", {})
             source = metadata.get("source", "unknown")
+
+            # Filter by year (skip circuit/year docs from other years; keep global)
+            if year is not None:
+                meta_year = metadata.get("year")
+                if meta_year is not None and meta_year != year:
+                    continue
+
+            # Filter by circuit for circuit-scoped docs only
+            if circuit:
+                meta_circuit = str(metadata.get("circuit", "")).lower()
+                meta_scope = metadata.get("scope")
+                if meta_scope == "circuit" and meta_circuit != str(circuit).lower():
+                    continue
 
             # Skip if already seen (multiple chunks from same doc)
             if source in seen_sources:

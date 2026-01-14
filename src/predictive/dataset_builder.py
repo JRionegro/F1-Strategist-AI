@@ -1,16 +1,14 @@
 """Dataset builders for predictive AI.
 
-This starter implements an in-memory dataset builder for Option B:
-"suggested pit window".
-
-It intentionally does NOT couple to the running app. You can feed it state
-snapshots from simulation replay or cached session extracts.
+Phase 4B adds helpers to build supervised tables from cached lap frames and
+persist deterministic datasets for reproducible training/backtests.
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable
+from pathlib import Path
 from typing import Any, Optional
 
 import pandas as pd
@@ -106,3 +104,99 @@ def build_pit_window_dataset(
         raise ValueError(f"Missing required columns: {missing}")
 
     return df[list(PIT_WINDOW_REQUIRED_COLUMNS)]
+
+
+def build_states_from_lap_frames(
+    laps: pd.DataFrame,
+    pit_events: Optional[pd.DataFrame] = None,
+) -> tuple[list[dict[str, Any]], dict[str, list[int]]]:
+    """Convert lap-level data into state snapshots + pit map.
+
+    Expected lap columns:
+    - driver_id (str)
+    - lap_number (int)
+    Optional: compound, lap_time_s, position, gap_ahead_s, gap_behind_s
+
+    Expected pit_events columns (optional):
+    - driver_id (str)
+    - lap_number (int)
+    """
+
+    def _clean(value: Any) -> Any:
+        # Convert pandas NaN to None so downstream validation accepts missing values.
+        return None if pd.isna(value) else value
+
+    required = {"driver_id", "lap_number"}
+    missing = required - set(laps.columns)
+    if missing:
+        raise ValueError(f"laps missing required columns: {sorted(missing)}")
+
+    pit_laps_by_driver: dict[str, list[int]] = defaultdict(list)
+    if pit_events is not None and not pit_events.empty:
+        if not {"driver_id", "lap_number"}.issubset(pit_events.columns):
+            raise ValueError("pit_events missing driver_id/lap_number")
+        for driver_id, group in pit_events.groupby("driver_id"):
+            laps_sorted = sorted(int(x) for x in group["lap_number"].tolist())
+            pit_laps_by_driver[str(driver_id)] = laps_sorted
+
+    states: list[dict[str, Any]] = []
+    # Sort by driver then lap for deterministic ordering
+    laps_sorted_df = laps.copy().sort_values(by=["driver_id", "lap_number"]).reset_index(drop=True)
+
+    # Track last pit per driver as we iterate laps in order
+    last_pit_by_driver: dict[str, Optional[int]] = {drv: None for drv in laps_sorted_df["driver_id"].unique()}
+
+    for _, row in laps_sorted_df.iterrows():
+        driver_id = str(row["driver_id"])
+        lap_number = int(row["lap_number"])
+
+        # Update last pit if current lap is in pit list
+        if lap_number in pit_laps_by_driver.get(driver_id, []):
+            last_pit_by_driver[driver_id] = lap_number
+
+        states.append(
+            {
+                "driver_id": driver_id,
+                "lap_number": lap_number,
+                "compound": _clean(row.get("compound")),
+                "last_lap_time_s": _clean(row.get("lap_time_s")),
+                "position": _clean(row.get("position")),
+                "gap_ahead_s": _clean(row.get("gap_ahead_s")),
+                "gap_behind_s": _clean(row.get("gap_behind_s")),
+                "last_pit_lap": last_pit_by_driver.get(driver_id),
+            }
+        )
+
+    return states, pit_laps_by_driver
+
+
+def build_pit_window_dataset_from_frames(
+    laps: pd.DataFrame,
+    pit_events: Optional[pd.DataFrame] = None,
+    *,
+    window_half_width: int = 0,
+    horizon_laps: Optional[int] = None,
+    rolling_window: int = 3,
+) -> pd.DataFrame:
+    """End-to-end builder from lap/pit frames to supervised table."""
+
+    states, pit_map = build_states_from_lap_frames(laps, pit_events)
+    return build_pit_window_dataset(
+        states,
+        pit_map,
+        window_half_width=window_half_width,
+        horizon_laps=horizon_laps,
+        rolling_window=rolling_window,
+    )
+
+
+def persist_dataset(df: pd.DataFrame, output_path: str | Path) -> Path:
+    """Persist dataset deterministically (sorted) to CSV."""
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Sort for determinism
+    sorted_df = df.sort_values(by=["driver_id", "lap_number"]).reset_index(drop=True)
+    sorted_df.to_csv(output_path, index=False)
+    return output_path

@@ -78,6 +78,10 @@ from src.dashboards_dash.race_control_dashboard import RaceControlDashboard
 from src.dashboards_dash.telemetry_dashboard import TelemetryDashboard
 from src.dashboards_dash import weather_dashboard
 
+# Predictive pit policy bootstrap
+from src.predictive.bootstrap import bootstrap_pit_policy_context
+from src.predictive.schemas import PitPolicyContext
+
 # RAG Manager for document loading
 from src.rag.rag_manager import get_rag_manager, reset_rag_manager
 from src.rag.template_generator import get_template_generator
@@ -174,6 +178,9 @@ simulation_controller: Optional[SimulationController] = None
 
 # Current loaded session object (for circuit map and other dashboards)
 current_session_obj = None
+
+# Cached pit policy context (loaded once per simulation from RAG)
+_pit_policy_context: Optional[PitPolicyContext] = None
 
 # LLM provider singleton (lazy initialization)
 _llm_provider: Optional[LLMProvider] = None
@@ -1748,6 +1755,16 @@ def update_drivers(session, circuit_key, year):
         # Store session_obj globally for use in dashboards
         global current_session_obj
         current_session_obj = session_obj
+
+        # Bootstrap pit policy context once per simulation
+        global _pit_policy_context
+        try:
+            rag_manager = get_rag_manager()
+            _pit_policy_context = bootstrap_pit_policy_context(rag_manager)
+            logger.info("Pit policy context loaded from RAG (strategy.md)")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to bootstrap pit policy context: %s", exc)
+            _pit_policy_context = PitPolicyContext()
         
         # Initialize simulation controller with session times
         global simulation_controller
@@ -2044,7 +2061,11 @@ def delete_rag_document(_delete_clicks):
         # Refresh sidebar lists from current vector store state
         stats = rag_manager.vector_store.get_collection_stats()
         chunk_count = int(stats.get("document_count", 0))
-        docs = rag_manager.list_documents()
+        current_context = rag_manager.current_context
+        docs = rag_manager.list_documents(
+            year=current_context.year if current_context else None,
+            circuit=current_context.circuit if current_context else None,
+        )
 
         # Update cached context counts if context exists
         if rag_manager.current_context is not None:
@@ -2163,7 +2184,7 @@ def update_rag_on_context_change(year, meeting_key):
         chunk_count = rag_manager.load_context(year=year, circuit=circuit)
         
         # Get document lists by category
-        docs = rag_manager.list_documents()
+        docs = rag_manager.list_documents(year=year, circuit=circuit)
         
         # Debug: Log what documents are found per category
         logger.info(f"RAG docs by category: {[(k, len(v)) for k, v in docs.items()]}")
@@ -2553,7 +2574,10 @@ uploaded_at: {datetime.now().isoformat()}
             )
             
             # Get updated document lists for sidebar
-            docs = rag_manager.list_documents()
+            docs = rag_manager.list_documents(
+                year=reload_year,
+                circuit=reload_circuit,
+            )
             
             # Format lists for display
             global_list = _format_doc_list(docs.get("global", []), "global")
@@ -2972,7 +2996,7 @@ def _do_generate_templates(year: int, circuit: str, circuit_display: str):
         )
         
         # Get updated document lists
-        all_docs = rag_manager.list_documents()
+        all_docs = rag_manager.list_documents(year=year, circuit=circuit)
         
         # Format lists for display
         global_list = _format_doc_list(all_docs.get("global", []), "global")

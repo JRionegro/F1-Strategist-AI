@@ -90,3 +90,40 @@ class PitWindowRow(BaseModel):
 
         if self.pit_window_end_lap <= self.lap_number:
             raise ValueError("pit window end must be in the future")
+
+
+class PitPolicyContext(BaseModel):
+    """Cached pit-decision guidance loaded once per simulation from strategy.md."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pit_policy_notes: str = ""
+    undercut_overcut_rules: str = ""
+    tire_compound_rules: str = ""
+    degradation_thresholds: str = ""
+    safety_car_overrides: str = ""
+    weather_overrides: str = ""
+    fuel_energy_notes: str = ""
+    source: Optional[str] = None  # relative path to strategy.md if present
+
+
+class RaceStateRecord(BaseModel):
+    """Minimal race state inputs allowed at inference time (simulation/live)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    driver_id: str = Field(min_length=1)
+    lap_number: int = Field(ge=1)
+    compound: Optional[str] = None
+    stint_lap: int = Field(ge=0)
+    gap_ahead_s: Optional[float] = Field(default=None, ge=0)
+    gap_behind_s: Optional[float] = Field(default=None, ge=0)
+    position: Optional[int] = Field(default=None, ge=1)
+    safety_car_status: Optional[str] = Field(
+        default=None,
+        description="Track status flag (e.g., green, yellow, vsc, sc)",
+    )
+    weather_summary: Optional[str] = Field(
+        default=None,
+        description="Short text summary used for quick rule application",
+    )

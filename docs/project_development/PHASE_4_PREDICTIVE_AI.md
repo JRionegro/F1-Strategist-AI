@@ -71,6 +71,20 @@ A feature is considered predictive if it:
 ### Objective
 Define exactly what we predict, what inputs are allowed at inference time, and how the ground truth is built.
 
+### One-time RAG bootstrap (simulation start)
+- At the start of each simulation, run a **single RAG lookup** against `strategy.md` to collect the textual rules used for pit/no-pit decisions.
+- Cache the result for the whole simulation; **no repeated RAG calls** during the run.
+- Expected fields in the bootstrap payload (immutable for the run):
+  - `pit_policy_notes`: general pit decision principles and thresholds.
+  - `undercut_overcut_rules`: conditions where undercut/overcut is preferred.
+  - `tire_compound_rules`: compound usage constraints and stint-length guidance.
+  - `degradation_thresholds`: any numeric/qualitative wear cues that trigger a stop.
+  - `safety_car_overrides`: SC/VSC-specific pit guidance.
+  - `weather_overrides`: rain/temperature rules affecting pit timing.
+  - `fuel_energy_notes`: any fuel/ERS considerations tied to pit timing.
+- Store in a typed structure (e.g., `PitPolicyContext`) so predictive logic can reference it deterministically.
+- If `strategy.md` is missing, log a warning and return an empty-but-well-formed structure.
+
 ### Deliverables
 - `docs/project_development/PHASE_4_PREDICTIVE_AI.md` (this document) updated with final target definitions.
 - A minimal schema for time-indexed “race state” records.
@@ -97,6 +111,20 @@ Later targets (Phase 4C+)
   - A precise definition.
   - An unambiguous ground-truth labeling method.
   - Clear allowed inputs at inference time.
+- RAG bootstrap for `strategy.md` executes exactly once per simulation start, produces the typed `PitPolicyContext`, and is available to predictive components without additional RAG queries.
+
+### Phase 4A implementation plan (updated)
+1) **Define contracts**
+  - Add `PitPolicyContext` schema with the fields above; ensure optional but present keys (empty lists/strings allowed).
+  - Add `RaceStateRecord` minimal schema for inference-time inputs (lap, compound, stint age, gaps, SC/VSC flag, weather summary).
+2) **Implement bootstrap**
+  - Add a `bootstrap_pit_policy_context()` function that queries RAG once (filtering for `strategy.md`), normalizes text into the contract, and caches per simulation.
+  - Wire it to the simulation start hook (before first predictive decision).
+3) **Tests**
+  - Unit: bootstrap returns well-formed defaults when `strategy.md` absent; deterministic output for a fixed fixture.
+  - Integration: simulation start triggers exactly one RAG call; subsequent predictive calls use cached context.
+4) **Acceptance check**
+  - Run a dry simulation and confirm the pit policy context is populated and reused (no repeated RAG queries in logs).
 
 ---
 
@@ -116,7 +144,7 @@ Create a reproducible pipeline that converts cached races into supervised learni
 ### Feature set (MVP)
 - Driver state: compound, stint age (laps), last pit lap.
 - Pace proxies: last-lap time, rolling mean (last 3/5 laps).
-- Gap/traffic: gap to car ahead/behind, position.
+- Gap/traffic: gap to car ahead/behind, position. Estimated position after pit.
 - Track state: lap number, session time, SC/VSC flag (if available).
 
 ### Test plan (Phase 4B)
