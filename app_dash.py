@@ -3742,6 +3742,10 @@ def toggle_play_pause(n_clicks):
     if simulation_controller is None:
         return "▶️", "success", True, "Play simulation"
     
+    # If simulation ended, restart from the beginning before playing
+    if simulation_controller.is_at_end():
+        simulation_controller.restart()
+    
     # Toggle play/pause state (simulation always starts from 0)
     is_playing = simulation_controller.toggle_play_pause()
     sim_logger.info(f"Play/Pause toggled: is_playing={is_playing}")
@@ -3894,6 +3898,29 @@ def update_simulation_progress(n_intervals, session_data):
     except Exception as e:
         logger.error(f"Error in update_simulation_progress: {e}", exc_info=True)
         return f"⏱️ Error: {str(e)}"
+
+
+# Sync play button when simulation reaches the end so it shows Play
+@callback(
+    Output('play-btn', 'children', allow_duplicate=True),
+    Output('play-btn', 'color', allow_duplicate=True),
+    Output('simulation-interval', 'disabled', allow_duplicate=True),
+    Output('play-btn-tooltip', 'children', allow_duplicate=True),
+    Input('simulation-interval', 'n_intervals'),
+    prevent_initial_call=True
+)
+def sync_play_button_on_finish(n_intervals):
+    """Show Play when the run finishes without clearing lap/time data."""
+    global simulation_controller
+
+    if simulation_controller is None:
+        raise PreventUpdate
+
+    if not simulation_controller.is_at_end():
+        raise PreventUpdate
+
+    # Simulation already paused in controller.update(); just reflect UI state
+    return "▶️", "success", True, "Play simulation"
 
 
 # NOTE: Circuit map real-time updates disabled
