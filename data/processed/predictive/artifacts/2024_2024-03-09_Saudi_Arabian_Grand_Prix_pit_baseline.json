@@ -1,0 +1,18 @@
+{
+  "version": "0.1.0",
+  "trained_on": "2024:2024-03-09_Saudi_Arabian_Grand_Prix",
+  "feature_columns": [
+    "stint_lap",
+    "last_lap_time_s",
+    "rolling_lap_time_s",
+    "gap_ahead_s",
+    "gap_behind_s",
+    "position"
+  ],
+  "n_train": 631,
+  "n_test": 271,
+  "auc": 1.0,
+  "brier": 0.019323633510288055,
+  "positive_rate": 0.025830258302583026,
+  "created_at": "2026-01-14T19:29:29.034138+00:00"
+}

@@ -36,6 +36,7 @@ def _prepare_features(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
     label = df["pit_window_center_lap"].notna().astype(int)
 
     features = df.loc[:, list(FEATURE_COLUMNS)].copy()
+    features = features.infer_objects(copy=False)
     features = features.fillna(0.0)
 
     return features, label
@@ -57,7 +58,6 @@ class PitStopBaselineModel:
                     LogisticRegression(
                         max_iter=self.max_iter,
                         solver=self.solver,
-                        n_jobs=1,
                     ),
                 ),
             ]

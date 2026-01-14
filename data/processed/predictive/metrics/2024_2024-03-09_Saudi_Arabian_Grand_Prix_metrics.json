@@ -1,0 +1,13 @@
+{
+  "race": "2024-03-09_Saudi_Arabian_Grand_Prix",
+  "year": 2024,
+  "version": "0.1.0",
+  "metrics": {
+    "auc": 1.0,
+    "brier": 0.019323633510288055,
+    "positive_rate": 0.025830258302583026,
+    "n_train": 631,
+    "n_test": 271
+  },
+  "row_count": 902
+}
