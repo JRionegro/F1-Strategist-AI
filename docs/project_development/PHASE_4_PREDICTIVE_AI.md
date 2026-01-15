@@ -39,18 +39,18 @@ This plan assumes no predictive phase is complete yet.
 ### Pending / Next steps (updated)
 
 - Broaden validation: run fetch/backtest/score/plot on more races (2023–2024) to confirm stability across grids/lengths.
-- UI integration (focus driver + chat + proactiva):
-  - Al iniciar simulación, intentar cargar el CSV scored: `data/processed/predictive/datasets/{year}_{race_name}_pit_window_scored.csv`.
-  - Si existe, construir `pit_proba_lookup(driver_code, lap_number)` → float|None; si no existe, continuar sin proba.
-  - Pasar `pit_proba_lookup` a `RaceOverviewDashboard.render(...)` y mostrar `pit_stop_proba` en el panel de focus driver cuando esté disponible.
-  - Chat intent: usar `answer_pit_probability(scored_path, driver, lap)` de `src/predictive/chat_intents.py` para responder “probabilidad de parada” con el mismo scored.
-  - IA proactiva: en cada tick, para focus driver (y opcional top-N), llamar al lookup; si prob ≥ umbral (ej. 0.60) notificar; aplicar cooldown anti-spam.
-  - Si falta CSV, UI/chat/alertas silencian; opcional: scoring en vivo cargando el artifact y calculando features actuales.
-- Model iteration: probar ajustes de features (stint/gap deltas) y comparar con `report_metrics.py`; conservar artifacts/metrics por corrida.
-- Thresholding: definir umbral por defecto y nota de calibración.
-- Packaging: helper programático “predict” que cargue el último artifact y puntúe un dataframe (sin CLI) para uso interno.
-- Monitoring/tests: smoke que ejecute `report_metrics.py` y confirme ≥1 artifact/metrics; prueba de argumentos para `plot_pit_probs.py`.
-- Docs: mantener esta página con scripts (`report_metrics.py`, `plot_pit_probs.py`) y receta backtest→score→plot→UI.
+- UI integration (focus driver + chat + proactive):
+  - On simulation start, attempt to load the scored CSV: `data/processed/predictive/datasets/{year}_{race_name}_pit_window_scored.csv`.
+  - If present, build `pit_proba_lookup(driver_code, lap_number)` → float|None; if missing, continue without proba.
+  - Pass `pit_proba_lookup` to `RaceOverviewDashboard.render(...)` and display `pit_stop_proba` in the focus driver panel when available.
+  - Chat intent: use `answer_pit_probability(scored_path, driver, lap)` from `src/predictive/chat_intents.py` to answer pit probability queries using the same scored file.
+  - Proactive AI: on each tick, for the focus driver (and optional top-N), call the lookup; if prob ≥ threshold (e.g., 0.60) notify; apply anti-spam cooldown.
+  - If the CSV is missing, silence UI/chat/alerts; optional fallback: live scoring by loading the artifact and computing current features.
+- Model iteration: try feature tweaks (stint/gap deltas) and compare with `report_metrics.py`; keep artifacts/metrics per run.
+- Thresholding: define a default threshold and calibration note.
+- Packaging: programmatic `predict` helper that loads the latest artifact and scores a dataframe (non-CLI) for internal callers.
+- Monitoring/tests: smoke test that runs `report_metrics.py` and confirms ≥1 artifact/metrics; argument validation test for `plot_pit_probs.py`.
+- Docs: keep this page updated with scripts (`report_metrics.py`, `plot_pit_probs.py`) and the backtest→score→plot→UI recipe.
 
 ---
 

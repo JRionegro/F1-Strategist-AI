@@ -429,7 +429,30 @@ class RaceEventDetector:
                     if msg_time <= self._last_checked['last_sc_time']:
                         continue
                 
-                # Flexible Safety Car detection patterns
+                # Check for Safety Car ENDING first (higher specificity)
+                is_sc_ending = (
+                    'IN THIS LAP' in message or
+                    'SC ENDING' in message or
+                    'SAFETY CAR ENDING' in message or
+                    ('SAFETY CAR' in message and 'WITHDRAWN' in message) or
+                    ('SC' in message and 'IN THIS LAP' in message)
+                )
+                
+                if is_sc_ending:
+                    self._last_checked['last_sc_time'] = msg_time
+                    
+                    return RaceEvent(
+                        event_type='safety_car_ending',
+                        priority=5,
+                        message=(
+                            "✅ SAFETY CAR ENDING THIS LAP! "
+                            "Prepare for restart. Manage tire temperature and gap."
+                        ),
+                        data={'category': category, 'message': message},
+                        timestamp=current_time
+                    )
+                
+                # Flexible Safety Car DEPLOYMENT detection patterns
                 is_safety_car = (
                     'SAFETY CAR' in category or 
                     'SAFETY CAR' in message or
@@ -451,6 +474,26 @@ class RaceEventDetector:
                             "🚨 SAFETY CAR DEPLOYED! Consider pit stop - "
                             "reduced time loss during SC period. "
                             "Evaluate tire condition and track position."
+                        ),
+                        data={'category': category, 'message': message},
+                        timestamp=current_time
+                    )
+                
+                # Check for VSC ENDING
+                is_vsc_ending = (
+                    ('VSC' in message or 'VIRTUAL SAFETY CAR' in message) and
+                    ('ENDING' in message or 'IN THIS LAP' in message or 'WITHDRAWN' in message)
+                )
+                
+                if is_vsc_ending:
+                    self._last_checked['last_sc_time'] = msg_time
+                    
+                    return RaceEvent(
+                        event_type='vsc_ending',
+                        priority=4,
+                        message=(
+                            "✅ VSC ENDING! Green flag coming. "
+                            "Prepare for full racing speed."
                         ),
                         data={'category': category, 'message': message},
                         timestamp=current_time
