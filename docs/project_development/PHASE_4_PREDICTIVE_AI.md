@@ -31,14 +31,26 @@ This plan assumes no predictive phase is complete yet.
   `time_order_split()`. Tests: `tests/predictive/test_modeling.py`, `tests/predictive/test_backtesting.py`.
 
 - Added scoring utility to apply saved pit baseline artifacts to pit-window CSVs: scripts/score_pit_window.py input.csv artifact.joblib [--output ...] writes <input>_scored.csv with pit_stop_proba.
+- Added metrics report and plotting tools: `scripts/report_metrics.py` (tabular AUC/Brier/n_train/n_test) and `scripts/plot_pit_probs.py` (pit_stop_proba vs lap per driver).
+- Backtests and scored datasets for 2025 Qatar GP and 2024 Saudi GP are generated (metrics/artifacts/scored CSV/plot in data/processed/predictive/... ).
 ### Test result
 
 
-### Not implemented yet
+### Pending / Next steps (updated)
 
-- No persisted model artifact export/loading; training is in-memory only.
-- No adapters from OpenF1/session objects.
-- No UI integration; predictive package remains offline-only.
+- Broaden validation: run fetch/backtest/score/plot on more races (2023–2024) to confirm stability across grids/lengths.
+- UI integration (focus driver + chat + proactiva):
+  - Al iniciar simulación, intentar cargar el CSV scored: `data/processed/predictive/datasets/{year}_{race_name}_pit_window_scored.csv`.
+  - Si existe, construir `pit_proba_lookup(driver_code, lap_number)` → float|None; si no existe, continuar sin proba.
+  - Pasar `pit_proba_lookup` a `RaceOverviewDashboard.render(...)` y mostrar `pit_stop_proba` en el panel de focus driver cuando esté disponible.
+  - Chat intent: usar `answer_pit_probability(scored_path, driver, lap)` de `src/predictive/chat_intents.py` para responder “probabilidad de parada” con el mismo scored.
+  - IA proactiva: en cada tick, para focus driver (y opcional top-N), llamar al lookup; si prob ≥ umbral (ej. 0.60) notificar; aplicar cooldown anti-spam.
+  - Si falta CSV, UI/chat/alertas silencian; opcional: scoring en vivo cargando el artifact y calculando features actuales.
+- Model iteration: probar ajustes de features (stint/gap deltas) y comparar con `report_metrics.py`; conservar artifacts/metrics por corrida.
+- Thresholding: definir umbral por defecto y nota de calibración.
+- Packaging: helper programático “predict” que cargue el último artifact y puntúe un dataframe (sin CLI) para uso interno.
+- Monitoring/tests: smoke que ejecute `report_metrics.py` y confirme ≥1 artifact/metrics; prueba de argumentos para `plot_pit_probs.py`.
+- Docs: mantener esta página con scripts (`report_metrics.py`, `plot_pit_probs.py`) y receta backtest→score→plot→UI.
 
 ---
 

@@ -66,6 +66,7 @@ class RaceOverviewDashboard:
         session_start_time: Optional[pd.Timestamp] = None,
         current_lap: Optional[int] = None,
         focused_driver_code: Optional[str] = None,
+        pit_proba_lookup: Optional[callable] = None,
     ):
         """
         Render the Race Overview Dashboard with real-time leaderboard.
@@ -76,6 +77,8 @@ class RaceOverviewDashboard:
             session_start_time: Session start timestamp from SimulationController
             current_lap: Current lap from SimulationController (OpenF1 format)
             focused_driver_code: Driver code to highlight in the table
+            pit_proba_lookup: Optional callable(driver_code: str, lap_number: int) -> Optional[float]
+                used to annotate focus driver with pit_stop_proba
 
         Returns:
             Dash component tree for the dashboard
@@ -1137,15 +1140,33 @@ class RaceOverviewDashboard:
                     ahead_row = leaderboard[leaderboard['Position'] == focus_pos - 1]
                     behind_row = leaderboard[leaderboard['Position'] == focus_pos + 1]
                     
+                    focus_driver_code = focus_row.get('Abbreviation', str(driver_num))
+
+                    lap_number = None
+                    if current_lap is not None:
+                        lap_number = int(current_lap)
+                    elif 'LapNumber' in focus_row:
+                        lap_number = int(focus_row['LapNumber'])
+                    elif 'NumberOfLaps' in focus_row:
+                        lap_number = int(focus_row['NumberOfLaps'])
+
+                    pit_stop_proba = None
+                    if pit_proba_lookup is not None and lap_number is not None:
+                        try:
+                            pit_stop_proba = pit_proba_lookup(focus_driver_code, lap_number)
+                        except Exception as exc:  # pragma: no cover - defensive
+                            logger.debug("pit_proba_lookup failed: %s", exc)
+
                     summary['focus_driver'] = {
                         'pos': focus_pos,
-                        'driver': focus_row.get('Abbreviation', str(driver_num)),
+                        'driver': focus_driver_code,
                         'gap_to_leader': f"{focus_row['GapToLeader']:.1f}s" if focus_row['GapToLeader'] > 0 else 'LEADER',
                         'gap_ahead': f"{focus_row['Interval']:.1f}s" if not ahead_row.empty else 'N/A',
                         'gap_behind': f"{behind_row.iloc[0]['Interval']:.1f}s" if not behind_row.empty else 'N/A',
                         'tire': tire_info['compound'],
                         'age': tire_info['age'],
-                        'stops': tire_info['pit_stops']
+                        'stops': tire_info['pit_stops'],
+                        'pit_stop_proba': pit_stop_proba
                     }
                     
                     # Pit window (drivers within range)
