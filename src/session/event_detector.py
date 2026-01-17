@@ -103,6 +103,12 @@ class RaceEventDetector:
         events = []
         
         try:
+            # Log throttle state for debugging
+            logger.debug(
+                f"[THROTTLE_CHECK] current_lap={current_lap}, "
+                f"last_alert_lap={self._last_checked['last_alert_lap']}"
+            )
+            
             # Always check for safety car (highest priority, every interval)
             sc_event = self._check_safety_car(session_key, current_time)
             if sc_event:
@@ -116,15 +122,30 @@ class RaceEventDetector:
                 if position_event:
                     events.append(position_event)
             
-            # Other checks every 2 laps to avoid spam
-            if current_lap <= self._last_checked['last_alert_lap'] + 1:
+            # Relax throttle: allow full checks when lap advances
+            if current_lap > self._last_checked['last_alert_lap']:
+                logger.info(
+                    f"[THROTTLE_CHECK] Lap advanced "
+                    f"({self._last_checked['last_alert_lap']} → {current_lap}), "
+                    f"triggering full event detection"
+                )
+                self._last_checked['last_alert_lap'] = current_lap
+                throttled = False
+            else:
+                throttled = True
+            
+            if throttled:
                 logger.debug(
-                    f"[DETECT] Lap {current_lap} - SC/Position only (throttled)"
+                    f"[DETECT] Lap {current_lap} - "
+                    f"SC/Position only (throttled, waiting for lap advance)"
                 )
                 return events
             
-            self._last_checked['last_alert_lap'] = current_lap
-            logger.debug(f"[DETECT] Full check at lap {current_lap}")
+            # Full event detection enabled
+            logger.info(
+                f"[DETECT] Lap {current_lap} - "
+                f"Full detection enabled (pit window checks active)"
+            )
             
             # Check pit window for focused driver
             if focused_driver:
