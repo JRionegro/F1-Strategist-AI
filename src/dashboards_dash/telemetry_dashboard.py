@@ -131,7 +131,7 @@ class TelemetryDashboard:
             )
 
             if lap_data is None:
-                return self._render_no_lap_data(focused_driver)
+                return self._render_no_lap_data(focused_driver, current_lap)
 
             # Fetch telemetry ONLY for this specific lap (optimized)
             telemetry_data = self._fetch_lap_telemetry(
@@ -456,6 +456,14 @@ class TelemetryDashboard:
         current_lap: Optional[int]
     ) -> Optional[dict]:
         """Get the last completed lap for a driver."""
+        # If simulation just started, no previous lap exists yet
+        if current_lap is not None and current_lap <= 1:
+            logger.info(
+                f"🏁 TELEMETRY: Lap {current_lap} - "
+                f"No previous lap available (simulation just started)"
+            )
+            return None
+        
         if self._cached_laps is None or self._cached_laps.empty:
             logger.debug("🚫 TELEMETRY: No cached laps available")
             return None
@@ -594,7 +602,7 @@ class TelemetryDashboard:
             drivers_data: List of (driver_number, telemetry_df) tuples
             racing_lap: Current racing lap number (1-based, excludes formation)
         """
-        # Create subplots: Speed, Throttle, Brake, Gear
+        # Create subplots: Speed, Brake, Throttle, Gear
         fig = make_subplots(
             rows=4, cols=1,
             shared_xaxes=True,
@@ -637,12 +645,12 @@ class TelemetryDashboard:
                 if idx == 0 and 'DRS' in telemetry.columns:
                     self._add_drs_zones(fig, telemetry, x_data, racing_lap)
 
-            # Throttle trace
-            if 'Throttle' in telemetry.columns:
+            # Brake trace (row 2 - below Speed)
+            if 'Brake' in telemetry.columns:
                 fig.add_trace(
                     go.Scatter(
                         x=x_data,
-                        y=telemetry['Throttle'],
+                        y=telemetry['Brake'],
                         name=name,
                         line=dict(color=color, width=2),
                         legendgroup=name,
@@ -651,12 +659,12 @@ class TelemetryDashboard:
                     row=2, col=1
                 )
 
-            # Brake trace
-            if 'Brake' in telemetry.columns:
+            # Throttle trace (row 3 - below Brake)
+            if 'Throttle' in telemetry.columns:
                 fig.add_trace(
                     go.Scatter(
                         x=x_data,
-                        y=telemetry['Brake'],
+                        y=telemetry['Throttle'],
                         name=name,
                         line=dict(color=color, width=2),
                         legendgroup=name,
@@ -696,7 +704,8 @@ class TelemetryDashboard:
                 font=dict(size=9),
                 bgcolor="rgba(30,30,30,0.8)"
             ),
-            hovermode='x unified'
+            hovermode='x unified',
+            uirevision='telemetry-constant'
         )
 
         # Update y-axes
@@ -708,7 +717,7 @@ class TelemetryDashboard:
             gridcolor='#333'
         )
         fig.update_yaxes(
-            title_text="Throttle (%)",
+            title_text="Brake (%)",
             row=2, col=1,
             range=[0, 105],
             title_font=dict(size=10),
@@ -716,7 +725,7 @@ class TelemetryDashboard:
             gridcolor='#333'
         )
         fig.update_yaxes(
-            title_text="Brake (%)",
+            title_text="Throttle (%)",
             row=3, col=1,
             range=[0, 105],
             title_font=dict(size=10),
@@ -978,8 +987,18 @@ class TelemetryDashboard:
             style={"height": "620px", "backgroundColor": "#1e1e1e"}
         )
 
-    def _render_no_lap_data(self, driver: str) -> dbc.Card:
+    def _render_no_lap_data(self, driver: str, current_lap: Optional[int] = None) -> dbc.Card:
         """Render when no lap data for driver."""
+        # Determine message based on lap number
+        if current_lap is not None and current_lap <= 1:
+            title = "Waiting for first lap"
+            message = f"Driver #{driver} is on lap {current_lap}. Telemetry will be available after completing the first lap."
+            icon_class = "fas fa-hourglass-start fa-3x mb-3"
+        else:
+            title = f"No lap data for driver #{driver}"
+            message = "Waiting for lap completion..."
+            icon_class = "fas fa-flag fa-3x mb-3"
+        
         return dbc.Card(
             [
                 dbc.CardHeader(
@@ -991,15 +1010,15 @@ class TelemetryDashboard:
                         html.Div(
                             [
                                 html.I(
-                                    className="fas fa-flag fa-3x mb-3",
+                                    className=icon_class,
                                     style={"color": "#666"}
                                 ),
                                 html.H5(
-                                    f"No lap data for driver #{driver}",
+                                    title,
                                     className="text-muted"
                                 ),
                                 html.P(
-                                    "Waiting for lap completion...",
+                                    message,
                                     className="small text-muted"
                                 ),
                             ],
