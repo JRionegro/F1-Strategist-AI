@@ -15,6 +15,7 @@ from typing import Dict, List, Optional, Any
 import pandas as pd
 
 from src.data.openf1_data_provider import OpenF1DataProvider
+from src.session.tire_thresholds import resolve_tire_windows
 from src.utils.logging_config import get_logger, LogCategory
 
 logger = get_logger(LogCategory.PROACTIVE)
@@ -46,21 +47,29 @@ class RaceEventDetector:
     """
     
     # Tire compound optimal stint lengths (laps)
-    TIRE_WINDOWS = {
-        'SOFT': {'min': 8, 'optimal': 12, 'max': 18},
-        'MEDIUM': {'min': 15, 'optimal': 22, 'max': 30},
-        'HARD': {'min': 25, 'optimal': 35, 'max': 45},
-        'INTERMEDIATE': {'min': 10, 'optimal': 20, 'max': 35},
-        'WET': {'min': 15, 'optimal': 30, 'max': 50}
-    }
+    # Defaults are defined in src/session/tire_thresholds.py
     
     # Undercut detection thresholds
     UNDERCUT_GAP_THRESHOLD = 2.5  # seconds - gap where undercut is possible
     UNDERCUT_STINT_AGE_MIN = 10  # laps - car behind needs aged tires
     
-    def __init__(self, data_provider: OpenF1DataProvider):
-        """Initialize with data provider."""
+    def __init__(
+        self,
+        data_provider: OpenF1DataProvider,
+        tire_windows: Optional[Dict[str, Dict[str, int]]] = None,
+    ):
+        """Initialize with data provider.
+
+        Args:
+            data_provider: OpenF1 provider instance.
+            tire_windows: Optional overrides for tire window thresholds.
+        """
         self.provider = data_provider
+        self.tire_windows = resolve_tire_windows(tire_windows)
+        logger.info(
+            "[PROACTIVE] Tire windows resolved: %s",
+            self.tire_windows,
+        )
         self._last_checked: Dict[str, Any] = {
             'last_pit_lap': {},  # driver_number -> last pit lap
             'last_sc_time': None,
@@ -179,14 +188,91 @@ class RaceEventDetector:
                 logger.debug(f"[PIT_CHECK] No stint data for driver {driver_number}")
                 return None
             
-            # Get latest stint
-            latest_stint = stints_df.iloc[-1]
-            compound = latest_stint.get('Compound', 'MEDIUM').upper()
-            stint_start = latest_stint.get('LapStart', 1)
-            stint_age = current_lap - stint_start + 1
+            # Focus on stints for the requested driver (API may already filter)
+            if 'DriverNumber' in stints_df.columns:
+                driver_stints = stints_df[stints_df['DriverNumber'] == driver_number]
+            else:
+                driver_stints = stints_df
+
+            if driver_stints.empty:
+                logger.debug(
+                    f"[PIT_CHECK] No driver-specific stint data for driver {driver_number}"
+                )
+                return None
+
+            sort_columns = [
+                column for column in ('StintNumber', 'StintStart')
+                if column in driver_stints.columns
+            ]
+            if sort_columns:
+                driver_stints = driver_stints.sort_values(sort_columns)
+
+            current_lap = max(1, current_lap)
+
+            current_stint = None
+            latest_stint_before: Optional[pd.Series] = None
+            earliest_future_stint: Optional[pd.Series] = None
+            for _, stint in driver_stints.iterrows():
+                stint_start_raw = stint.get('StintStart', stint.get('LapStart'))
+                stint_end_raw = stint.get('StintEnd', stint.get('LapEnd'))
+
+                if pd.isna(stint_start_raw):
+                    continue
+
+                try:
+                    stint_start_lap = int(stint_start_raw)
+                except (TypeError, ValueError):
+                    continue
+
+                stint_end_lap: Optional[int]
+                if pd.isna(stint_end_raw):
+                    stint_end_lap = None
+                else:
+                    try:
+                        stint_end_lap = int(stint_end_raw)
+                    except (TypeError, ValueError):
+                        stint_end_lap = None
+
+                if stint_start_lap <= current_lap and (
+                    stint_end_lap is None or current_lap <= stint_end_lap
+                ):
+                    current_stint = stint
+                    break
+
+                if stint_start_lap <= current_lap:
+                    latest_stint_before = stint
+                elif earliest_future_stint is None:
+                    earliest_future_stint = stint
+
+            if current_stint is None:
+                if latest_stint_before is not None:
+                    current_stint = latest_stint_before
+                elif earliest_future_stint is not None:
+                    current_stint = earliest_future_stint
+                else:
+                    current_stint = driver_stints.iloc[0]
+
+            stint_start_raw = current_stint.get('StintStart', current_stint.get('LapStart', 1))
+
+            try:
+                stint_start = int(stint_start_raw)
+            except (TypeError, ValueError):
+                stint_start = 1
+
+            compound = str(current_stint.get('Compound', 'MEDIUM')).upper()
+            tyre_age_start_raw = current_stint.get('TyreAge', 0)
+            try:
+                tyre_age_start = int(tyre_age_start_raw or 0)
+            except (TypeError, ValueError):
+                tyre_age_start = 0
+
+            laps_since_start = max(0, current_lap - stint_start)
+            stint_age = tyre_age_start + laps_since_start
             
             # Get tire window
-            window = self.TIRE_WINDOWS.get(compound, self.TIRE_WINDOWS['MEDIUM'])
+            window = self.tire_windows.get(
+                compound, self.tire_windows["MEDIUM"]
+            )
             
             logger.info(
                 f"[PIT_CHECK] Driver {driver_number}: {compound} tire, "

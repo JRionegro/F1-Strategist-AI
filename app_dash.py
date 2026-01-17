@@ -42,6 +42,7 @@ from src.session.global_session import (
 from src.session.simulation_controller import SimulationController
 from src.session.live_detector import check_for_live_session
 from src.session.event_detector import RaceEventDetector, RaceEvent
+from src.session.tire_thresholds import load_tire_window_overrides_from_path
 
 # FORCE RELOAD: Remove modules from cache BEFORE importing
 modules_to_reload = [
@@ -1768,6 +1769,17 @@ def update_drivers(session, circuit_key, year):
         except Exception as exc:  # noqa: BLE001
             logger.warning("Failed to bootstrap pit policy context: %s", exc)
             _pit_policy_context = PitPolicyContext()
+
+        # Initialize proactive event detector with RAG tire window overrides
+        global event_detector
+        tire_window_overrides = _load_tire_window_overrides(
+            session_info=session_info,
+            session_obj=session_obj,
+        )
+        event_detector = RaceEventDetector(
+            openf1_provider,
+            tire_windows=tire_window_overrides,
+        )
         
         # Initialize simulation controller with session times
         global simulation_controller
@@ -2141,6 +2153,38 @@ def _get_circuit_name_for_rag(meeting_key: int, year: int) -> str:
     except Exception as e:
         logger.warning(f"Could not get circuit name for meeting_key={meeting_key}: {e}")
     return ""
+
+
+def _load_tire_window_overrides(
+    session_info: dict,
+    session_obj: Optional[SessionAdapter],
+) -> Optional[Dict[str, Dict[str, int]]]:
+    if session_obj is None:
+        return None
+
+    year = session_info.get("year") or session_obj.date.year
+    meeting_key = session_info.get("meeting_key")
+    if not year or not meeting_key:
+        return None
+
+    circuit_name = _get_circuit_name_for_rag(int(meeting_key), int(year))
+    if not circuit_name:
+        return None
+
+    strategy_path = (
+        Path("data/rag")
+        / str(year)
+        / "circuits"
+        / circuit_name
+        / "strategy.md"
+    )
+
+    overrides = load_tire_window_overrides_from_path(strategy_path)
+    if overrides:
+        logger.info("Loaded tire window overrides from %s", strategy_path)
+    else:
+        logger.info("No tire window overrides found; using defaults")
+    return overrides
 
 
 @callback(
@@ -3914,7 +3958,7 @@ def save_api_keys(n_clicks, claude_key, gemini_key, openf1_key):
 )
 def toggle_play_pause(n_clicks):
     """Toggle play/pause for simulation."""
-    global simulation_controller, current_session_obj, _pit_policy_context
+    global simulation_controller, current_session_obj, _pit_policy_context, event_detector
     
     if simulation_controller is None:
         return "▶️", "success", True, "Play simulation"
@@ -3927,6 +3971,19 @@ def toggle_play_pause(n_clicks):
         except Exception as exc:  # noqa: BLE001
             logger.warning("Pit policy bootstrap failed on play: %s", exc)
             _pit_policy_context = PitPolicyContext()
+
+        session_info = {}
+        if current_session_obj is not None:
+            session_info = current_session_obj.session_info or {}
+
+        tire_window_overrides = _load_tire_window_overrides(
+            session_info=session_info,
+            session_obj=current_session_obj,
+        )
+        event_detector = RaceEventDetector(
+            openf1_provider,
+            tire_windows=tire_window_overrides,
+        )
     
     # If simulation ended, restart from the beginning before playing
     if simulation_controller.is_at_end():
