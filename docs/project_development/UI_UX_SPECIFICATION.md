@@ -475,7 +475,9 @@ Features Visible:
   - Kick Sauber: #52E252 (Green)
   - Haas F1 Team: #B6BABD (Gray)
 - Simplified header showing meeting name and session name only
-- Automatic updates every 5 seconds in Live mode
+- Automatic updates every 5 seconds in Live mode aligned with the simulation controller clock
+- Retirement-aware formatting: once a driver is marked DNF their row locks last lap/time, hides gaps/tires, and surfaces the official retirement status
+- Shared FastF1 retirement timeline keeps DNF timing consistent with the track map dashboard
 - Team color coding implemented using hidden TeamName column with CSS filter_query
 - Responsive layout occupying 65% of dashboard area (first column)
 
@@ -571,6 +573,9 @@ Features Visible:
 - Team colors
 - DRS detection zones
 - Pit stop in progress indicators
+- Retirement stack pinned beneath the standings highlighting drivers removed from the circuit view with their retirement lap/time
+- Shared FastF1-derived retirement map ensures the circuit markers and race overview rows transition to DNF simultaneously
+- Simulation controller alignment keeps map playback, gaps, and retirements on the same elapsed time reference as the leaderboard
 
 **Availability**: ✅ Live | ✅ Simulation
 

@@ -1,6 +1,6 @@
 # F1 Strategist AI - Documentation Index
 
-**Last Updated**: January 11, 2026  
+**Last Updated**: January 18, 2026  
 **Project Status**: Production Ready ✅
 
 ---
@@ -90,6 +90,10 @@ are located in the [project_development/](project_development/) folder.
 - **UI/UX design** → [UI_UX_SPECIFICATION.md](project_development/UI_UX_SPECIFICATION.md)
 - **Logging & Debugging** → [DEVELOPMENT_GUIDE.md#logging-system](project_development/DEVELOPMENT_GUIDE.md#logging-system)
 
+### 🆕 Latest Update (January 2026)
+
+- Race overview and track map dashboards now consume a shared retirement map, keeping DNF timing and formatting consistent across the UI. See [PROJECT_STATUS.md](project_development/PROJECT_STATUS.md#-recent-achievements-january-18-2026) for details.
+
 ---
 
 ## 📊 Project Summary
@@ -103,6 +107,7 @@ are located in the [project_development/](project_development/) folder.
 | AI Chatbot | ✅ | Real LLM integration (Claude/Gemini) with RAG |
 | MCP Server | ✅ | 19 tools for F1 data access |
 | Dash UI | ✅ | Live and Simulation modes |
+| Retirement Sync | ✅ | Track map and race overview share FastF1-derived DNF metadata |
 | Cache System | ✅ | Parquet-based with >90% hit rate |
 
 ### Technology Stack

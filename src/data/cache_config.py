@@ -33,6 +33,11 @@ class DataType(Enum):
     DRIVER_INFO = "driver_info"
     TRACK_STATUS = "track_status"
     RACE_CONTROL = "race_control"
+    CALENDAR = "calendar"
+    SESSION_LIST = "session_list"
+    POSITIONS = "positions"
+    INTERVALS = "intervals"
+    CAR_DATA = "car_data"
 
 
 class RetentionPolicy(Enum):
@@ -86,11 +91,16 @@ class CacheConfig:
                 DataType.SPRINT_RESULTS: RetentionPolicy.PERMANENT,
                 DataType.WEATHER: RetentionPolicy.PERMANENT,
                 DataType.DRIVER_INFO: RetentionPolicy.PERMANENT,
+                DataType.CALENDAR: RetentionPolicy.PERMANENT,
+                DataType.SESSION_LIST: RetentionPolicy.PERMANENT,
                 # Datos con retención temporal (pesados)
                 DataType.LAP_TIMES: RetentionPolicy.DAYS_30,
                 DataType.TELEMETRY: RetentionPolicy.PERMANENT,
                 DataType.PIT_STOPS: RetentionPolicy.DAYS_90,
                 DataType.TIRE_STRATEGY: RetentionPolicy.DAYS_90,
+                DataType.POSITIONS: RetentionPolicy.DAYS_30,
+                DataType.INTERVALS: RetentionPolicy.DAYS_30,
+                DataType.CAR_DATA: RetentionPolicy.DAYS_30,
                 # Eventos de carrera
                 DataType.TRACK_STATUS: RetentionPolicy.DAYS_30,
                 DataType.RACE_CONTROL: RetentionPolicy.DAYS_90,

@@ -567,7 +567,16 @@ class OpenF1DataProvider:
         if date_end:
             params["date<"] = date_end
             
-        car_data = self._request("car_data", params)
+        try:
+            car_data = self._request("car_data", params)
+        except requests.HTTPError as exc:
+            status_code = exc.response.status_code if exc.response is not None else None
+            if status_code == 422:
+                logger.warning(
+                    f"Car telemetry not available for session {session_key} (HTTP 422)"
+                )
+                return pd.DataFrame()
+            raise
         
         if not car_data:
             logger.warning(f"No car data for session {session_key}")

@@ -1,8 +1,8 @@
 # F1 Strategist AI - Project Status
 
-**Date**: January 6, 2026  
+**Date**: January 18, 2026  
 **Current Phase**: Phase 4 - Advanced Features/UI 📋  
-**Global Progress**: 92% completed
+**Global Progress**: 94% completed
 
 ---
 
@@ -17,7 +17,7 @@ Phase 2D: Architecture        ████████████████�
 Phase 3A: LLM & RAG           ████████████████████ 100% ✅
 Phase 3B: Multi-Agent         ████████████████████ 100% ✅
 Phase 3C: Tool Integration    ████████████████████ 100% ✅
-Phase 4: User Interface       █████████████████░░░  85% 🚧
+Phase 4: User Interface       ██████████████████░░  92% 🚧
 Phase 4A: Live Detection      ████████████████████ 100% ✅
 Phase 4B: Weather Dashboard   ████████████████████ 100% ✅
 ```
@@ -75,7 +75,7 @@ Phase 4B: Weather Dashboard   ████████████████�
 
 **Achievement:** Application now automatically detects live F1 sessions and switches modes!
 
-### Phase 4B: Weather Dashboard with Simulation Integration (100%) ✅ **NEW!**
+### Phase 4B: Weather Dashboard with Simulation Integration (100%) ✅
 - [x] Weather Dashboard implementation (3 components)
 - [x] Simulation time integration
 - [x] Dynamic data filtering by elapsed time
@@ -105,7 +105,17 @@ Phase 4B: Weather Dashboard   ████████████████�
 - 📈 Growing timeline during simulation
 - 🟡 "Now" marker on temperature graph
 
-### Phase 4C: AI Chatbot Integration (100%) ✅ **NEW!**
+### Phase 4C: Race Overview & Track Map Synchronization (100%) ✅ **NEW!**
+- [x] Retirement detection recomputed from FastF1 lap timing with fallback to cached telemetry
+- [x] Track map retirement stack that relocates retired drivers off the racing line after the precise timestamp
+- [x] Hover data safeguards that preserve final-lap context for retired drivers
+- [x] Race overview DNF formatting that replaces gaps, intervals, tire, and stop metrics with official status strings
+- [x] Shared simulation-clock alignment between race overview and track map dashboards
+- [x] Regression checks against the 2025 Qatar Grand Prix dataset to verify timing accuracy
+
+**Impact:** Track map bubbles now remain on circuit until the exact moment a driver retires, then migrate to the retirement stack while the race overview instantly mirrors the DNF status. Both dashboards stay synchronized with the simulation controller, eliminating premature flags and mismatched statistics.
+
+### Phase 4D: AI Chatbot Integration (100%) ✅
 - [x] LLM Provider integration (Claude + Gemini)
 - [x] HybridRouter for complexity-based routing
 - [x] Single-provider fallback (when only one API key configured)
@@ -131,7 +141,7 @@ Phase 4B: Weather Dashboard   ████████████████�
 
 ## 🔄 Current Status
 
-### Test Results (January 6, 2026)
+### Test Results (January 18, 2026)
 ```
 ✅ Integration Tests:     15/15  (100%)
 ✅ Base Agent Tests:      29/29  (100%)
@@ -147,7 +157,9 @@ Phase 4B: Weather Dashboard   ████████████████�
 ✅ MCP Server:            24/24  (100%)
 ✅ Live Detection:        3/3    (100%)
 ✅ Weather Dashboard:     Manual Testing (100%)
-✅ AI Chatbot:            Manual Testing (100%) ⬅️ NEW!
+✅ AI Chatbot:            Manual Testing (100%)
+✅ Track Map Sync:        Manual Validation (Qatar 2025) (100%) **NEW!**
+✅ Race Overview DNF:     Manual Validation (Qatar 2025) (100%) **NEW!**
 ───────────────────────────────────────
 Total:                    234/236 (99.2%)
 Skipped:                  2 (API keys not configured)
@@ -168,6 +180,8 @@ Errors:                   13 (Windows file locking - non-critical)
 - ✅ AI Chatbot with real LLM providers (Claude/Gemini) **NEW!**
 - ✅ RAG-powered context-aware responses **NEW!**
 - ✅ API key management via UI **NEW!**
+- ✅ Track map retirement stack synchronized with race overview DNF formatting **NEW!**
+- ✅ FastF1-derived retirement timing keeps dashboards aligned during simulation playback **NEW!**
 
 ### Documentation
 - 📄 [PHASE_3B_IMPLEMENTATION.md](PHASE_3B_IMPLEMENTATION.md) - Complete implementation report
@@ -179,13 +193,12 @@ Errors:                   13 (Windows file locking - non-critical)
 
 ## 📋 Pending (Phase 4)
 
-### Phase 4C: Race Overview Dashboard (In Progress) 🚧
-- [ ] Live leaderboard with real-time positions
-- [ ] Gap analysis visualization
-- [ ] Tire strategy display
-- [ ] Pit stop timeline
-- [ ] Driver performance metrics
-- [ ] Circuit map with car positions
+### Phase 4E: Advanced Visualization (In Progress) 🚧
+- [ ] Gap delta charts for leader and class battles
+- [ ] Pit stop timeline overlay on track map and overview
+- [ ] Driver comparison widgets (pace, tire life)
+- [ ] Circuit map camera presets for broadcast-style views
+- [ ] Export and sharing workflow for strategy snapshots
 
 ### Option A: Additional UI Features (Recommended)
 - [ ] Chat interface with multi-agent
@@ -325,22 +338,22 @@ LOCAL_TOKEN_TRACKING=true
 ## 🚀 Next Steps
 
 ### Immediate (This Week)
-1. ✅ Weather Dashboard simulation integration **COMPLETED!**
-2. ✅ Smart update optimization **COMPLETED!**
-3. [ ] Race Overview Dashboard enhancements
-4. [ ] Live leaderboard implementation
+1. ✅ Race overview DNF formatting rollout **COMPLETED!**
+2. ✅ Track map retirement stack implementation **COMPLETED!**
+3. [ ] Integrate pit stop timeline into race overview table
+4. [ ] Add gap delta sparkline to highlight evolving battles
 
-### Next Week (Phase 4C)
-5. [ ] Circuit map with real-time positions
-6. [ ] Pit stop strategy visualization
-7. [ ] Gap analysis charts
-8. [ ] Driver performance metrics
+### Next Week (Phase 4E)
+5. [ ] Introduce camera presets for the circuit map
+6. [ ] Ship driver comparison widget (pace vs. tire age)
+7. [ ] Provide export/share button for strategy snapshots
+8. [ ] Harden telemetry panel for multi-driver playback
 
-### Next 2 Weeks (Phase 4D)
-9. [ ] Chat interface with multi-agent
-10. [ ] Strategy planning tools
-11. [ ] Historical comparison features
-12. [ ] Complete UI polish
+### Next 2 Weeks (Phase 4F)
+9. [ ] Multi-agent chat layout polish
+10. [ ] Strategy planning canvas for manual what-if scenarios
+11. [ ] Historical comparison overlay for simulation mode
+12. [ ] Final UI pass (responsive tweaks + accessibility)
 
 ---
 
@@ -376,52 +389,38 @@ LOCAL_TOKEN_TRACKING=true
 - [x] Live detection system
 - [x] Weather dashboard **NEW!**
 
-**Status**: 🎯 Phase 4B completed - Weather Dashboard operational  
-**Ready for**: 🚀 Phase 4C - Race Overview enhancements  
-**Focus**: Live leaderboard and visualization improvements
+**Status**: 🎯 Phase 4C completed - Race overview & track map synchronized  
+**Ready for**: 🚀 Phase 4E - Advanced visualization upgrades  
+**Focus**: Gap analytics, pit timelines, and broadcast tooling
 
 ---
 
-**Last Update**: December 25, 2025, 11:45 PM  
-**Next Review**: January 5, 2026 (End of Phase 4C)  
+**Last Update**: January 18, 2026, 17:30  
+**Next Review**: January 25, 2026 (Phase 4E checkpoint)  
 **Responsible**: Jorge Rionegro
 
 ---
 
-## 🎉 Recent Achievements (December 25, 2025)
+## 🎉 Recent Achievements (January 18, 2026)
 
-### Weather Dashboard Smart Update System
-**Problem**: Weather dashboard was refreshing every 3 seconds during simulation, causing:
-- Excessive UI re-renders (visual flicker)
-- Unnecessary DOM updates
-- Poor user experience during stable conditions
+### Retirement-Synchronized Dashboards
+**Problem**: Retired drivers jumped off the circuit too early and the race overview continued to display stale gap/tire data.
 
 **Solution Implemented**:
-1. **Smart Update Logic**: Compare current vs. last weather state
-2. **Threshold-based Detection**: Update only on significant changes:
-   - Rain: > 0.1mm change
-   - Wind: > 5 km/h change
-   - Air temp: > 2°C change
-   - Track temp: > 3°C change
-   - Humidity: > 10% change
-   - Pressure: > 2 hPa change
-3. **Time-based Fallback**: Force update every 3 minutes if no changes
-4. **State Persistence**: `dcc.Store` to track last update timestamp and weather state
+1. **FastF1 Lap Timing Integration**: Derive retirement timestamps from lap start/end deltas with numerical driver matching and offset correction.
+2. **Track Map Retirement Stack**: Move retired markers to a dedicated off-track column only after the exact retirement time while keeping hover data for the final lap.
+3. **Race Overview DNF Formatting**: Replace gaps, intervals, tire, and stop columns with the official retirement status once a driver drops out.
+4. **Shared Simulation Clock**: Align race overview and track map updates on the simulation controller elapsed seconds to avoid premature DNF flags.
 
 **Results**:
-- ✅ 98% reduction in UI updates during stable conditions
-- ✅ Eliminated visual flicker
-- ✅ Maintained responsiveness to significant changes
-- ✅ Smooth simulation playback experience
+- ✅ Precise retirement timing validated against the 2025 Qatar Grand Prix cache.
+- ✅ Track map markers remain on track until the real DNF moment, then relocate cleanly.
+- ✅ Leaderboard no longer shows misleading metrics for retired drivers.
+- ✅ Simulation playback feels consistent across dashboards.
 
 **Technical Implementation**:
-- Modified `update_weather_dashboard()` callback (lines 1630-1880 in app_dash.py)
-- Added `weather-last-update-store` for state tracking
-- Implemented change detection algorithm
-- Used `dash.no_update` for efficient rendering
+- Updated `_refresh_track_map_retirements` and `_build_track_map_driver_data` in `app_dash.py`.
+- Leveraged FastF1 position provider session offsets for accurate time alignment.
+- Extended race overview rendering to consume the retirement map and adjust styling.
 
-**Files Modified**:
-- `app_dash.py`: Weather dashboard callback with smart update logic
-- `PROJECT_STATUS.md`: Documentation updated
-
-**Impact**: Significant UX improvement for simulation mode, setting foundation for live mode optimization
+**Impact**: Both visual dashboards now tell the same story about DNFs, improving trustworthiness for strategy analysis and post-race reviews.

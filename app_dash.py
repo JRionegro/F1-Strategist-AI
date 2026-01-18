@@ -11,12 +11,14 @@ import logging
 import os
 import sys
 import math
+import threading
 import importlib
 import hashlib
 from pathlib import Path
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List, Tuple, cast
+from datetime import datetime, timedelta, timezone
+from typing import Optional, Dict, Any, List, Tuple, Sequence, Set, cast
 from numbers import Real
+from uuid import uuid4
 
 import dash
 from dash import Dash, html, dcc, Input, Output, State, callback, ctx, Patch, ALL, no_update
@@ -26,6 +28,8 @@ import pandas as pd
 
 # OpenF1 data provider (replaces FastF1)
 from src.data.openf1_adapter import get_session as get_openf1_session, SessionAdapter
+from src.data.cache_generation import CacheGenerationService, MeetingSelector, SessionCode
+from src.data.cache_config import DEFAULT_CACHE_CONFIG
 from src.data.openf1_data_provider import OpenF1DataProvider
 from src.data.last_race_finder import (
     get_last_completed_race,
@@ -153,6 +157,156 @@ telemetry_dashboard = TelemetryDashboard(openf1_provider)
 
 # Initialize Race Event Detector for proactive AI alerts
 event_detector = RaceEventDetector(openf1_provider)
+
+# Cache generation service for manual cache orchestration
+_cache_track_map_dashboard = get_track_map_dashboard()
+cache_generation_service = CacheGenerationService(
+    openf1_provider=openf1_provider,
+    fastf1_provider=_cache_track_map_dashboard.provider,
+    cache_config=DEFAULT_CACHE_CONFIG,
+)
+_CACHE_ARTIFACT_DEFS = cache_generation_service.list_artifacts()
+CACHE_ARTIFACT_OPTIONS = [
+    {"label": artifact.label, "value": artifact.key}
+    for artifact in _CACHE_ARTIFACT_DEFS
+]
+CACHE_DEFAULT_SELECTION = [
+    artifact.key
+    for artifact in _CACHE_ARTIFACT_DEFS
+    if artifact.level in {"session", "fastf1"}
+]
+CACHE_ARTIFACT_MAP = {artifact.key: artifact for artifact in _CACHE_ARTIFACT_DEFS}
+CACHE_AVAILABLE_YEARS = list(range(datetime.now().year, 2017, -1))
+
+_cache_job_lock = threading.Lock()
+_cache_job_snapshot: Dict[str, Any] = {
+    "job_id": None,
+    "status": "idle",
+    "completed": 0,
+    "total": 0,
+    "message": "",
+    "error": None,
+    "timestamp": None,
+    "context": None,
+}
+
+
+def _set_cache_job_state(**updates: Any) -> None:
+    with _cache_job_lock:
+        _cache_job_snapshot.update(updates)
+
+
+def _get_cache_job_state() -> Dict[str, Any]:
+    with _cache_job_lock:
+        return dict(_cache_job_snapshot)
+
+
+def _cache_progress_payload() -> Dict[str, Any]:
+    snapshot = _get_cache_job_state()
+    return {
+        key: snapshot.get(key)
+        for key in [
+            "status",
+            "completed",
+            "total",
+            "message",
+            "error",
+            "timestamp",
+            "context",
+        ]
+    }
+
+
+def _run_cache_job(
+    job_id: str,
+    action: str,
+    year: int,
+    meeting_key: MeetingSelector,
+    session_code: SessionCode,
+    selected_keys: List[str],
+) -> None:
+    try:
+        if action == "delete":
+            _set_cache_job_state(
+                status="running",
+                message="Deleting selected caches...",
+                error=None,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                completed=0,
+                total=len(selected_keys),
+            )
+            deleted_paths = cache_generation_service.clear_caches(
+                year,
+                meeting_key,
+                session_code,
+                selected_keys,
+            )
+            count = len(deleted_paths)
+            _set_cache_job_state(
+                status="completed",
+                completed=count,
+                total=max(count, 1),
+                message=f"Deleted {count} cache files." if count else "No cache files deleted.",
+                error=None,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            )
+            return
+
+        skip_existing = action == "fill"
+
+        def progress_callback(completed: int, total: int, message: str) -> None:
+            with _cache_job_lock:
+                if _cache_job_snapshot.get("job_id") != job_id:
+                    return
+                _cache_job_snapshot.update({
+                    "status": "running",
+                    "completed": completed,
+                    "total": total,
+                    "message": message,
+                    "error": None,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+
+        summary = cache_generation_service.generate_caches(
+            year,
+            meeting_key,
+            session_code,
+            selected_keys,
+            progress_callback=progress_callback,
+            skip_existing=skip_existing,
+        )
+        total_requested = summary.get("total", len(selected_keys))
+        created_count = summary.get("created", total_requested if not skip_existing else 0)
+        skipped_count = summary.get("skipped", 0)
+        if skip_existing:
+            message = (
+                f"Created {created_count} caches; {skipped_count} already up to date."
+                if total_requested
+                else "No missing caches detected."
+            )
+        else:
+            message = "Cache generation finished successfully."
+        _set_cache_job_state(
+            status="completed",
+            completed=total_requested,
+            total=max(total_requested, 1),
+            message=message,
+            error=None,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Cache %s failed: %s", action, exc, exc_info=True)
+        _set_cache_job_state(
+            status="error",
+            completed=0,
+            total=max(len(selected_keys), 1),
+            message="Cache deletion failed." if action == "delete" else "Cache generation failed.",
+            error=str(exc),
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+    finally:
+        with _cache_job_lock:
+            _cache_job_snapshot["job_id"] = None
 
 # Bootstrap Icons CDN for icon support
 BOOTSTRAP_ICONS = "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
@@ -1114,7 +1268,15 @@ def create_sidebar():
                         ],
                         value="sim",
                         className="mb-1"
-                    )
+                    ),
+                    dbc.Button(
+                        "Manage caches",
+                        id='cache-manager-open',
+                        color='secondary',
+                        size='sm',
+                        className='w-100 mt-2',
+                        outline=True,
+                    ),
                 ], title="🎮 Mode", className="mb-1")
             ], start_collapsed=True),
             
@@ -1669,6 +1831,20 @@ app.layout = dbc.Container([
     dcc.Store(id='chat-messages-store', storage_type='memory', data=[]),
     dcc.Store(id='chat-pending-query-store', data={'query': None, 'quick': None}),
     dcc.Store(id='proactive-last-check-store', data={'last_lap': 0}),
+    dcc.Store(id='cache-progress-store', data={
+        'status': 'idle',
+        'completed': 0,
+        'total': 0,
+        'message': '',
+        'error': None,
+        'timestamp': None,
+    }),
+    dcc.Interval(
+        id='cache-progress-poll',
+        interval=1000,
+        n_intervals=0,
+        disabled=True,
+    ),
     
     # Interval for proactive AI alerts (every 15 seconds when simulation running)
     dcc.Interval(
@@ -1678,6 +1854,109 @@ app.layout = dbc.Container([
         disabled=True  # Enable when simulation is playing
     ),
     
+    # Cache Manager Modal
+    dbc.Modal([
+        dbc.ModalHeader(dbc.ModalTitle("🗂️ Cache Management")),
+        dbc.ModalBody([
+            dbc.Row([
+                dbc.Col([
+                    dbc.Label("Year", className="fw-bold"),
+                    dcc.Dropdown(
+                        id='cache-year-selector',
+                        options=[{"label": str(year), "value": year} for year in CACHE_AVAILABLE_YEARS],
+                        value=CACHE_AVAILABLE_YEARS[0] if CACHE_AVAILABLE_YEARS else None,
+                        clearable=False,
+                        className="mb-2",
+                    ),
+                    dbc.Label("Circuit", className="fw-bold"),
+                    dcc.Dropdown(
+                        id='cache-meeting-selector',
+                        options=[],
+                        value=None,
+                        placeholder="Select meeting",
+                        className="mb-2",
+                    ),
+                    dbc.Label("Session", className="fw-bold"),
+                    dcc.Dropdown(
+                        id='cache-session-selector',
+                        options=[],
+                        value=None,
+                        placeholder="Select session",
+                        className="mb-2",
+                    ),
+                    dbc.Label("Cache types", className="fw-bold"),
+                    dbc.Checklist(
+                        id='cache-type-checklist',
+                        options=cast(Sequence[Any], CACHE_ARTIFACT_OPTIONS),
+                        value=CACHE_DEFAULT_SELECTION,
+                        className="border rounded p-2",
+                    ),
+                ], md=5),
+                dbc.Col([
+                    dbc.Alert(
+                        id='cache-error-alert',
+                        color='danger',
+                        is_open=False,
+                        className="py-2 mb-2"
+                    ),
+                    html.Div(id='cache-status-summary', className='mb-2'),
+                    dcc.Loading(
+                        dbc.Table(
+                            id='cache-status-table',
+                            bordered=True,
+                            striped=True,
+                            hover=True,
+                            size='sm',
+                            className='mb-2'
+                        ),
+                        type="circle",
+                        color="#e10600",
+                    ),
+                    dbc.Progress(
+                        id='cache-progress-bar',
+                        value=0,
+                        max=1,
+                        label='',
+                        striped=True,
+                        animated=True,
+                        className='mb-1'
+                    ),
+                    html.Small(
+                        id='cache-progress-message',
+                        className='text-muted'
+                    ),
+                ], md=7),
+            ])
+        ]),
+        dbc.ModalFooter([
+            dbc.Button(
+                "Regenerate caches",
+                id='cache-regenerate-button',
+                color='danger',
+                className='me-2'
+            ),
+            dbc.Button(
+                "Generate missing caches",
+                id='cache-fill-button',
+                color='primary',
+                outline=True,
+                className='me-2'
+            ),
+            dbc.Button(
+                "Delete caches",
+                id='cache-delete-button',
+                color='warning',
+                outline=True,
+                className='me-2'
+            ),
+            dbc.Button(
+                "Close",
+                id='cache-modal-close',
+                color='secondary'
+            )
+        ]),
+    ], id='cache-manager-modal', size='xl', is_open=False),
+
     # Help Modal
     dbc.Modal([
         dbc.ModalHeader(dbc.ModalTitle("❓ Help & Documentation")),
@@ -2216,6 +2495,637 @@ def update_sessions(circuit_key, year, current_session):
 
 
 import time
+
+
+def _format_size(size_bytes: int) -> str:
+    """Return human readable size string."""
+    if size_bytes <= 0:
+        return "0 B"
+    units = ["B", "KB", "MB", "GB", "TB"]
+    value = float(size_bytes)
+    for unit in units:
+        if value < 1024 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(value)} {unit}"
+            return f"{value:.2f} {unit}"
+        value /= 1024
+    return f"{value:.2f} TB"
+
+
+def _describe_cache_job_context(context: Optional[Dict[str, Any]]) -> str:
+    """Return compact description for the active cache job context."""
+    if not context:
+        return ""
+
+    parts: List[str] = []
+    year = context.get("year")
+    meeting = context.get("meeting")
+    session = context.get("session")
+    action = context.get("action")
+    artifacts = context.get("artifacts") or []
+
+    if action:
+        parts.append(str(action).capitalize())
+    if year is not None:
+        parts.append(f"Year: {year}")
+    if meeting not in {None, ""}:
+        parts.append(f"Meeting: {meeting}")
+    if session not in {None, ""}:
+        parts.append(f"Session: {session}")
+    if artifacts:
+        parts.append(f"Artifacts: {len(artifacts)} selected")
+
+    return " · ".join(parts)
+
+
+@callback(
+    Output('cache-manager-modal', 'is_open'),
+    Input('cache-manager-open', 'n_clicks'),
+    Input('cache-modal-close', 'n_clicks'),
+    State('cache-manager-modal', 'is_open'),
+    prevent_initial_call=True,
+)
+def toggle_cache_manager_modal(open_clicks, close_clicks, is_open):
+    """Toggle cache manager modal visibility."""
+    triggered = ctx.triggered_id if ctx.triggered else None
+    if triggered == 'cache-manager-open':
+        return True
+    if triggered == 'cache-modal-close':
+        return False
+    return is_open
+
+
+@callback(
+    Output('cache-meeting-selector', 'options'),
+    Output('cache-meeting-selector', 'value'),
+    Input('cache-year-selector', 'value'),
+)
+def update_cache_meetings(year):
+    """Populate meeting selector inside cache modal."""
+    if year is None:
+        return [], None
+
+    schedule = load_f1_calendar(year)
+    if schedule.empty:
+        return [], None
+
+    circuit_short_names = {
+        'United Arab Emirates': 'Abu Dhabi',
+        'United States': 'USA',
+        'United Kingdom': 'Britain',
+        'Saudi Arabia': 'Saudi',
+    }
+
+    options = []
+    for _, event in schedule.iterrows():
+        country = event['Country']
+        location = event['Location']
+        round_num = int(event['RoundNumber'])
+        meeting_key = event['MeetingKey']
+
+        if country == 'United States':
+            if 'Miami' in str(location):
+                display_name = 'Miami'
+            elif 'Austin' in str(location):
+                display_name = 'USA (Austin)'
+            elif 'Las Vegas' in str(location):
+                display_name = 'Las Vegas'
+            else:
+                display_name = circuit_short_names.get(country, country)
+        else:
+            display_name = circuit_short_names.get(country, country)
+
+        options.append({
+            'label': f"R{round_num} - {display_name}",
+            'value': meeting_key,
+        })
+    if options:
+        options.insert(0, {'label': 'All meetings', 'value': 'ALL'})
+
+    return options, (options[0]['value'] if options else None)
+
+
+@callback(
+    Output('cache-session-selector', 'options'),
+    Output('cache-session-selector', 'value'),
+    Input('cache-meeting-selector', 'value'),
+    State('cache-year-selector', 'value'),
+)
+def update_cache_sessions(meeting_key, year):
+    """Populate session selector inside cache modal."""
+    if meeting_key is None or year is None:
+        return [], None
+
+    if isinstance(meeting_key, str) and meeting_key.strip().upper() in {'ALL', '*', 'YEAR'}:
+        options = [
+            {'label': 'Race', 'value': 'R'},
+            {'label': 'Qualifying', 'value': 'Q'},
+            {'label': 'Sprint', 'value': 'S'},
+            {'label': 'Sprint Qualifying', 'value': 'SQ'},
+            {'label': 'Sprint Shootout', 'value': 'SS'},
+            {'label': 'Practice 1', 'value': 'P1'},
+            {'label': 'Practice 2', 'value': 'P2'},
+            {'label': 'Practice 3', 'value': 'P3'},
+        ]
+        return options, 'R'
+
+    sessions_params = {"year": year, "meeting_key": meeting_key}
+    sessions = openf1_provider._request("sessions", sessions_params)
+    if not sessions:
+        return [], None
+
+    session_map = {
+        'Practice 1': 'P1',
+        'Practice 2': 'P2',
+        'Practice 3': 'P3',
+        'Qualifying': 'Q',
+        'Sprint': 'S',
+        'Sprint Qualifying': 'SQ',
+        'Sprint Shootout': 'SS',
+        'Race': 'R',
+    }
+    value_to_label = {
+        'P1': 'Practice 1',
+        'P2': 'Practice 2',
+        'P3': 'Practice 3',
+        'FP1': 'Practice 1',
+        'FP2': 'Practice 2',
+        'FP3': 'Practice 3',
+        'Q': 'Qualifying',
+        'SQ': 'Sprint Qualifying',
+        'SS': 'Sprint Shootout',
+        'S': 'Sprint',
+        'SPRINT': 'Sprint',
+        'R': 'Race',
+        'RACE': 'Race',
+    }
+
+    options: List[Dict[str, str]] = []
+    seen_values: Set[str] = set()
+
+    for session in sessions:
+        session_name = str(session.get('session_name', '') or '')
+        session_type_raw = session.get('session_type') or session.get('session_code')
+        if isinstance(session_type_raw, str):
+            code = session_type_raw.upper()
+        elif session_type_raw is not None:
+            code = str(session_type_raw).upper()
+        else:
+            code = session_map.get(session_name, session_name).upper()
+
+        normalized_code = code.upper()
+
+        label = value_to_label.get(normalized_code)
+        if label is None:
+            name_lower = session_name.lower()
+            if 'practice' in name_lower:
+                if '1' in name_lower:
+                    label = 'Practice 1'
+                    normalized_code = 'P1'
+                elif '2' in name_lower:
+                    label = 'Practice 2'
+                    normalized_code = 'P2'
+                elif '3' in name_lower:
+                    label = 'Practice 3'
+                    normalized_code = 'P3'
+                else:
+                    label = 'Practice'
+            elif 'qualifying' in name_lower and 'shootout' in name_lower:
+                label = 'Sprint Shootout'
+                normalized_code = 'SS'
+            elif 'qualifying' in name_lower:
+                if 'sprint' in name_lower:
+                    label = 'Sprint Qualifying'
+                    normalized_code = 'SQ'
+                else:
+                    label = 'Qualifying'
+                    normalized_code = 'Q'
+            elif 'sprint' in name_lower:
+                label = 'Sprint'
+                normalized_code = 'S'
+            elif 'race' in name_lower:
+                label = 'Race'
+                normalized_code = 'R'
+            else:
+                label = session_name or normalized_code.title()
+
+        if normalized_code in seen_values:
+            continue
+        seen_values.add(normalized_code)
+
+        options.append({'label': label, 'value': normalized_code})
+
+    default_value = None
+    if options:
+        race_option = next((opt['value'] for opt in options if opt['value'] in {'R', 'RACE'}), None)
+        default_value = race_option or options[0]['value']
+
+    return options, default_value
+
+
+@callback(
+    Output('cache-status-summary', 'children'),
+    Output('cache-status-table', 'children'),
+    Output('cache-regenerate-button', 'disabled'),
+    Output('cache-fill-button', 'disabled'),
+    Output('cache-error-alert', 'is_open'),
+    Output('cache-error-alert', 'children'),
+    Output('cache-progress-bar', 'value'),
+    Output('cache-progress-bar', 'label'),
+    Output('cache-progress-bar', 'max'),
+    Output('cache-progress-message', 'children'),
+    Output('cache-year-selector', 'disabled'),
+    Output('cache-meeting-selector', 'disabled'),
+    Output('cache-session-selector', 'disabled'),
+    Output('cache-type-checklist', 'disabled'),
+    Input('cache-year-selector', 'value'),
+    Input('cache-meeting-selector', 'value'),
+    Input('cache-session-selector', 'value'),
+    Input('cache-type-checklist', 'value'),
+    Input('cache-progress-store', 'data'),
+)
+def refresh_cache_status(year, meeting_key, session_code, selected_keys, progress_data):
+    """Refresh cache status summary and table based on selection."""
+    logger.debug(
+        "Cache modal refresh -> year=%s meeting=%s session=%s selected=%s",
+        year,
+        meeting_key,
+        session_code,
+        selected_keys,
+    )
+
+    progress_data = progress_data or {}
+    progress_status = progress_data.get('status', 'idle')
+    progress_context = progress_data.get('context') or {}
+    progress_completed = int(progress_data.get('completed', 0))
+    progress_total = int(progress_data.get('total', 0))
+    progress_max = max(progress_total, 1)
+    is_running = progress_status == 'running'
+    disable_inputs = is_running
+
+    display_year = year
+    display_meeting = meeting_key
+    display_session = session_code
+    selected_keys_list = list(selected_keys or [])
+
+    if is_running:
+        display_year = progress_context.get('year', year)
+        display_meeting = progress_context.get('meeting', meeting_key)
+        display_session = progress_context.get('session', session_code)
+        selected_keys_list = list(progress_context.get('artifacts') or selected_keys_list)
+
+    context_description = _describe_cache_job_context(progress_context)
+
+    if is_running:
+        if progress_total:
+            progress_label = f"Working... ({progress_completed}/{progress_total})"
+        else:
+            progress_label = "Working..."
+    else:
+        progress_label = f"{progress_completed}/{progress_total}" if progress_total else ''
+
+    progress_value = progress_completed
+    if is_running and progress_completed == 0 and progress_total:
+        progress_value = 0.01
+
+    progress_message = progress_data.get('message') or ''
+    if is_running:
+        base_message = progress_message or 'Working on cache job...'
+        progress_message = f"{base_message} ({context_description})" if context_description else base_message
+    elif progress_message and context_description:
+        progress_message = f"{progress_message} ({context_description})"
+
+    alert_open = False
+    alert_message = ''
+
+    summary_parts: List[Any] = []
+
+    if is_running:
+        summary_parts.append(
+            dbc.Alert(
+                [
+                    dbc.Spinner(size='sm', color='warning', spinner_class_name='me-2'),
+                    html.Span('Cache job in progress'),
+                    html.Br(),
+                    html.Small(context_description or 'Tracking active cache request'),
+                ],
+                color='warning',
+                className='mb-2 py-2'
+            )
+        )
+
+    if not selected_keys_list:
+        summary_parts.append(
+            dbc.Alert(
+                "Select at least one cache type to inspect status.",
+                color='info',
+                className='mb-2 py-2'
+            )
+        )
+        return (
+            summary_parts,
+            [],
+            True,
+            True,
+            alert_open,
+            alert_message,
+            progress_value,
+            progress_label,
+            progress_max,
+            progress_message,
+            disable_inputs,
+            disable_inputs,
+            disable_inputs,
+            disable_inputs,
+        )
+
+    artifacts = [CACHE_ARTIFACT_MAP[key] for key in selected_keys_list if key in CACHE_ARTIFACT_MAP]
+    requires_meeting = any(artifact.level in {'meeting', 'session', 'fastf1'} for artifact in artifacts)
+    requires_session = any(artifact.level in {'session', 'fastf1'} for artifact in artifacts)
+
+    disable_button = False
+    disable_fill = False
+    is_all_meetings = isinstance(display_meeting, str) and display_meeting.strip().upper() in {'ALL', '*', 'YEAR'}
+    missing_messages: List[str] = []
+    if requires_meeting and not is_all_meetings and display_meeting in (None, ''):
+        disable_button = True
+        disable_fill = True
+        alert_open = True
+        missing_messages.append("Select a circuit to manage meeting or session caches.")
+
+    if requires_session and not display_session:
+        disable_button = True
+        disable_fill = True
+        alert_open = True
+        missing_messages.append("Select a session to generate session-level caches.")
+
+    if missing_messages:
+        alert_message = " ".join(missing_messages)
+
+    if missing_messages:
+        summary_parts.append(
+            dbc.Alert(
+                alert_message or "Select the required filters to inspect caches.",
+                color='info',
+                className='mb-2 py-2'
+            )
+        )
+        return (
+            summary_parts,
+            [],
+            True,
+            True,
+            alert_open,
+            alert_message,
+            progress_value,
+            progress_label,
+            progress_max,
+            progress_message,
+            disable_inputs,
+            disable_inputs,
+            disable_inputs,
+            disable_inputs,
+        )
+
+    meeting_value: Optional[int] = None
+    if display_meeting not in (None, '') and not is_all_meetings:
+        try:
+            meeting_value = int(display_meeting)
+        except (TypeError, ValueError):
+            meeting_value = None
+
+    session_value = display_session
+
+    table_children: List[Any] = []
+    summary_children: Optional[Any] = None
+
+    try:
+        status = cache_generation_service.describe_status(
+            int(display_year) if display_year is not None else datetime.now().year,
+            display_meeting if is_all_meetings else meeting_value,
+            session_value,
+            selected_keys_list,
+        )
+
+        if status.get('multi_meeting'):
+            summary_children = dbc.Alert(
+                f"Inspecting {status.get('meeting_count', 0)} meetings. Cache status preview is unavailable for season-wide selection.",
+                color='info',
+                className='mb-2 py-2'
+            )
+            table_children = []
+            disable_button = False
+        else:
+            summary_children = html.Div([
+                html.H6("Cache summary", className='mb-1'),
+                html.Div(
+                    f"{status['existing']} of {status['requested']} caches ready"
+                    f" · {status['total_size_mb']:.3f} MB",
+                    className='small text-muted'
+                ),
+            ])
+
+            header = html.Thead(html.Tr([
+                html.Th("Cache"),
+                html.Th("Exists", className='text-center'),
+                html.Th("Size"),
+                html.Th("Path"),
+            ]))
+
+            rows = []
+            for entry in status['entries']:
+                exists_badge = dbc.Badge(
+                    "Yes" if entry['exists'] else "No",
+                    color='success' if entry['exists'] else 'secondary',
+                    pill=True,
+                    className='px-2'
+                )
+                size_label = _format_size(int(entry['size_bytes']))
+                rows.append(html.Tr([
+                    html.Td(entry['label']),
+                    html.Td(exists_badge, className='text-center'),
+                    html.Td(size_label),
+                    html.Td(entry['path'] or "—", className='text-break small'),
+                ]))
+
+            table_children = [header, html.Tbody(rows)]
+
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Cache status refresh failed: %s", exc)
+        summary_children = dbc.Alert(
+            f"Error inspecting cache status: {exc}",
+            color='danger',
+            className='mb-2 py-2'
+        )
+        table_children = []
+        disable_button = True
+        disable_fill = True
+        disable_inputs = is_running
+
+    if progress_status == 'running':
+        disable_button = True
+        disable_fill = True
+
+    if progress_status == 'error':
+        alert_open = True
+        base_error = progress_data.get('error') or 'Cache generation failed.'
+        alert_message = f"{base_error} ({context_description})" if context_description else base_error
+
+    if summary_children:
+        summary_parts.append(summary_children)
+
+    return (
+        summary_parts,
+        table_children,
+        disable_button,
+        disable_fill,
+        alert_open,
+        alert_message,
+        progress_value,
+        progress_label,
+        progress_max,
+        progress_message,
+        disable_inputs,
+        disable_inputs,
+        disable_inputs,
+        disable_inputs,
+    )
+
+
+@callback(
+    Output('cache-delete-button', 'disabled'),
+    Input('cache-year-selector', 'value'),
+    Input('cache-meeting-selector', 'value'),
+    Input('cache-session-selector', 'value'),
+    Input('cache-type-checklist', 'value'),
+    Input('cache-progress-store', 'data'),
+)
+def update_cache_delete_button(year, meeting_key, session_code, selected_keys, progress_data):
+    """Enable delete button only when context is valid."""
+    if (progress_data or {}).get('status') == 'running':
+        return True
+
+    selected_keys = selected_keys or []
+    if not selected_keys:
+        return True
+
+    artifacts = [CACHE_ARTIFACT_MAP[key] for key in selected_keys if key in CACHE_ARTIFACT_MAP]
+    if not artifacts:
+        return True
+
+    requires_meeting = any(artifact.level in {'meeting', 'session', 'fastf1'} for artifact in artifacts)
+    requires_session = any(artifact.level in {'session', 'fastf1'} for artifact in artifacts)
+    is_all_meetings = isinstance(meeting_key, str) and meeting_key.strip().upper() in {'ALL', '*', 'YEAR'}
+
+    if requires_meeting and not is_all_meetings and meeting_key in (None, ''):
+        return True
+    if requires_session and not session_code:
+        return True
+
+    return False
+
+
+@callback(
+    Output('cache-progress-store', 'data', allow_duplicate=True),
+    Input('cache-regenerate-button', 'n_clicks'),
+    Input('cache-fill-button', 'n_clicks'),
+    Input('cache-delete-button', 'n_clicks'),
+    State('cache-year-selector', 'value'),
+    State('cache-meeting-selector', 'value'),
+    State('cache-session-selector', 'value'),
+    State('cache-type-checklist', 'value'),
+    prevent_initial_call=True,
+)
+def handle_cache_actions(regen_clicks, fill_clicks, delete_clicks, year, meeting_key, session_code, selected_keys):
+    """Process cache regeneration or deletion requests from the modal."""
+    triggered = ctx.triggered_id
+    if triggered not in {'cache-regenerate-button', 'cache-delete-button', 'cache-fill-button'}:
+        raise PreventUpdate
+
+    selected_keys = list(selected_keys or [])
+    if not selected_keys:
+        raise PreventUpdate
+
+    current_state = _get_cache_job_state()
+    if current_state.get('status') == 'running':
+        return _cache_progress_payload()
+
+    if triggered == 'cache-delete-button':
+        action = 'delete'
+    elif triggered == 'cache-fill-button':
+        action = 'fill'
+    else:
+        action = 'regenerate'
+    year_value = int(year) if year is not None else datetime.now().year
+
+    logger.info(
+        "Manual cache %s requested -> year=%s meeting=%s session=%s keys=%s",
+        action,
+        year,
+        meeting_key,
+        session_code,
+        selected_keys,
+    )
+
+    job_id = str(uuid4())
+    timestamp = datetime.now(timezone.utc).isoformat()
+    if action == 'delete':
+        initial_message = 'Deleting selected caches...'
+    elif action == 'fill':
+        initial_message = 'Generating missing caches...'
+    else:
+        initial_message = 'Starting cache generation...'
+    job_context = {
+        'job_id': job_id,
+        'action': action,
+        'year': year_value,
+        'meeting': meeting_key,
+        'session': session_code,
+        'artifacts': list(selected_keys),
+    }
+
+    with _cache_job_lock:
+        _cache_job_snapshot.update({
+            'job_id': job_id,
+            'status': 'running',
+            'completed': 0,
+            'total': len(selected_keys) or 1,
+            'message': initial_message,
+            'error': None,
+            'timestamp': timestamp,
+            'context': job_context,
+        })
+
+    worker = threading.Thread(
+        target=_run_cache_job,
+        args=(job_id, action, year_value, meeting_key, session_code, selected_keys),
+        daemon=True,
+    )
+    worker.start()
+
+    return _cache_progress_payload()
+
+
+@callback(
+    Output('cache-progress-poll', 'disabled'),
+    Input('cache-progress-store', 'data'),
+)
+def toggle_cache_progress_poll(progress_data):
+    status = (progress_data or {}).get('status')
+    return status != 'running'
+
+
+@callback(
+    Output('cache-progress-store', 'data', allow_duplicate=True),
+    Input('cache-progress-poll', 'n_intervals'),
+    prevent_initial_call=True,
+)
+def poll_cache_progress(_interval):
+    state = _cache_progress_payload()
+    if state.get('status') in {None, 'idle'}:
+        raise PreventUpdate
+    return state
+
 
 @callback(
     Output('driver-dropdown-container', 'children'),

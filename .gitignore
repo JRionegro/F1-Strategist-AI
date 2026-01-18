@@ -56,6 +56,8 @@ config/.env.*.local
 data/raw/
 data/processed/*.parquet
 data/processed/*.csv
+data/races/**/*.parquet
+data/races/**/*.csv
 *.cache
 *.pkl
 *.pickle
@@ -103,6 +105,7 @@ Thumbs.db
 # FastF1 cache
 cache/
 .fastf1/
+test_cache/
 
 # MCP server temp files
 *.mcp.json.tmp

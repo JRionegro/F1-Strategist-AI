@@ -17,6 +17,7 @@ from .cache_config import (
     DEFAULT_CACHE_CONFIG,
 )
 from .cache_manager import CacheManager
+from .cache_generation import CacheGenerationService, CacheArtifact
 from .openf1_data_provider import OpenF1DataProvider
 from .live_session_monitor import (
     LiveSessionMonitor,
@@ -43,6 +44,8 @@ __all__ = [
     "DEFAULT_CACHE_CONFIG",
     # Cache Manager
     "CacheManager",
+    "CacheGenerationService",
+    "CacheArtifact",
     # Data Provider
     "OpenF1DataProvider",
     # Live Session

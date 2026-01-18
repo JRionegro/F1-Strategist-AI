@@ -292,15 +292,24 @@ data/rag/
 ### Dashboards
 
 1. **AI Assistant**: Chat interface with multi-agent responses
-2. **Race Overview**: Leaderboard, positions, tire strategy
-3. **Weather**: Temperature, rain probability, track conditions
-4. **Race Control**: Flags, incidents, penalties
+2. **Race Overview**: Leaderboard with retirement-aware formatting, gaps, tire strategy
+3. **Track Map**: Circuit visualization with simulation-synced markers and DNF handling
+4. **Telemetry**: Speed, throttle, brake, and DRS traces for selected drivers
+5. **Weather**: Temperature, rain probability, track conditions
+6. **Race Control**: Flags, incidents, penalties
 
 ### Layout
 
 - **65% Main Content**: Dashboards and visualizations
 - **35% Sidebar**: Context selection, RAG documents, settings
 - **Minimum Width**: 1280px (optimized for race team monitors)
+
+### Recent Enhancements (January 2026)
+
+- ✅ Retirement detection now derives precise timestamps from FastF1 lap timing, keeping track-map markers on track until the exact retirement moment.
+- ✅ Track map dashboard repositions retired drivers in a dedicated stack while preserving final-lap telemetry for hover detail.
+- ✅ Race overview table suppresses gaps, intervals, tire, and stop metrics for DNF drivers and surfaces official retirement status instead.
+- ✅ Simulation controller alignment ensures both dashboards share a consistent elapsed-time reference, eliminating premature DNF flags.
 
 ---
 
