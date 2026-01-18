@@ -6,7 +6,7 @@ Handles simulation playback controls and time progression.
 
 import logging
 from datetime import datetime, timedelta
-from typing import Callable, Optional
+from typing import Callable, Dict, Optional, Tuple
 import pandas as pd
 
 from src.utils.logging_config import get_logger, LogCategory
@@ -52,6 +52,8 @@ class SimulationController:
         self.is_playing = False
         self.speed_multiplier = 1.0
         self.last_update = datetime.now()
+        self._lap_windows: Dict[int, Tuple[float, float]] = {}
+        self._build_lap_windows()
         
         logger.info(
             f"Initialized SimulationController: "
@@ -317,24 +319,49 @@ class SimulationController:
                 logger.warning("No laps found for leader (DriverNumber=1)")
                 return 1
             
+            def _to_absolute_timestamp(value):
+                if isinstance(value, pd.Timestamp):
+                    return value
+                if isinstance(value, pd.Timedelta):
+                    return self.start_time + value
+                if isinstance(value, datetime):
+                    return value
+                return pd.NaT
+
+            leader_laps.loc[:, 'LapStartAbs'] = leader_laps['LapStartTime'].apply(_to_absolute_timestamp)
+            if 'LapEndTime' in leader_laps.columns:
+                leader_laps.loc[:, 'LapEndAbs'] = leader_laps['LapEndTime'].apply(_to_absolute_timestamp)
+            else:
+                leader_laps.loc[:, 'LapEndAbs'] = pd.NaT
+
             # Filter out formation lap (lap 1 has NaT)
-            valid_laps = leader_laps[leader_laps['LapStartTime'].notna()].copy()
+            valid_laps = leader_laps[leader_laps['LapStartAbs'].notna()].copy()
             
             if valid_laps.empty:
                 return 1
             
             logger.debug(f"[SimController] current_time: {current_time}")
             logger.debug(f"[SimController] valid_laps count: {len(valid_laps)}")
-            logger.debug(f"[SimController] First lap start: {valid_laps['LapStartTime'].min()}")
+            logger.debug(f"[SimController] First lap start: {valid_laps['LapStartAbs'].min()}")
             
             # At start of race (before any lap has started)
             earliest_started_lap = int(valid_laps['LapNumber'].min())
             formation_row = leader_laps[leader_laps['LapNumber'] == 1]
-            formation_untimed = not formation_row.empty and formation_row['LapStartTime'].isna().any()
+            formation_start = formation_row['LapStartAbs'].iloc[0] if not formation_row.empty else pd.NaT
+            formation_time = formation_row['LapTime'].iloc[0] if (not formation_row.empty and 'LapTime' in formation_row.columns) else pd.NaT
 
-            if current_time <= valid_laps['LapStartTime'].min():
-                # If lap 1 has no timing, show it explicitly as the untimed first lap
-                if formation_untimed:
+            has_untimed_formation = pd.isna(formation_start)
+
+            if has_untimed_formation and pd.notna(formation_time):
+                expected_start = self.start_time + formation_time
+            else:
+                expected_start = valid_laps['LapStartAbs'].min()
+
+            if pd.isna(expected_start):
+                expected_start = self.start_time
+
+            if current_time <= expected_start:
+                if has_untimed_formation:
                     self.current_lap = 1
                     logger.debug("[SimController] Before race start, returning untimed lap 1")
                 else:
@@ -345,7 +372,7 @@ class SimulationController:
                 return self.current_lap
             
             # Filter laps that have started
-            started_laps = valid_laps[valid_laps['LapStartTime'] <= current_time]
+            started_laps = valid_laps[valid_laps['LapStartAbs'] <= current_time]
             
             if started_laps.empty:
                 self.current_lap = int(valid_laps['LapNumber'].min())
@@ -355,7 +382,7 @@ class SimulationController:
             logger.debug(f"[SimController] started_laps count: {len(started_laps)}")
             
             # Sort by start time descending to check most recent laps first
-            started_laps_sorted = started_laps.sort_values('LapStartTime', ascending=False)
+            started_laps_sorted = started_laps.sort_values('LapStartAbs', ascending=False)
             
             # Find the lap currently in progress
             current_lap = int(started_laps_sorted.iloc[0]['LapNumber'])
@@ -364,8 +391,8 @@ class SimulationController:
             # Check if this lap has ended
             for _, lap_row in started_laps_sorted.iterrows():
                 lap_num = int(lap_row['LapNumber'])
-                lap_start = lap_row['LapStartTime']
-                lap_end = lap_row.get('LapEndTime', pd.NaT)
+                lap_start = lap_row['LapStartAbs']
+                lap_end = lap_row.get('LapEndAbs', pd.NaT)
                 
                 logger.debug(f"[SimController] Checking lap {lap_num}: start={lap_start}, end={lap_end}, current={current_time}")
                 
@@ -387,3 +414,80 @@ class SimulationController:
             logger.error(f"LapStartTime dtype: {self.lap_data['LapStartTime'].dtype}")
             logger.error(f"LapStartTime sample: {self.lap_data['LapStartTime'].iloc[0]}")
             raise
+
+    def _build_lap_windows(self) -> None:
+        """Pre-compute lap start/end windows in session seconds."""
+        if self.lap_data is None or self.lap_data.empty:
+            return
+
+        try:
+            sorted_laps = self.lap_data.sort_values('LapNumber').reset_index(drop=True)
+        except Exception:  # noqa: BLE001
+            return
+
+        prev_end = 0.0
+        for idx, row in sorted_laps.iterrows():
+            lap_number_raw = row.get('LapNumber')
+            try:
+                lap_number = int(lap_number_raw)
+            except (TypeError, ValueError):
+                continue
+
+            start_value = row.get('LapStartTime')
+            start_seconds = prev_end
+
+            if isinstance(start_value, pd.Timestamp):
+                start_seconds = (start_value - self.start_time).total_seconds()
+            elif isinstance(start_value, pd.Timedelta):
+                start_seconds = start_value.total_seconds()
+            elif isinstance(start_value, datetime):
+                start_seconds = (start_value - self.start_time).total_seconds()
+
+            if pd.isna(start_value):
+                start_seconds = prev_end
+
+            start_seconds = float(max(start_seconds, prev_end))
+
+            end_seconds: Optional[float] = None
+            end_value = row.get('LapEndTime', pd.NaT)
+            if isinstance(end_value, pd.Timestamp):
+                end_seconds = (end_value - self.start_time).total_seconds()
+            elif isinstance(end_value, pd.Timedelta):
+                end_seconds = end_value.total_seconds()
+            elif isinstance(end_value, datetime):
+                end_seconds = (end_value - self.start_time).total_seconds()
+
+            if pd.isna(end_value) or end_seconds is None:
+                lap_time_value = row.get('LapTime', pd.NaT)
+                if isinstance(lap_time_value, pd.Timedelta) and not pd.isna(lap_time_value):
+                    end_seconds = start_seconds + lap_time_value.total_seconds()
+                else:
+                    next_start = None
+                    if idx + 1 < len(sorted_laps):
+                        next_start = sorted_laps.iloc[idx + 1].get('LapStartTime')
+                    if isinstance(next_start, pd.Timestamp):
+                        end_seconds = (next_start - self.start_time).total_seconds()
+                    elif isinstance(next_start, pd.Timedelta) and not pd.isna(next_start):
+                        end_seconds = next_start.total_seconds()
+
+            if end_seconds is None:
+                end_seconds = start_seconds
+
+            end_seconds = float(max(end_seconds, start_seconds))
+            self._lap_windows[lap_number] = (start_seconds, end_seconds)
+            prev_end = end_seconds
+
+    def get_lap_window_seconds(self, lap_number: int) -> Optional[Tuple[float, float]]:
+        """Return start/end session seconds for a lap if available."""
+        return self._lap_windows.get(lap_number)
+
+    def clamp_elapsed_to_lap(self, elapsed_seconds: float, lap_number: int) -> float:
+        """Clamp elapsed session seconds to the bounds of a lap window."""
+        window = self.get_lap_window_seconds(lap_number)
+        if window is None:
+            return elapsed_seconds
+
+        start_seconds, _ = window
+        if elapsed_seconds < start_seconds:
+            return start_seconds
+        return elapsed_seconds

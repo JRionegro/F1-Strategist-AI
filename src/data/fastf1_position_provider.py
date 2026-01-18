@@ -310,7 +310,7 @@ class FastF1PositionProvider:
 
     def get_all_driver_positions(
         self,
-        lap_number: int,
+        lap_number: Optional[int],
         driver_numbers: Optional[List[int]] = None,
         elapsed_time: Optional[float] = None,
     ) -> Dict[int, DriverPosition]:
@@ -340,12 +340,28 @@ class FastF1PositionProvider:
                 continue
 
             driver_data = driver_data.sort_values("time").reset_index(drop=True)
-            time_values = driver_data["time"].to_numpy(dtype=float)
+
+            filtered_data = driver_data
+            if lap_number is not None and "lap_number" in driver_data.columns:
+                try:
+                    lap_mask = driver_data["lap_number"].astype(int) == int(lap_number)
+                except Exception:  # noqa: BLE001
+                    lap_mask = driver_data["lap_number"] == lap_number
+                if lap_mask.any():
+                    filtered_data = driver_data.loc[lap_mask].reset_index(drop=True)
+                    if filtered_data.empty:
+                        filtered_data = driver_data
+                else:
+                    filtered_data = driver_data
+
+            time_values = filtered_data["time"].to_numpy(dtype=float)
+            if time_values.size == 0:
+                continue
             insert_idx = int(np.searchsorted(time_values, adjusted_time, side="left"))
             prev_idx = max(insert_idx - 1, 0)
-            next_idx = min(insert_idx, len(driver_data) - 1)
-            prev_row = driver_data.iloc[prev_idx]
-            next_row = driver_data.iloc[next_idx]
+            next_idx = min(insert_idx, len(filtered_data) - 1)
+            prev_row = filtered_data.iloc[prev_idx]
+            next_row = filtered_data.iloc[next_idx]
             prev_time = float(prev_row["time"])
             next_time = float(next_row["time"])
 
@@ -367,12 +383,19 @@ class FastF1PositionProvider:
             z_val = prev_z + (next_z - prev_z) * ratio
             time_val = prev_time + (next_time - prev_time) * ratio
 
+            current_lap_val = next_row.get("lap_number")
+            if isinstance(current_lap_val, (int, float)):
+                lap_number_value = int(current_lap_val)
+            else:
+                lap_number_value = int(lap_number) if lap_number is not None else -1
+
             positions[driver_number] = {
                 "x": x_val,
                 "y": y_val,
                 "z": z_val,
                 "time": time_val,
                 "query_time": adjusted_time,
+                "lap_number": lap_number_value,
                 "previous_sample": {
                     "time": prev_time,
                     "x": prev_x,

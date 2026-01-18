@@ -28,6 +28,9 @@ TEAM_COLORS: Dict[str, str] = {
     "Unknown": "#FFFFFF",
 }
 
+FOCUS_OUTLINE_COLOR = "#e10600"
+FOCUS_ALT_OUTLINE_COLOR = "#f5ff00"
+
 
 class TrackMapDashboard:
     """Expose helper methods to build the circuit map and driver overlays."""
@@ -43,7 +46,70 @@ class TrackMapDashboard:
         logger.info("TrackMapDashboard initialized")
 
     @staticmethod
-    def _build_customdata(driver_number: int, position: Dict[str, Any]) -> List[List[float]]:
+    def _hex_to_rgb(hex_color: str) -> Optional[Tuple[int, int, int]]:
+        """Convert hex color to RGB tuple."""
+        if not isinstance(hex_color, str):
+            return None
+
+        value = hex_color.strip().lstrip("#")
+        if len(value) == 3:
+            value = "".join(ch * 2 for ch in value)
+        if len(value) != 6:
+            return None
+
+        try:
+            r = int(value[0:2], 16)
+            g = int(value[2:4], 16)
+            b = int(value[4:6], 16)
+        except ValueError:
+            return None
+        return r, g, b
+
+    @classmethod
+    def _should_use_dark_text(cls, hex_color: str) -> bool:
+        """Return True when the foreground should be dark for contrast."""
+        rgb = cls._hex_to_rgb(hex_color)
+        if rgb is None:
+            return False
+
+        r, g, b = rgb
+        brightness = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
+        return brightness >= 0.68
+
+    @classmethod
+    def _is_red_hue(cls, hex_color: str) -> bool:
+        """Return True when the provided color is strongly red."""
+        rgb = cls._hex_to_rgb(hex_color)
+        if rgb is None:
+            return False
+
+        r, g, b = rgb
+        return r >= 200 and g <= 90 and b <= 90
+
+    @classmethod
+    def resolve_marker_style(cls, driver: Dict[str, Any]) -> Dict[str, Any]:
+        """Return marker styling based on team color and focus state."""
+        team = driver.get("team_name", "Unknown")
+        fill_color = TEAM_COLORS.get(team, TEAM_COLORS["Unknown"])
+        text_color = "#000000" if cls._should_use_dark_text(fill_color) else "#FFFFFF"
+        is_focus = bool(driver.get("is_focus_driver"))
+        outline_color = FOCUS_OUTLINE_COLOR if is_focus else "white"
+        if is_focus and cls._is_red_hue(fill_color):
+            outline_color = FOCUS_ALT_OUTLINE_COLOR
+        outline_width = 3 if is_focus else 2
+        return {
+            "fill_color": fill_color,
+            "text_color": text_color,
+            "outline_color": outline_color,
+            "outline_width": outline_width,
+        }
+
+    @staticmethod
+    def _build_customdata(
+        driver_number: int,
+        position: Dict[str, Any],
+        fallback_lap: int = 1,
+    ) -> List[List[float]]:
         """Return customdata payload used by the tween helper."""
         prev_sample = position.get("previous_sample") or {}
         next_sample = position.get("next_sample") or {}
@@ -55,6 +121,11 @@ class TrackMapDashboard:
         prev_y = float(prev_sample.get("y", position.get("y", 0.0)))
         next_x = float(next_sample.get("x", position.get("x", 0.0)))
         next_y = float(next_sample.get("y", position.get("y", 0.0)))
+        lap_raw = position.get("lap_number")
+        if isinstance(lap_raw, (int, float)) and lap_raw >= 1:
+            lap_number = float(lap_raw)
+        else:
+            lap_number = float(max(fallback_lap, 1))
 
         return [[
             float(driver_number),
@@ -66,6 +137,7 @@ class TrackMapDashboard:
             next_y,
             query_time,
             current_time,
+            lap_number,
         ]]
 
     def load_session(self, year: int, country: str, session_type: str = "R") -> bool:
@@ -112,7 +184,12 @@ class TrackMapDashboard:
             padding = 0.05
             x_pad = max(200.0, x_span * padding)
             y_pad = max(200.0, y_span * padding)
-            x_range = (float(x_vals.min() - x_pad), float(x_vals.max() + x_pad))
+            left_pad = x_pad * 0.6
+            right_pad = x_pad * 1.6
+            x_range = (
+                float(x_vals.min() - left_pad),
+                float(x_vals.max() + right_pad),
+            )
             y_range = (float(y_vals.min() - y_pad), float(y_vals.max() + y_pad))
         else:
             x_range = (-5000.0, 5000.0)
@@ -161,16 +238,26 @@ class TrackMapDashboard:
             paper_bgcolor="#0d0d0d",
             font=dict(color="white"),
             hovermode="closest",
-            margin=dict(l=10, r=10, t=10, b=10),
+            margin=dict(l=28, r=10, t=10, b=70),
             autosize=True,
             legend=dict(
-                title="Teams",
-                orientation="v",
-                x=1.02,
-                y=1,
-                bgcolor="rgba(0,0,0,0.5)",
+                title=None,
+                orientation="h",
+                x=0.02,
+                y=-0.16,
+                xanchor="left",
+                yanchor="top",
+                bgcolor="rgba(0,0,0,0.35)",
                 bordercolor="white",
                 borderwidth=1,
+                font=dict(size=9),
+                entrywidthmode="fraction",
+                entrywidth=0.24,
+                itemsizing="constant",
+                tracegroupgap=0,
+                itemclick=False,
+                itemdoubleclick=False,
+                traceorder="normal",
             ),
             uirevision="track-map-constant",
         )
@@ -180,8 +267,9 @@ class TrackMapDashboard:
         current_lap: int,
         driver_data: List[Dict[str, Any]],
         elapsed_time: Optional[float] = None,
-        width: int = 1200,
-        height: int = 800,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        lap_filter: Optional[int] = None,
     ) -> go.Figure:
         """Return full circuit figure with markers."""
         if not self.session_loaded or self._base_figure is None:
@@ -192,16 +280,20 @@ class TrackMapDashboard:
             )
 
         fig = go.Figure(self._base_figure.to_dict())
-        fig.update_layout(
-            title=dict(
-                text=f"Track Positions - Lap {current_lap}",
-                font=dict(size=20, color="white"),
-            ),
-            width=width,
-            height=height,
-            uirevision="track-map-constant",
-            transition=dict(duration=600, easing="linear"),
-        )
+        layout_updates: Dict[str, Any] = {
+            "title": dict(text=""),
+            "uirevision": "track-map-constant",
+            "transition": dict(duration=600, easing="linear"),
+            "autosize": True,
+            "margin": dict(l=30, r=30, t=20, b=90),
+            "height": 560,
+        }
+        if width is not None:
+            layout_updates["width"] = width
+        if height is not None:
+            layout_updates["height"] = height
+
+        fig.update_layout(**layout_updates)
 
         if self._axis_ranges is not None:
             fig.update_xaxes(range=list(self._axis_ranges[0]))
@@ -210,7 +302,7 @@ class TrackMapDashboard:
         sorted_drivers = sorted(driver_data, key=lambda item: item["driver_number"])
         driver_numbers = [entry["driver_number"] for entry in sorted_drivers]
         positions = self.provider.get_all_driver_positions(
-            lap_number=current_lap,
+            lap_number=lap_filter,
             driver_numbers=driver_numbers,
             elapsed_time=elapsed_time,
         )
@@ -235,8 +327,8 @@ class TrackMapDashboard:
 
             position = positions[driver_number]
             team = driver.get("team_name", "Unknown")
-            color = TEAM_COLORS.get(team, TEAM_COLORS["Unknown"])
-            custom_data = self._build_customdata(driver_number, position)
+            styles = self.resolve_marker_style(driver)
+            custom_data = self._build_customdata(driver_number, position, fallback_lap=current_lap)
 
             fig.add_trace(go.Scatter(
                 x=[position["x"]],
@@ -244,18 +336,18 @@ class TrackMapDashboard:
                 mode="markers+text",
                 marker=dict(
                     size=20,
-                    color=color,
-                    line=dict(color="white", width=2),
+                    color=styles["fill_color"],
+                    line=dict(color=styles["outline_color"], width=styles["outline_width"]),
                 ),
                 text=[str(driver_number)],
                 textposition="middle center",
-                textfont=dict(color="white", size=10, family="Arial Black"),
+                textfont=dict(color=styles["text_color"], size=10, family="Arial Black"),
                 name=team if not seen_teams.get(team) else None,
                 legendgroup=team,
                 showlegend=team not in seen_teams,
                 hovertemplate=(
                     f"<b>{driver.get('driver_name', driver_number)}</b><br>"
-                    f"Team: {team}<br>Lap {current_lap}<extra></extra>"
+                    f"Team: {team}<br>Lap %{{customdata[9]:.0f}}<extra></extra>"
                 ),
                 customdata=custom_data,
                 uid=str(driver_number),
@@ -264,7 +356,12 @@ class TrackMapDashboard:
 
         return fig
 
-    def _create_error_figure(self, message: str, width: int, height: int) -> go.Figure:
+    def _create_error_figure(
+        self,
+        message: str,
+        width: Optional[int],
+        height: Optional[int],
+    ) -> go.Figure:
         """Return fallback figure with an error message."""
         fig = go.Figure()
         fig.add_annotation(
@@ -276,23 +373,37 @@ class TrackMapDashboard:
             showarrow=False,
             font=dict(size=18, color="red"),
         )
-        fig.update_layout(
-            title="Track Map",
-            plot_bgcolor="#1a1a1a",
-            paper_bgcolor="#0d0d0d",
-            font=dict(color="white"),
-            width=width,
-            height=height,
-            xaxis=dict(visible=False),
-            yaxis=dict(visible=False),
-        )
+        layout_updates: Dict[str, Any] = {
+            "title": "Track Map",
+            "plot_bgcolor": "#1a1a1a",
+            "paper_bgcolor": "#0d0d0d",
+            "font": dict(color="white"),
+            "xaxis": dict(visible=False),
+            "yaxis": dict(visible=False),
+            "autosize": True,
+        }
+        if width is not None:
+            layout_updates["width"] = width
+        if height is not None:
+            layout_updates["height"] = height
+
+        fig.update_layout(**layout_updates)
         return fig
 
-    def create_loading_figure(self, width: int = 1200, height: int = 800) -> go.Figure:
+    def create_loading_figure(
+        self,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+    ) -> go.Figure:
         """Return loading placeholder."""
         return self._create_error_figure("⏳ Loading track map session...", width, height)
 
-    def create_no_data_figure(self, lap_number: int, width: int = 1200, height: int = 800) -> go.Figure:
+    def create_no_data_figure(
+        self,
+        lap_number: int,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+    ) -> go.Figure:
         """Return placeholder when telemetry is unavailable."""
         return self._create_error_figure(
             f"No position data for lap {lap_number}",
@@ -350,8 +461,8 @@ class TrackMapDashboard:
 
             position = positions[driver_number]
             team = driver.get("team_name", "Unknown")
-            color = TEAM_COLORS.get(team, TEAM_COLORS["Unknown"])
-            custom_data = self._build_customdata(driver_number, position)
+            styles = self.resolve_marker_style(driver)
+            custom_data = self._build_customdata(driver_number, position, fallback_lap=current_lap)
 
             fig.add_trace(go.Scatter(
                 x=[position["x"]],
@@ -359,12 +470,12 @@ class TrackMapDashboard:
                 mode="markers+text",
                 marker=dict(
                     size=20,
-                    color=color,
-                    line=dict(color="white", width=2),
+                    color=styles["fill_color"],
+                    line=dict(color=styles["outline_color"], width=styles["outline_width"]),
                 ),
                 text=[str(driver_number)],
                 textposition="middle center",
-                textfont=dict(color="white", size=10, family="Arial Black"),
+                textfont=dict(color=styles["text_color"], size=10, family="Arial Black"),
                 name=driver.get("driver_name", str(driver_number)),
                 hovertext=f"{driver.get('driver_name', driver_number)} ({team})",
                 hoverinfo="text",

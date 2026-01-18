@@ -64,6 +64,7 @@ class RaceOverviewDashboard:
         session_key: Optional[int] = None,
         simulation_time: Optional[float] = None,
         session_start_time: Optional[pd.Timestamp] = None,
+        formation_offset_seconds: Optional[float] = None,
         current_lap: Optional[int] = None,
         focused_driver_code: Optional[str] = None,
         pit_proba_lookup: Optional[callable] = None,
@@ -75,6 +76,7 @@ class RaceOverviewDashboard:
             session_key: OpenF1 session key
             simulation_time: Current simulation time in seconds from session start
             session_start_time: Session start timestamp from SimulationController
+            formation_offset_seconds: Formation lap offset subtracted from simulation clock
             current_lap: Current lap from SimulationController (OpenF1 format)
             focused_driver_code: Driver code to highlight in the table
             pit_proba_lookup: Optional callable(driver_code: str, lap_number: int) -> Optional[float]
@@ -101,8 +103,10 @@ class RaceOverviewDashboard:
 
         try:
             logger.info(
-                f"Loading Race Overview for session {session_key} "
-                f"at simulation time {simulation_time}s"
+                "Loading Race Overview for session %s at simulation time %.3fs (formation offset %.3fs)",
+                session_key,
+                simulation_time if simulation_time is not None else float('nan'),
+                formation_offset_seconds if formation_offset_seconds is not None else 0.0,
             )
 
             # Cache data to avoid 429 rate limiting from multiple API calls
@@ -277,14 +281,20 @@ class RaceOverviewDashboard:
             if simulation_time is not None and session_start_time is not None:
                 # Convert simulation_time to absolute timestamp
                 # using session_start_time from SimulationController
+                offset_seconds = (
+                    float(formation_offset_seconds)
+                    if formation_offset_seconds is not None
+                    else 0.0
+                )
+                adjusted_sim_seconds = simulation_time + offset_seconds
                 current_timestamp = session_start_time + pd.Timedelta(
-                    seconds=simulation_time
+                    seconds=adjusted_sim_seconds
                 )
                 
                 logger.info(
                     f"Current simulation timestamp: {current_timestamp} "
                     f"(session_start={session_start_time}, "
-                    f"elapsed={simulation_time:.1f}s)"
+                    f"elapsed={simulation_time:.1f}s, formation_offset={offset_seconds:.1f}s)"
                 )
                 
                 # Get all positions at or before current simulation time
@@ -336,7 +346,7 @@ class RaceOverviewDashboard:
                 # Filter intervals by simulation time
                 if simulation_time is not None and session_start_time is not None:
                     current_timestamp = session_start_time + pd.Timedelta(
-                        seconds=simulation_time
+                        seconds=adjusted_sim_seconds
                     )
                     filtered_intervals = intervals[
                         intervals['Timestamp'] <= current_timestamp
@@ -358,6 +368,13 @@ class RaceOverviewDashboard:
                             f"Latest intervals (per driver) at {latest_interval_time}: "
                             f"{len(latest_intervals)} records"
                         )
+                        logger.debug(
+                            "Interval coverage -> sim=%.3fs offset=%.3fs latest=%s count=%d",
+                            simulation_time,
+                            formation_offset_seconds if formation_offset_seconds is not None else 0.0,
+                            latest_interval_time,
+                            len(latest_intervals),
+                        )
                     else:
                         latest_intervals = pd.DataFrame()
                         logger.warning("No intervals available at this time")
@@ -374,14 +391,20 @@ class RaceOverviewDashboard:
                 if not latest_intervals.empty:
                     # Merge positions with intervals, stints, and drivers
                     leaderboard_data = latest_positions.merge(
-                    latest_intervals[[
-                        'DriverNumber',
-                        'GapToLeader',
-                        'Interval'
-                    ]],
-                    on='DriverNumber',
-                    how='left'
-                )
+                        latest_intervals[[
+                            'DriverNumber',
+                            'GapToLeader',
+                            'Interval'
+                        ]],
+                        on='DriverNumber',
+                        how='left'
+                    )
+                    logger.debug(
+                        "Race overview merge: positions=%d intervals=%d gaps=%d",
+                        len(latest_positions),
+                        len(latest_intervals),
+                        latest_intervals['GapToLeader'].count(),
+                    )
                     logger.info(
                         f"Merged data: {len(leaderboard_data)} rows with "
                         f"gaps/intervals"

@@ -47,6 +47,7 @@ class LogCategory(Enum):
     CHAT = "f1.chat"                 # AI chat/LLM
     DATA = "f1.data"                 # Data providers
     PROACTIVE = "f1.proactive"       # Proactive AI alerts system
+    TRACK_MAP = "f1.track_map"       # Track map diagnostics
 
 
 # Default log levels per category
@@ -63,7 +64,8 @@ DEFAULT_LEVELS: Dict[LogCategory, int] = {
     LogCategory.API: logging.WARNING,         # Hide API calls
     LogCategory.CHAT: logging.INFO,           # Show chat activity
     LogCategory.DATA: logging.WARNING,        # Hide data loading
-    LogCategory.PROACTIVE: logging.DEBUG,     # Show proactive AI alerts (DEBUG for dev)
+    LogCategory.PROACTIVE: logging.WARNING,   # Hide proactive debug chatter
+    LogCategory.TRACK_MAP: logging.WARNING,   # Hide track-map debug noise
 }
 
 # Store for category loggers
@@ -107,6 +109,13 @@ def setup_logging(
     proactive_logger = logging.getLogger(LogCategory.PROACTIVE.value)
     proactive_logger.addHandler(proactive_handler)
     proactive_logger.propagate = False  # Don't duplicate to root
+
+    track_map_handler = logging.StreamHandler()
+    track_map_handler.setLevel(logging.DEBUG)
+    track_map_handler.setFormatter(console_format)
+    track_map_debug_logger = logging.getLogger(LogCategory.TRACK_MAP.value)
+    track_map_debug_logger.addHandler(track_map_handler)
+    track_map_debug_logger.propagate = False
 
     # Optional file handler
     if log_file:

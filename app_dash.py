@@ -15,7 +15,7 @@ import importlib
 import hashlib
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 import dash
 from dash import Dash, html, dcc, Input, Output, State, callback, ctx, Patch, ALL, no_update
@@ -77,7 +77,7 @@ from src.dashboards_dash.ai_assistant_dashboard import AIAssistantDashboard
 from src.dashboards_dash.race_overview_dashboard import RaceOverviewDashboard
 from src.dashboards_dash.race_control_dashboard import RaceControlDashboard
 from src.dashboards_dash.telemetry_dashboard import TelemetryDashboard
-from src.dashboards_dash.track_map_dashboard import get_track_map_dashboard
+from src.dashboards_dash.track_map_dashboard import get_track_map_dashboard, TrackMapDashboard
 from src.dashboards_dash import weather_dashboard
 
 # Predictive pit policy bootstrap
@@ -122,9 +122,7 @@ control_logger = get_logger(LogCategory.RACE_CONTROL)  # Race control
 api_logger = get_logger(LogCategory.API)  # API calls
 chat_logger = get_logger(LogCategory.CHAT)  # Chat/AI
 proactive_logger = get_logger(LogCategory.PROACTIVE)  # Proactive AI alerts
-
-# Enable PROACTIVE and CHAT debugging by default for development
-enable_category(LogCategory.PROACTIVE)
+track_map_logger = get_logger(LogCategory.TRACK_MAP)  # Track map diagnostics
 
 # Log which LLM keys are visible after loading env
 logger.info(
@@ -133,6 +131,7 @@ logger.info(
     bool(os.getenv("GOOGLE_API_KEY"))
 )
 enable_category(LogCategory.CHAT)
+enable_category(LogCategory.TRACK_MAP)
 
 # Uncomment to enable specific debugging:
 # enable_category(LogCategory.SIMULATION)  # See simulation updates
@@ -190,6 +189,89 @@ _pit_policy_context: Optional[PitPolicyContext] = None
 # LLM provider singleton (lazy initialization)
 _llm_provider: Optional[LLMProvider] = None
 _llm_provider_type: Optional[str] = None  # 'hybrid', 'claude', 'gemini'
+
+# Track map figure patching state
+_track_map_trace_offset: Optional[int] = None
+_track_map_driver_order: List[int] = []
+_track_map_focus_driver: Optional[int] = None
+
+
+def _extract_track_map_trace_offset(figure: Any) -> Optional[int]:
+    """Return index of the first driver trace in a track map figure."""
+    figure_dict = figure.to_dict() if hasattr(figure, "to_dict") else figure
+    if not isinstance(figure_dict, dict):
+        return None
+
+    data_traces = figure_dict.get("data", [])
+    if not isinstance(data_traces, list):
+        return None
+
+    for idx, raw_trace in enumerate(data_traces):
+        trace_dict: Optional[Dict[str, Any]]
+        if isinstance(raw_trace, dict):
+            trace_dict = raw_trace
+        elif hasattr(raw_trace, "to_plotly_json"):
+            converted = raw_trace.to_plotly_json()
+            trace_dict = converted if isinstance(converted, dict) else None
+        else:
+            trace_dict = None
+
+        if trace_dict and trace_dict.get("mode") == "markers+text":
+            return idx
+
+    return None
+
+
+def _parse_driver_selector_value(selector_value: Optional[str]) -> Tuple[Optional[str], Optional[int]]:
+    """Return driver code and car number from the selector value."""
+    if not selector_value or selector_value == 'none':
+        return None, None
+
+    parts = selector_value.split('_')
+    if len(parts) < 3:
+        return parts[0] if parts else None, None
+
+    driver_code = parts[0]
+    try:
+        driver_number = int(parts[-1])
+    except ValueError:
+        return driver_code, None
+    return driver_code, driver_number
+
+
+def _resolve_track_map_total_laps(session_payload: Optional[Dict[str, Any]]) -> Optional[int]:
+    """Return the configured race distance if present in the session payload."""
+    if not isinstance(session_payload, dict):
+        return None
+
+    raw_total = session_payload.get("total_laps")
+    if isinstance(raw_total, (int, float)):
+        return int(raw_total)
+
+    session_section = session_payload.get("session")
+    if isinstance(session_section, dict):
+        section_total = session_section.get("total_laps")
+        if isinstance(section_total, (int, float)):
+            return int(section_total)
+
+    return None
+
+
+def _format_track_map_lap_label(
+    current_lap: int,
+    total_laps: Optional[int],
+    formation_offset_seconds: float,
+    elapsed_time_seconds: float,
+) -> str:
+    """Build the lap label shown below the track map."""
+    if formation_offset_seconds > 0.0 and current_lap <= 1 and elapsed_time_seconds < 1.0:
+        return "Formation Lap"
+
+    lap_value = max(current_lap, 1)
+    if total_laps and total_laps > 0:
+        return f"Lap {lap_value} / {total_laps}"
+
+    return f"Lap {lap_value}"
 
 
 # Circuit total laps lookup table (works for both LIVE and historical)
@@ -334,12 +416,168 @@ def _calculate_total_laps(session_obj, circuit_name: Optional[str] = None) -> in
     return 57  # Default fallback
 
 
-def _build_track_map_driver_data() -> List[Dict[str, Any]]:
+def _timedelta_to_seconds(value: Any) -> Optional[float]:
+    """Convert timedelta-like values to floating seconds."""
+    if value is None:
+        return None
+
+    if isinstance(value, float) and math.isnan(value):
+        return None
+
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    if isinstance(value, timedelta):
+        return value.total_seconds()
+
+    if isinstance(value, pd.Timedelta):
+        return float(value.total_seconds())
+
+    try:
+        converted = pd.to_timedelta(value, errors="coerce")
+    except Exception:  # noqa: BLE001
+        return None
+
+    if pd.isna(converted):
+        return None
+
+    return float(converted.total_seconds())
+
+
+def _extract_fastf1_lap1_seconds(
+    dashboard: TrackMapDashboard,
+    driver_number: int,
+) -> Optional[float]:
+    """Return lap-one duration from FastF1 telemetry in seconds."""
+    provider = getattr(dashboard, "provider", None)
+    session = getattr(provider, "session", None)
+    if session is None or not hasattr(session, "laps"):
+        return None
+
+    laps_df = session.laps
+    if laps_df is None or laps_df.empty:
+        return None
+
+    candidate = pd.DataFrame()
+    if "DriverNumber" in laps_df.columns:
+        driver_numbers = pd.to_numeric(laps_df["DriverNumber"], errors="coerce")
+        candidate = laps_df.loc[driver_numbers == driver_number]
+
+    if candidate.empty:
+        provider_abbr = provider.get_driver_abbreviation(driver_number) if provider else None
+        if provider_abbr:
+            try:
+                candidate = session.laps.pick_drivers(provider_abbr)
+            except Exception:  # noqa: BLE001
+                candidate = pd.DataFrame()
+
+    if candidate.empty:
+        candidate = laps_df
+
+    lap_one = candidate.loc[candidate["LapNumber"] == 1]
+    if lap_one.empty:
+        return None
+
+    first_row = lap_one.iloc[0]
+    lap_time_seconds = _timedelta_to_seconds(first_row.get("LapTime"))
+    if lap_time_seconds is not None and lap_time_seconds > 0:
+        return lap_time_seconds
+
+    start_seconds = _timedelta_to_seconds(first_row.get("LapStartTime"))
+    end_seconds = _timedelta_to_seconds(first_row.get("LapEndTime"))
+    if start_seconds is not None and end_seconds is not None and end_seconds > start_seconds:
+        return end_seconds - start_seconds
+
+    return None
+
+
+def _normalize_lap_timing_data(
+    lap_timing: pd.DataFrame,
+    dashboard: TrackMapDashboard,
+    driver_number: int,
+) -> Tuple[pd.DataFrame, Optional[float], Optional[float]]:
+    """Align OpenF1 lap timings with FastF1 estimated race start."""
+    if lap_timing is None or lap_timing.empty:
+        return lap_timing, None, None
+
+    normalized = lap_timing.copy()
+
+    if "LapNumber" in normalized.columns:
+        normalized.loc[:, "LapNumber"] = pd.to_numeric(normalized["LapNumber"], errors="coerce")
+    else:
+        normalized.loc[:, "LapNumber"] = pd.Series(float("nan"), index=normalized.index)
+
+    if "LapStartTime" in normalized.columns:
+        normalized.loc[:, "LapStartTime"] = pd.to_timedelta(normalized["LapStartTime"], errors="coerce")
+    else:
+        normalized.loc[:, "LapStartTime"] = pd.NaT
+
+    if "LapEndTime" in normalized.columns:
+        normalized.loc[:, "LapEndTime"] = pd.to_timedelta(normalized["LapEndTime"], errors="coerce")
+    else:
+        normalized.loc[:, "LapEndTime"] = pd.NaT
+
+    if "LapTime" in normalized.columns:
+        normalized.loc[:, "LapTime"] = pd.to_timedelta(normalized["LapTime"], errors="coerce")
+
+    lap_two = normalized.loc[normalized["LapNumber"] == 2].head(1)
+    lap_two_start_seconds = _timedelta_to_seconds(lap_two.iloc[0]["LapStartTime"]) if not lap_two.empty else None
+
+    fastf1_lap_one_seconds = _extract_fastf1_lap1_seconds(dashboard, driver_number)
+    formation_offset_seconds = None
+
+    if lap_two_start_seconds is not None and fastf1_lap_one_seconds is not None:
+        gap_seconds = lap_two_start_seconds - fastf1_lap_one_seconds
+        if gap_seconds > 1.0:
+            formation_offset_seconds = gap_seconds
+
+    if formation_offset_seconds is not None:
+        offset_td = pd.to_timedelta(formation_offset_seconds, unit="s")
+        start_valid_mask = normalized["LapStartTime"].notna()
+        end_valid_mask = normalized["LapEndTime"].notna()
+
+        normalized.loc[start_valid_mask, "LapStartTime"] = (
+            normalized.loc[start_valid_mask, "LapStartTime"] - offset_td
+        )
+        normalized.loc[end_valid_mask, "LapEndTime"] = (
+            normalized.loc[end_valid_mask, "LapEndTime"] - offset_td
+        )
+
+        zero_td = pd.to_timedelta(0, unit="s")
+        start_series = normalized.loc[start_valid_mask, "LapStartTime"]
+        normalized.loc[start_valid_mask, "LapStartTime"] = start_series.where(start_series >= zero_td, zero_td)
+
+        end_series = normalized.loc[end_valid_mask, "LapEndTime"]
+        normalized.loc[end_valid_mask, "LapEndTime"] = end_series.where(end_series >= zero_td, zero_td)
+
+        if "LapTime" in normalized.columns:
+            recompute_mask = normalized["LapEndTime"].isna() & normalized["LapTime"].notna()
+            if recompute_mask.any():
+                normalized.loc[recompute_mask, "LapEndTime"] = (
+                    normalized.loc[recompute_mask, "LapStartTime"]
+                    + normalized.loc[recompute_mask, "LapTime"]
+                )
+
+    lap_one_mask = normalized["LapNumber"] == 1
+    normalized.loc[lap_one_mask, "LapStartTime"] = normalized.loc[lap_one_mask, "LapStartTime"].fillna(pd.Timedelta(seconds=0))
+    if "LapTime" in normalized.columns:
+        normalized.loc[lap_one_mask, "LapEndTime"] = (
+            normalized.loc[lap_one_mask, "LapStartTime"] + normalized.loc[lap_one_mask, "LapTime"]
+        )
+
+    normalized.loc[:, "LapStartTime_seconds"] = normalized["LapStartTime"].apply(_timedelta_to_seconds)
+    normalized.loc[:, "LapEndTime_seconds"] = normalized["LapEndTime"].apply(_timedelta_to_seconds)
+
+    return normalized, formation_offset_seconds, fastf1_lap_one_seconds
+
+
+def _build_track_map_driver_data(focused_driver_value: Optional[str] = None) -> List[Dict[str, Any]]:
     """Collect driver metadata for the track map dashboard."""
     if current_session_obj is None:
         return []
 
     driver_entries: List[Dict[str, Any]] = []
+    _, focus_driver_number = _parse_driver_selector_value(focused_driver_value)
 
     try:
         results = getattr(current_session_obj, "results", None)
@@ -379,6 +617,7 @@ def _build_track_map_driver_data() -> List[Dict[str, Any]]:
                     "driver_number": driver_number,
                     "driver_name": str(driver_name),
                     "team_name": str(team_name),
+                    "is_focus_driver": driver_number == focus_driver_number,
                 })
                 seen_numbers.add(driver_number)
 
@@ -705,7 +944,7 @@ def create_sidebar():
                             # {"label": " Lap Analysis", "value": "laps"},
                             # {"label": " Qualifying", "value": "qualifying"},
                         ],
-                        value=["ai", "race_overview", "race_control", "weather", "telemetry"],
+                        value=["ai", "race_overview", "track_map", "race_control", "weather", "telemetry"],
                         className="mb-1"
                     )
                 ], title="📊 Dashboards", className="mb-1")
@@ -1863,13 +2102,18 @@ def update_drivers(session, circuit_key, year):
         
         # Store session_obj globally for use in dashboards
         global current_session_obj
+        global _track_map_trace_offset, _track_map_driver_order
         current_session_obj = session_obj
+        _track_map_trace_offset = None
+        _track_map_driver_order = []
 
         # Preload FastF1 telemetry for track map dashboard
         track_map_status: Dict[str, Any] = {
             'ready': False,
             'error': None,
             'params': None,
+            'formation_offset_seconds': 0.0,
+            'fastf1_lap_one_seconds': None,
         }
         try:
             track_map_dashboard = get_track_map_dashboard()
@@ -1942,59 +2186,165 @@ def update_drivers(session, circuit_key, year):
         # Initialize simulation controller with session times
         global simulation_controller
         try:
-            # Get session date/time information
-            session_date = session_obj.date  # This is the event date
-            
-            # Get lap times to determine session duration
+            session_date = session_obj.date
             laps = session_obj.laps
-            if not laps.empty and 'LapEndTime_seconds' in laps.columns:
-                # Get first and last lap end times
+
+            if laps.empty or 'LapEndTime_seconds' not in laps.columns:
+                logger.warning("No lap data available for simulation controller")
+                simulation_controller = None
+            else:
                 first_lap_end = laps['LapEndTime_seconds'].min()
                 last_lap_end = laps['LapEndTime_seconds'].max()
-                
-                # Convert seconds to timedelta and anchor simulation at session start
-                if pd.notna(last_lap_end):
-                    start_time = session_date  # begin at session start to include untimed lap 1
-                    end_time = session_date + timedelta(seconds=float(last_lap_end))
-                    
-                    # Prepare lap data with absolute timestamps for accurate lap tracking
-                    lap_timing_data = None
-                    if 'LapStartTime' in laps.columns and 'LapNumber' in laps.columns and 'DriverNumber' in laps.columns:
-                        # Use LEADER's laps (DriverNumber=1) for race lap count
-                        leader_laps = laps[laps['DriverNumber'] == 1].copy()
+
+                if pd.isna(last_lap_end):
+                    logger.warning("Could not extract lap times for simulation")
+                    simulation_controller = None
+                else:
+                    lap_timing_data: Optional[pd.DataFrame] = None
+                    formation_offset_seconds: float = 0.0
+                    fastf1_lap_one_seconds: Optional[float] = None
+
+                    if {'LapStartTime', 'LapNumber', 'DriverNumber'}.issubset(laps.columns):
+                        driver_numbers = pd.to_numeric(laps['DriverNumber'], errors='coerce')
+                        target_driver_number = 1
+                        leader_mask = driver_numbers == target_driver_number
+
+                        if not leader_mask.any():
+                            fallback_number: Optional[int] = None
+                            results_frame = getattr(session_obj, 'results', None)
+                            if isinstance(results_frame, pd.DataFrame) and not results_frame.empty:
+                                driver_numbers_series = results_frame.get('DriverNumber')
+                                if driver_numbers_series is not None:
+                                    fallback_candidates = pd.to_numeric(driver_numbers_series, errors='coerce').dropna()
+                                    if not fallback_candidates.empty:
+                                        fallback_number = int(fallback_candidates.iloc[0])
+
+                            if fallback_number is None:
+                                valid_numbers = driver_numbers.dropna().astype(int)
+                                if not valid_numbers.empty:
+                                    fallback_number = int(valid_numbers.iloc[0])
+
+                            if fallback_number is not None:
+                                target_driver_number = fallback_number
+                                leader_mask = driver_numbers == target_driver_number
+                                logger.warning(
+                                    "Driver #1 lap data missing; using driver #%s for lap tracking",
+                                    target_driver_number,
+                                )
+                            else:
+                                logger.warning("No valid lap data available for lap tracking")
+
+                        leader_laps = laps.loc[leader_mask].copy()
                         if not leader_laps.empty:
-                            lap_timing_data = leader_laps[['LapNumber', 'LapStartTime', 'DriverNumber']].copy()
-                            # Convert LapStartTime (timedelta from session start) to absolute datetime when present
-                            lap_timing_data.loc[lap_timing_data['LapStartTime'].notna(), 'LapStartTime'] = (
-                                session_date + lap_timing_data.loc[
-                                    lap_timing_data['LapStartTime'].notna(), 'LapStartTime'
-                                ]
+                            leader_laps.loc[:, 'DriverNumber'] = int(target_driver_number)
+
+                            select_columns = ['LapNumber', 'LapStartTime', 'LapEndTime', 'DriverNumber']
+                            if 'LapTime' in leader_laps.columns:
+                                select_columns.append('LapTime')
+
+                            lap_timing_candidate = leader_laps[select_columns].copy()
+                            normalized_laps, offset_seconds, lap_one_seconds = _normalize_lap_timing_data(
+                                lap_timing_candidate,
+                                track_map_dashboard,
+                                int(target_driver_number),
                             )
-                            # Preserve NaT for formation/untimed lap 1 so UI can mark it
+
+                            if offset_seconds is not None:
+                                formation_offset_seconds = offset_seconds
+                                logger.info(
+                                    "Applied formation offset %.1fs using FastF1 lap-one %.1fs",
+                                    formation_offset_seconds,
+                                    lap_one_seconds if lap_one_seconds is not None else float('nan'),
+                                )
+
+                            if lap_one_seconds is not None:
+                                fastf1_lap_one_seconds = lap_one_seconds
+
+                            lap_timing_data = normalized_laps
                             logger.info(
-                                f"Prepared lap timing data from LEADER: {len(lap_timing_data)} laps (including untimed lap 1 if present)"
+                                "Prepared lap timing data from driver #%s: %d laps",
+                                target_driver_number,
+                                len(lap_timing_data) if lap_timing_data is not None else 0,
                             )
                         else:
-                            logger.warning("No laps found for leader (DriverNumber=1)")
-                    
-                    # Create controller with lap data for EXACT lap calculation
+                            logger.warning("Unable to build lap timing data; no laps matched target driver")
+
+                    # Determine simulation start/end using normalized laps if available
+                    def _derive_boundary_seconds() -> Tuple[float, float, float]:
+                        start_seconds = 0.0
+                        lap_one_end_seconds = float(first_lap_end) if pd.notna(first_lap_end) else 0.0
+                        session_end_seconds = float(last_lap_end)
+
+                        if lap_timing_data is not None and not lap_timing_data.empty:
+                            lap_one_mask = pd.Series(False, index=lap_timing_data.index)
+                            if 'LapNumber' in lap_timing_data.columns:
+                                lap_numbers = pd.to_numeric(lap_timing_data['LapNumber'], errors='coerce')
+                                lap_numbers_clean = lap_numbers.dropna()
+                                if not lap_numbers_clean.empty:
+                                    first_lap_number = lap_numbers_clean.min()
+                                    lap_one_mask = lap_numbers == first_lap_number
+
+                            if 'LapStartTime_seconds' in lap_timing_data.columns:
+                                start_series = lap_timing_data.loc[lap_one_mask, 'LapStartTime_seconds'].dropna()
+                                if not start_series.empty:
+                                    start_seconds = float(start_series.iloc[0])
+                            elif 'LapStartTime' in lap_timing_data.columns:
+                                raw_start_series = lap_timing_data.loc[lap_one_mask, 'LapStartTime'].dropna()
+                                if not raw_start_series.empty:
+                                    derived_series = raw_start_series.apply(_timedelta_to_seconds).dropna()
+                                    if not derived_series.empty:
+                                        start_seconds = float(derived_series.iloc[0])
+
+                            if 'LapEndTime_seconds' in lap_timing_data.columns:
+                                end_series = lap_timing_data.loc[lap_one_mask, 'LapEndTime_seconds'].dropna()
+                                if not end_series.empty:
+                                    lap_one_end_seconds = float(end_series.iloc[0])
+                                session_end_candidates = lap_timing_data['LapEndTime_seconds'].dropna()
+                                if not session_end_candidates.empty:
+                                    session_end_seconds = float(session_end_candidates.max())
+                            elif 'LapEndTime' in lap_timing_data.columns:
+                                raw_end_series = lap_timing_data.loc[lap_one_mask, 'LapEndTime'].dropna()
+                                if not raw_end_series.empty:
+                                    derived_end_series = raw_end_series.apply(_timedelta_to_seconds).dropna()
+                                    if not derived_end_series.empty:
+                                        lap_one_end_seconds = float(derived_end_series.iloc[0])
+                                session_end_series = lap_timing_data['LapEndTime'].dropna()
+                                session_value_series = session_end_series.apply(_timedelta_to_seconds).dropna()
+                                if not session_value_series.empty:
+                                    session_end_seconds = float(session_value_series.max())
+
+                        return start_seconds, lap_one_end_seconds, session_end_seconds
+
+                    start_seconds, first_lap_end_seconds, session_end_seconds = _derive_boundary_seconds()
+
+                    start_time = session_date + timedelta(seconds=start_seconds)
+                    end_time = session_date + timedelta(seconds=session_end_seconds)
+
+                    if formation_offset_seconds:
+                        track_map_status['formation_offset_seconds'] = formation_offset_seconds
+                    else:
+                        track_map_status['formation_offset_seconds'] = 0.0
+
+                    if fastf1_lap_one_seconds is not None:
+                        track_map_status['fastf1_lap_one_seconds'] = fastf1_lap_one_seconds
+
                     simulation_controller = SimulationController(
                         start_time,
                         end_time,
                         lap_data=lap_timing_data
                     )
-                    simulation_controller.pause()  # Start paused
-                    
+                    simulation_controller.pause()
+
                     logger.info(
-                        f"SimulationController initialized: {start_time} -> {end_time} "
-                        f"(first lap end at {first_lap_end:.1f}s, last lap at {last_lap_end:.1f}s)"
+                        "SimulationController initialized: %s -> %s (lap1 end %.1fs, final lap %.1fs)",
+                        start_time,
+                        end_time,
+                        first_lap_end_seconds,
+                        session_end_seconds,
                     )
-                else:
-                    logger.warning("Could not extract lap times for simulation")
-            else:
-                logger.warning("No lap data available for simulation controller")
-        except Exception as e:
-            logger.error(f"Failed to initialize SimulationController: {e}")
+        except Exception as exc:
+            logger.error(f"Failed to initialize SimulationController: {exc}")
+            simulation_controller = None
         
         drivers = session_obj.drivers
         results = session_obj.results
@@ -3509,6 +3859,7 @@ def update_dashboards(
     global _cached_weather_component, _cached_weather_lap, _cached_weather_session_key
     global _cached_telemetry_component, _cached_telemetry_key
     global _cached_race_control_component, _cached_race_control_sig
+    global _track_map_trace_offset, _track_map_driver_order
 
     driver_code = None
     if focused_driver and focused_driver != 'none':
@@ -3619,10 +3970,21 @@ def update_dashboards(
                         except Exception as e:
                             logger.warning(f"Could not get lap for overview: {e}")
                     
+                    formation_offset_seconds = None
+                    if isinstance(track_map_status, dict):
+                        formation_offset_value = track_map_status.get('formation_offset_seconds')
+                        if isinstance(formation_offset_value, (int, float)):
+                            formation_offset_seconds = float(formation_offset_value)
+                    overview_logger.debug(
+                        "Race overview (initial) formation offset: %s",
+                        formation_offset_seconds,
+                    )
+
                     overview_content = race_overview_dashboard.render(
                         session_key=session_key,
                         simulation_time=simulation_time,
                         session_start_time=session_start_time,
+                        formation_offset_seconds=formation_offset_seconds,
                         current_lap=overview_current_lap,
                         focused_driver_code=driver_code
                     )
@@ -3777,7 +4139,7 @@ def update_dashboards(
 
         elif dashboard_id == "track_map":
             card_id = "track-map-wrapper"
-            base_style = {"height": "620px", "overflow": "hidden"}
+            base_style = {"minHeight": "480px", "height": "100%", "overflow": "hidden"}
 
             if not mode_is_simulation:
                 dashboards.append(
@@ -3847,7 +4209,86 @@ def update_dashboards(
                 continue
 
             track_map_dashboard = get_track_map_dashboard()
-            base_figure = track_map_dashboard.get_circuit_figure()
+            driver_entries = _build_track_map_driver_data(focused_driver)
+            formation_offset_value = track_map_status.get('formation_offset_seconds')
+            formation_offset_seconds = (
+                float(formation_offset_value)
+                if isinstance(formation_offset_value, (int, float))
+                else 0.0
+            )
+            total_laps = _resolve_track_map_total_laps(session_data)
+            _, focus_driver_number = _parse_driver_selector_value(focused_driver)
+            global _track_map_focus_driver
+            _track_map_focus_driver = focus_driver_number
+
+            initial_elapsed = 0.0
+            initial_lap = 1
+            if simulation_controller is not None:
+                try:
+                    initial_elapsed = simulation_controller.get_elapsed_seconds()
+                except Exception as exc:  # noqa: BLE001
+                    dash_logger.debug("Unable to read simulation time for initial track map: %s", exc)
+                    initial_elapsed = 0.0
+                try:
+                    initial_lap = simulation_controller.get_current_lap() or 1
+                except Exception as exc:  # noqa: BLE001
+                    dash_logger.debug("Unable to read lap for initial track map: %s", exc)
+                    initial_lap = 1
+
+            effective_initial_elapsed = initial_elapsed
+            if simulation_controller is not None:
+                try:
+                    effective_initial_elapsed = simulation_controller.clamp_elapsed_to_lap(
+                        initial_elapsed,
+                        max(initial_lap, 1),
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    dash_logger.debug("Unable to clamp elapsed time for track map: %s", exc)
+                    effective_initial_elapsed = initial_elapsed
+
+            if driver_entries:
+                try:
+                    base_figure = track_map_dashboard.create_figure(
+                        current_lap=max(initial_lap, 1),
+                        driver_data=driver_entries,
+                        elapsed_time=effective_initial_elapsed,
+                    )
+                    offset = _extract_track_map_trace_offset(base_figure)
+                    if offset is not None:
+                        _track_map_trace_offset = offset
+                        _track_map_driver_order = sorted(entry["driver_number"] for entry in driver_entries)
+                    else:
+                        _track_map_trace_offset = None
+                        _track_map_driver_order = []
+                except Exception as exc:  # noqa: BLE001
+                    dash_logger.error("Failed to build initial track map figure: %s", exc, exc_info=True)
+                    base_figure = track_map_dashboard.get_circuit_figure()
+                    _track_map_trace_offset = None
+                    _track_map_driver_order = []
+                else:
+                    if track_map_logger.isEnabledFor(logging.DEBUG):
+                        track_map_logger.debug(
+                            (
+                                "[TrackMapInitial] drivers=%d sim_elapsed_store=%.3f sim_elapsed_ctrl=%.3f "
+                                "sim_elapsed_clamped=%.3f sim_lap=%s"
+                            ),
+                            len(_track_map_driver_order),
+                            initial_elapsed,
+                            initial_elapsed,
+                            effective_initial_elapsed,
+                            max(initial_lap, 1),
+                        )
+            else:
+                base_figure = track_map_dashboard.get_circuit_figure()
+                _track_map_trace_offset = None
+                _track_map_driver_order = []
+            base_figure.update_layout(title=dict(text=""), autosize=True)
+            initial_lap_label = _format_track_map_lap_label(
+                current_lap=max(initial_lap, 1),
+                total_laps=total_laps,
+                formation_offset_seconds=formation_offset_seconds,
+                elapsed_time_seconds=max(initial_elapsed, 0.0),
+            )
             status_badge = dbc.Badge(
                 "FastF1 cache ready",
                 color="success",
@@ -3870,18 +4311,42 @@ def update_dashboards(
                             ], className="align-items-center g-0"),
                             className="py-1"
                         ),
-                        dbc.CardBody([
-                            dcc.Loading(
-                                dcc.Graph(
-                                    id='track-map-graph',
-                                    figure=base_figure,
-                                    config={'displayModeBar': False},
-                                    style={'height': '100%'}
+                        dbc.CardBody(
+                            [
+                                html.Div(
+                                    dcc.Loading(
+                                        dcc.Graph(
+                                            id='track-map-graph',
+                                            figure=base_figure,
+                                            config={'displayModeBar': False, 'responsive': True},
+                                            responsive=True,
+                                            style={'height': '100%', 'width': '100%'}
+                                        ),
+                                        type="circle",
+                                        color="#e10600",
+                                        style={'flex': '1 1 auto'},
+                                        delay_show=750,
+                                        show_initially=False
+                                    ),
+                                    style={'flex': '1 1 auto', 'minHeight': '360px'}
                                 ),
-                                type="circle",
-                                color="#e10600"
-                            )
-                        ], style={'height': 'calc(100% - 10px)', 'padding': '5px'})
+                                html.Div(
+                                    html.Span(
+                                        initial_lap_label,
+                                        id="track-map-lap-label",
+                                        className="fw-semibold text-light",
+                                    ),
+                                    className="mt-2 text-center",
+                                    style={'fontSize': '0.95rem'}
+                                ),
+                            ],
+                            style={
+                                'height': '100%',
+                                'padding': '6px',
+                                'display': 'flex',
+                                'flexDirection': 'column',
+                            }
+                        )
                     ], className="mb-3 h-100", style=base_style),
                     id=card_id
                 )
@@ -4112,10 +4577,22 @@ def refresh_race_overview_body(
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Could not read lap for overview refresh: %s", exc)
 
+        formation_offset_seconds = None
+        if isinstance(session_data, dict):
+            track_map_status = session_data.get('track_map', {})
+            if isinstance(track_map_status, dict):
+                formation_offset_value = track_map_status.get('formation_offset_seconds')
+                if isinstance(formation_offset_value, (int, float)):
+                    formation_offset_seconds = float(formation_offset_value)
+        overview_logger.debug(
+            "Race overview formation offset: %s", formation_offset_seconds
+        )
+
         overview_content = race_overview_dashboard.render(
             session_key=session_key,
             simulation_time=simulation_time,
             session_start_time=session_start_time,
+            formation_offset_seconds=formation_offset_seconds,
             current_lap=overview_current_lap,
             focused_driver_code=driver_code
         )
@@ -4127,17 +4604,22 @@ def refresh_race_overview_body(
 
 @callback(
     Output('track-map-graph', 'figure'),
+    Output('track-map-lap-label', 'children'),
     Input('simulation-time-store', 'data'),
     Input('session-store', 'data'),
+    Input('driver-selector', 'value'),
     State('dashboard-selector', 'value'),
     State('mode-selector', 'value'),
+    State('track-map-graph', 'figure'),
     prevent_initial_call=True
 )
 def refresh_track_map_figure(
     simulation_time_data: Optional[Dict[str, Any]],
     session_data: Optional[Dict[str, Any]],
+    focused_driver_value: Optional[str],
     selected_dashboards: Optional[List[str]],
     mode_value: Optional[str],
+    _existing_figure: Optional[Dict[str, Any]],
 ):
     """Refresh Track Map markers using cached FastF1 positions and simulation time."""
     if not selected_dashboards or 'track_map' not in selected_dashboards:
@@ -4151,18 +4633,31 @@ def refresh_track_map_figure(
     if not track_map_status.get('ready'):
         raise PreventUpdate
 
+    formation_offset_value = track_map_status.get('formation_offset_seconds')
+    formation_offset_seconds = (
+        float(formation_offset_value)
+        if isinstance(formation_offset_value, (int, float))
+        else 0.0
+    )
+    total_laps = _resolve_track_map_total_laps(session_data)
+    _, focus_driver_number = _parse_driver_selector_value(focused_driver_value)
+
     track_dashboard = get_track_map_dashboard()
-    driver_data = _build_track_map_driver_data()
-    if not driver_data:
-        dash_logger.debug("Track map driver data unavailable; returning base circuit figure")
-        return track_dashboard.get_circuit_figure()
+    driver_data = _build_track_map_driver_data(focused_driver_value)
+    driver_style_lookup = {
+        entry["driver_number"]: track_dashboard.resolve_marker_style(entry)
+        for entry in driver_data
+    }
 
     elapsed_time = 0.0
+    store_elapsed_time = 0.0
     if simulation_time_data and isinstance(simulation_time_data, dict):
         try:
             elapsed_time = float(simulation_time_data.get('time', 0.0))
+            store_elapsed_time = elapsed_time
         except (TypeError, ValueError):
             elapsed_time = 0.0
+            store_elapsed_time = 0.0
 
     current_lap = 1
     if simulation_controller is not None:
@@ -4175,16 +4670,186 @@ def refresh_track_map_figure(
         except Exception as exc:  # noqa: BLE001
             dash_logger.debug("Unable to determine current lap for track map: %s", exc)
 
+    current_lap = max(current_lap, 1)
+    effective_elapsed_time = max(elapsed_time, 0.0)
+    lap_label_text = _format_track_map_lap_label(
+        current_lap=current_lap,
+        total_laps=total_laps,
+        formation_offset_seconds=formation_offset_seconds,
+        elapsed_time_seconds=store_elapsed_time,
+    )
+
+    if not driver_data:
+        dash_logger.debug("Track map driver data unavailable; returning base circuit figure")
+        empty_figure = track_dashboard.get_circuit_figure()
+        empty_figure.update_layout(title=dict(text=""))
+        return empty_figure, lap_label_text
+
+    driver_numbers = sorted(entry["driver_number"] for entry in driver_data)
+
+    global _track_map_trace_offset, _track_map_driver_order, _track_map_focus_driver
+
     try:
-        figure = track_dashboard.create_figure(
-            current_lap=max(current_lap, 1),
-            driver_data=driver_data,
-            elapsed_time=elapsed_time,
+        requires_new_base = False
+        if not _track_map_driver_order:
+            requires_new_base = True
+        elif _track_map_driver_order != driver_numbers:
+            requires_new_base = True
+
+        focus_changed = _track_map_focus_driver != focus_driver_number
+        if focus_changed:
+            requires_new_base = True
+        _track_map_focus_driver = focus_driver_number
+
+        if requires_new_base or _track_map_trace_offset is None:
+            dash_logger.debug(
+                "Track map full refresh: offset=%s order_changed=%s drivers=%d",  # noqa: G004
+                _track_map_trace_offset,
+                _track_map_driver_order != driver_numbers,
+                len(driver_numbers),
+            )
+            full_figure = track_dashboard.create_figure(
+                current_lap=current_lap,
+                driver_data=driver_data,
+                elapsed_time=effective_elapsed_time,
+            )
+            offset = _extract_track_map_trace_offset(full_figure)
+            if offset is None:
+                dash_logger.warning("Track map figure missing driver traces; returning full figure")
+                _track_map_trace_offset = None
+                _track_map_driver_order = []
+                full_figure.update_layout(title=dict(text=""))
+                return full_figure, lap_label_text
+
+            _track_map_trace_offset = offset
+            _track_map_driver_order = list(driver_numbers)
+            full_figure.update_layout(title=dict(text=""))
+            return full_figure, lap_label_text
+
+        positions = track_dashboard.provider.get_all_driver_positions(
+            lap_number=None,
+            driver_numbers=_track_map_driver_order,
+            elapsed_time=effective_elapsed_time,
         )
-        return figure
+
+        if track_map_logger.isEnabledFor(logging.DEBUG):
+            debug_driver: Optional[int] = None
+            if _track_map_driver_order:
+                debug_driver = _track_map_driver_order[0]
+            elif driver_numbers:
+                debug_driver = driver_numbers[0]
+
+            if debug_driver is not None:
+                cache_entry = positions.get(debug_driver)
+                lap_value: str | int = 'n/a'
+                prev_time_value = float('nan')
+                next_time_value = float('nan')
+                query_time_value = float('nan')
+                sample_time_value = float('nan')
+
+                if isinstance(cache_entry, dict):
+                    cache_lap_raw = cache_entry.get('lap_number')
+                    if isinstance(cache_lap_raw, (int, float)):
+                        lap_value = int(cache_lap_raw)
+
+                    previous_sample = cache_entry.get('previous_sample')
+                    if isinstance(previous_sample, dict):
+                        prev_time_raw = previous_sample.get('time')
+                        if isinstance(prev_time_raw, (int, float)):
+                            prev_time_value = float(prev_time_raw)
+
+                    next_sample = cache_entry.get('next_sample')
+                    if isinstance(next_sample, dict):
+                        next_time_raw = next_sample.get('time')
+                        if isinstance(next_time_raw, (int, float)):
+                            next_time_value = float(next_time_raw)
+
+                    query_time_raw = cache_entry.get('query_time')
+                    if isinstance(query_time_raw, (int, float)):
+                        query_time_value = float(query_time_raw)
+
+                    sample_time_raw = cache_entry.get('time')
+                    if isinstance(sample_time_raw, (int, float)):
+                        sample_time_value = float(sample_time_raw)
+
+                track_map_logger.debug(
+                    (
+                        "[TrackMap] driver=%s sim_elapsed_store=%.3f sim_elapsed_ctrl=%.3f "
+                        "sim_elapsed_clamped=%.3f sim_lap=%s cache_lap=%s prev_time=%.3f next_time=%.3f "
+                        "query_time=%.3f sample_time=%.3f"
+                    ),
+                    debug_driver,
+                    store_elapsed_time,
+                    elapsed_time,
+                    effective_elapsed_time,
+                    current_lap,
+                    lap_value,
+                    prev_time_value,
+                    next_time_value,
+                    query_time_value,
+                    sample_time_value,
+                )
     except Exception as exc:  # noqa: BLE001
-        dash_logger.error("Error updating track map figure: %s", exc, exc_info=True)
-        return track_dashboard.get_circuit_figure()
+        dash_logger.error("Error updating track map positions: %s", exc, exc_info=True)
+        fallback_figure = track_dashboard.get_circuit_figure()
+        fallback_figure.update_layout(title=dict(text=""))
+        return fallback_figure, lap_label_text
+
+    patch = Patch()
+
+    if not positions:
+        patch['layout']['annotations'] = [{
+            'text': "No position data available",
+            'xref': 'paper',
+            'yref': 'paper',
+            'x': 0.5,
+            'y': 0.5,
+            'showarrow': False,
+            'font': {'size': 16, 'color': 'orange'},
+        }]
+    else:
+        patch['layout']['annotations'] = []
+
+    trace_offset = _track_map_trace_offset or 0
+    for idx, driver_number in enumerate(_track_map_driver_order):
+        position = positions.get(driver_number)
+        trace_idx = trace_offset + idx
+        if position is None:
+            continue
+
+        pos_x = position.get('x')
+        pos_y = position.get('y')
+        x_value = float(pos_x) if isinstance(pos_x, (int, float)) else 0.0
+        y_value = float(pos_y) if isinstance(pos_y, (int, float)) else 0.0
+
+        patch['data'][trace_idx]['x'] = [x_value]
+        patch['data'][trace_idx]['y'] = [y_value]
+        patch['data'][trace_idx]['text'] = [str(driver_number)]
+        customdata = track_dashboard._build_customdata(
+            driver_number,
+            position,
+            fallback_lap=current_lap,
+        )
+        patch['data'][trace_idx]['customdata'] = customdata
+
+        styles = driver_style_lookup.get(driver_number)
+        if styles:
+            patch['data'][trace_idx]['marker'] = {
+                'size': 20,
+                'color': styles['fill_color'],
+                'line': {
+                    'color': styles['outline_color'],
+                    'width': styles['outline_width'],
+                },
+            }
+            patch['data'][trace_idx]['textfont'] = {
+                'color': styles['text_color'],
+                'size': 10,
+                'family': 'Arial Black',
+            }
+
+    patch['layout']['title'] = {'text': ''}
+    return patch, lap_label_text
 
 
 # NOTE: Render callback REMOVED - chat callback writes directly to container
