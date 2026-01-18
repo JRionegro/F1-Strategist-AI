@@ -88,7 +88,7 @@ class CacheConfig:
                 DataType.DRIVER_INFO: RetentionPolicy.PERMANENT,
                 # Datos con retención temporal (pesados)
                 DataType.LAP_TIMES: RetentionPolicy.DAYS_30,
-                DataType.TELEMETRY: RetentionPolicy.DAYS_7,
+                DataType.TELEMETRY: RetentionPolicy.PERMANENT,
                 DataType.PIT_STOPS: RetentionPolicy.DAYS_90,
                 DataType.TIRE_STRATEGY: RetentionPolicy.DAYS_90,
                 # Eventos de carrera

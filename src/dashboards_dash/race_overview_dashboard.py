@@ -5,8 +5,10 @@ Shows live positions, gaps, tire compounds using Intervals API for accuracy.
 """
 
 import logging
-from typing import Optional
+import math
 from datetime import datetime
+from numbers import Real
+from typing import Any, Dict, Optional
 
 import dash_bootstrap_components as dbc
 import pandas as pd
@@ -68,6 +70,7 @@ class RaceOverviewDashboard:
         current_lap: Optional[int] = None,
         focused_driver_code: Optional[str] = None,
         pit_proba_lookup: Optional[callable] = None,
+        retirements: Optional[Dict[int, Dict[str, Any]]] = None,
     ):
         """
         Render the Race Overview Dashboard with real-time leaderboard.
@@ -783,6 +786,64 @@ class RaceOverviewDashboard:
                 )
 
             # Build leaderboard table
+            retirement_lookup: Dict[int, Dict[str, Any]] = {}
+            if retirements:
+                retirement_lookup = {
+                    int(driver_num): info
+                    for driver_num, info in retirements.items()
+                    if isinstance(driver_num, int)
+                }
+
+            active_retirements: Dict[int, Dict[str, Any]] = {}
+            if retirement_lookup:
+                elapsed_value = float(simulation_time) if isinstance(simulation_time, Real) and math.isfinite(float(simulation_time)) else None
+                for driver_num, info in retirement_lookup.items():
+                    retire_time_value = info.get("time")
+                    retire_lap_value = info.get("lap")
+                    should_flag = False
+                    if elapsed_value is not None and isinstance(retire_time_value, Real) and math.isfinite(float(retire_time_value)):
+                        should_flag = elapsed_value >= float(retire_time_value)
+                    elif isinstance(retire_lap_value, int) and current_lap is not None:
+                        should_flag = current_lap >= max(retire_lap_value, 1)
+                    if should_flag:
+                        active_retirements[driver_num] = info
+
+            if not leaderboard_data.empty:
+                leaderboard_data = leaderboard_data.copy()
+                driver_numbers_series = pd.to_numeric(
+                    leaderboard_data.get('DriverNumber'),
+                    errors='coerce'
+                )
+                if active_retirements:
+                    status_map = {
+                        driver_num: info.get('status') or 'DNF'
+                        for driver_num, info in active_retirements.items()
+                    }
+
+                    def _map_retired(value: Any) -> bool:
+                        if pd.isna(value):
+                            return False
+                        try:
+                            driver_key = int(value)
+                        except (TypeError, ValueError):
+                            return False
+                        return driver_key in active_retirements
+
+                    def _map_status(value: Any) -> Optional[str]:
+                        if pd.isna(value):
+                            return None
+                        try:
+                            driver_key = int(value)
+                        except (TypeError, ValueError):
+                            return None
+                        return status_map.get(driver_key)
+
+                    leaderboard_data['Retired'] = driver_numbers_series.apply(_map_retired)
+                    leaderboard_data['RetiredStatus'] = driver_numbers_series.apply(_map_status)
+                else:
+                    leaderboard_data['Retired'] = False
+                    leaderboard_data['RetiredStatus'] = None
+
             leaderboard_table = self._build_leaderboard_table(
                 leaderboard_data,
                 focused_driver_code=focused_driver_code,
@@ -851,15 +912,24 @@ class RaceOverviewDashboard:
         # Prepare table data
         table_rows = []
         for _, row in leaderboard_data.iterrows():
-            position = int(row['Position'])
+            raw_position = row.get('Position')
+            try:
+                position = int(raw_position)
+            except (TypeError, ValueError):
+                position = 0
             driver = row.get(
                 'Abbreviation',
                 f"#{row['DriverNumber']}"
             )
 
+            is_retired = bool(row.get('Retired'))
+            retired_status = row.get('RetiredStatus') or 'DNF'
+
             # Format gaps
             gap_to_leader = row.get('GapToLeader', None)
-            if position == 1:
+            if is_retired:
+                gap_str = retired_status
+            elif position == 1:
                 gap_str = "Leader"
             elif gap_to_leader is None or pd.isna(gap_to_leader):
                 gap_str = "-"
@@ -869,7 +939,9 @@ class RaceOverviewDashboard:
                 gap_str = f"+{gap_to_leader:.3f}s"
 
             interval = row.get('Interval', None)
-            if position == 1:
+            if is_retired:
+                interval_str = "-"
+            elif position == 1:
                 interval_str = "-"
             elif interval is None or pd.isna(interval):
                 interval_str = "-"
@@ -894,14 +966,17 @@ class RaceOverviewDashboard:
                 'UNKNOWN': '⚫'
             }
             tire_circle = tire_colors.get(compound, '⚫')
-            
-            # Display tire age (already correctly calculated including formation lap)
-            tire_str = f"{tire_circle} {int(tire_age)}"
+
+            if is_retired:
+                tire_str = "—"
+            else:
+                tire_str = f"{tire_circle} {int(tire_age)}"
             
             # Pit stops
             pit_stops = row.get('PitStops', 0)
             if pd.isna(pit_stops):
                 pit_stops = 0
+            pit_display = '-' if is_retired else int(pit_stops)
 
             # Get team name for color mapping
             team_name = row.get('TeamName', '')
@@ -912,7 +987,7 @@ class RaceOverviewDashboard:
                 "Gap": gap_str,
                 "Interval": interval_str,
                 "Tire": tire_str,
-                "Stops": int(pit_stops),
+                "Stops": pit_display,
                 "TeamName": team_name,  # Hidden column for conditional styling
             })
 

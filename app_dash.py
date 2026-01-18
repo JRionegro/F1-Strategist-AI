@@ -15,7 +15,8 @@ import importlib
 import hashlib
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, List, Tuple, cast
+from numbers import Real
 
 import dash
 from dash import Dash, html, dcc, Input, Output, State, callback, ctx, Patch, ALL, no_update
@@ -194,6 +195,9 @@ _llm_provider_type: Optional[str] = None  # 'hybrid', 'claude', 'gemini'
 _track_map_trace_offset: Optional[int] = None
 _track_map_driver_order: List[int] = []
 _track_map_focus_driver: Optional[int] = None
+_track_map_driver_laps: Dict[int, int] = {}
+_track_map_retirements: Dict[int, Dict[str, Any]] = {}
+_track_map_retirement_order: List[int] = []
 
 
 def _extract_track_map_trace_offset(figure: Any) -> Optional[int]:
@@ -226,7 +230,6 @@ def _parse_driver_selector_value(selector_value: Optional[str]) -> Tuple[Optiona
     """Return driver code and car number from the selector value."""
     if not selector_value or selector_value == 'none':
         return None, None
-
     parts = selector_value.split('_')
     if len(parts) < 3:
         return parts[0] if parts else None, None
@@ -237,6 +240,24 @@ def _parse_driver_selector_value(selector_value: Optional[str]) -> Tuple[Optiona
     except ValueError:
         return driver_code, None
     return driver_code, driver_number
+
+
+def _update_track_map_lap_cache(positions: Dict[int, Any]) -> None:
+    """Store the latest lap number per driver for tooltip fallbacks."""
+    if not isinstance(positions, dict):
+        return
+
+    for driver_number, payload in positions.items():
+        if not isinstance(driver_number, int):
+            continue
+        if not isinstance(payload, dict):
+            continue
+
+        lap_raw = payload.get("lap_number")
+        if isinstance(lap_raw, Real):
+            lap_value = float(lap_raw)
+            if math.isfinite(lap_value) and lap_value >= 1.0:
+                _track_map_driver_laps[driver_number] = int(lap_value)
 
 
 def _resolve_track_map_total_laps(session_payload: Optional[Dict[str, Any]]) -> Optional[int]:
@@ -253,6 +274,16 @@ def _resolve_track_map_total_laps(session_payload: Optional[Dict[str, Any]]) -> 
         section_total = session_section.get("total_laps")
         if isinstance(section_total, (int, float)):
             return int(section_total)
+
+    circuit_meta = session_payload.get("circuit")
+    if isinstance(circuit_meta, dict):
+        circuit_name = circuit_meta.get("name") or circuit_meta.get("circuit_name")
+        if isinstance(circuit_name, str):
+            return _get_total_laps_for_circuit(circuit_name)
+
+    circuit_name = session_payload.get("circuit_name")
+    if isinstance(circuit_name, str):
+        return _get_total_laps_for_circuit(circuit_name)
 
     return None
 
@@ -571,13 +602,193 @@ def _normalize_lap_timing_data(
     return normalized, formation_offset_seconds, fastf1_lap_one_seconds
 
 
-def _build_track_map_driver_data(focused_driver_value: Optional[str] = None) -> List[Dict[str, Any]]:
+def _is_retirement_status(status: str) -> bool:
+    """Return True when a FastF1 status indicates retirement or DNF."""
+    if not status:
+        return False
+
+    normalized = str(status).strip().lower()
+    if not normalized:
+        return False
+
+    if normalized in {"finished", "classified"}:
+        return False
+
+    if normalized.startswith("+"):
+        # +1 Lap, +2 Laps -> still classified
+        return False
+
+    if normalized.startswith("disqualified"):
+        return True
+
+    retirement_keywords = (
+        "ret",  # retired
+        "dnf",
+        "accident",
+        "collision",
+        "engine",
+        "gearbox",
+        "hydraul",
+        "suspension",
+        "electrical",
+        "oil",
+        "damage",
+        "brake",
+        "fuel",
+        "not classified",
+        "did not finish",
+        "stopped",
+        "tyre",
+        "power unit",
+        "water",
+    )
+    return any(keyword in normalized for keyword in retirement_keywords)
+
+
+def _refresh_track_map_retirements(track_dashboard: TrackMapDashboard) -> Dict[int, Dict[str, Any]]:
+    """Compute retirement metadata using FastF1 session results."""
+    global _track_map_retirements, _track_map_retirement_order
+
+    provider = getattr(track_dashboard, "provider", None)
+    session = getattr(provider, "session", None)
+    if session is None or not hasattr(session, "results"):
+        _track_map_retirements = {}
+        _track_map_retirement_order = []
+        return _track_map_retirements
+
+    results_df = getattr(session, "results", None)
+    if not isinstance(results_df, pd.DataFrame) or results_df.empty:
+        _track_map_retirements = {}
+        _track_map_retirement_order = []
+        return _track_map_retirements
+
+    laps_df = getattr(session, "laps", None)
+
+    session_start_dt: Optional[datetime] = None
+    if simulation_controller is not None:
+        start_candidate = getattr(simulation_controller, "start_time", None)
+        session_start_dt = start_candidate if isinstance(start_candidate, datetime) else None
+
+    def _extract_seconds(raw_value: Any) -> Optional[float]:
+        if raw_value is None:
+            return None
+
+        if isinstance(raw_value, pd.Timedelta):
+            if pd.isna(raw_value):
+                return None
+            return float(raw_value.total_seconds())
+
+        if isinstance(raw_value, Real):
+            numeric_value = float(raw_value)
+            return numeric_value if math.isfinite(numeric_value) else None
+
+        if isinstance(raw_value, pd.Timestamp):
+            if pd.isna(raw_value):
+                return None
+            if session_start_dt is None:
+                return None
+            timestamp_dt = raw_value.to_pydatetime()
+        elif isinstance(raw_value, datetime):
+            timestamp_dt = raw_value
+        else:
+            return None
+
+        if session_start_dt is None:
+            return None
+        return max((timestamp_dt - session_start_dt).total_seconds(), 0.0)
+
+    retirements: Dict[int, Dict[str, Any]] = {}
+    positions_df = getattr(provider, "positions_df", None)
+    time_offset_value = getattr(provider, "_session_time_offset", 0.0)
+    try:
+        time_offset = float(time_offset_value)
+    except (TypeError, ValueError):
+        time_offset = 0.0
+
+    for _, row in results_df.iterrows():
+        driver_number_raw = row.get("DriverNumber")
+        status_raw = row.get("Status")
+        if driver_number_raw is None:
+            continue
+        try:
+            driver_number = int(cast(float | int | str, driver_number_raw))
+        except (TypeError, ValueError):
+            continue
+
+        status_text = str(status_raw or "").strip()
+        if not _is_retirement_status(status_text):
+            continue
+
+        retired_lap: Optional[int] = None
+        retire_time: Optional[float] = None
+        if isinstance(laps_df, pd.DataFrame) and not laps_df.empty and "DriverNumber" in laps_df.columns:
+            numeric_driver_numbers = pd.to_numeric(laps_df["DriverNumber"], errors="coerce")
+            driver_laps = laps_df.loc[numeric_driver_numbers == driver_number]
+            if not driver_laps.empty and "LapNumber" in driver_laps.columns:
+                lap_values = pd.to_numeric(driver_laps["LapNumber"], errors="coerce").dropna()
+                if not lap_values.empty:
+                    retired_lap = int(lap_values.max())
+            if not driver_laps.empty:
+                driver_laps_sorted = driver_laps.sort_values("LapNumber")
+                final_lap_row = driver_laps_sorted.iloc[-1]
+                for key in ("LapEndTime", "LapStartTime", "Time"):
+                    timestamp_candidate = final_lap_row.get(key)
+                    retire_time = _extract_seconds(timestamp_candidate)
+                    if retire_time is not None:
+                        break
+
+        if retired_lap is None:
+            cached_lap = _track_map_driver_laps.get(driver_number)
+            if isinstance(cached_lap, int) and cached_lap >= 1:
+                retired_lap = cached_lap
+
+        if retire_time is None and isinstance(positions_df, pd.DataFrame) and not positions_df.empty:
+            try:
+                driver_slice = positions_df[positions_df["driver_number"] == str(driver_number)]
+            except Exception:  # noqa: BLE001
+                driver_slice = pd.DataFrame()
+            if not driver_slice.empty and "time" in driver_slice.columns:
+                time_series = pd.to_numeric(driver_slice["time"], errors="coerce").dropna()
+                if not time_series.empty:
+                    retire_time = float(time_series.max())
+
+        if isinstance(retire_time, (int, float)):
+            retire_time = max(0.0, float(retire_time) - time_offset)
+
+        retirements[driver_number] = {
+            "status": status_text or "Retired",
+            "lap": retired_lap,
+            "time": retire_time,
+        }
+
+    ordered = sorted(
+        retirements.items(),
+        key=lambda item: (
+            item[1]["lap"] if item[1]["lap"] is not None else float("inf"),
+            item[0],
+        ),
+    )
+    _track_map_retirement_order = [driver for driver, _ in ordered]
+    for idx, driver in enumerate(_track_map_retirement_order):
+        retirements[driver]["order"] = idx
+
+    _track_map_retirements = retirements
+    return _track_map_retirements
+
+
+def _build_track_map_driver_data(
+    focused_driver_value: Optional[str] = None,
+    current_lap: Optional[int] = None,
+    retirements: Optional[Dict[int, Dict[str, Any]]] = None,
+    elapsed_time_seconds: Optional[float] = None,
+) -> List[Dict[str, Any]]:
     """Collect driver metadata for the track map dashboard."""
     if current_session_obj is None:
         return []
 
     driver_entries: List[Dict[str, Any]] = []
     _, focus_driver_number = _parse_driver_selector_value(focused_driver_value)
+    retirement_lookup = retirements or _track_map_retirements
 
     try:
         results = getattr(current_session_obj, "results", None)
@@ -613,11 +824,20 @@ def _build_track_map_driver_data(focused_driver_value: Optional[str] = None) -> 
                     or "Unknown"
                 )
 
+                lap_hint = _track_map_driver_laps.get(driver_number)
+                if not isinstance(lap_hint, int) or lap_hint < 1:
+                    lap_hint = None
+
                 driver_entries.append({
                     "driver_number": driver_number,
                     "driver_name": str(driver_name),
                     "team_name": str(team_name),
                     "is_focus_driver": driver_number == focus_driver_number,
+                    "lap_fallback": lap_hint,
+                    "retired": False,
+                    "retired_lap": None,
+                    "retired_status": None,
+                    "retired_order": None,
                 })
                 seen_numbers.add(driver_number)
 
@@ -625,6 +845,40 @@ def _build_track_map_driver_data(focused_driver_value: Optional[str] = None) -> 
         dash_logger.warning("Unable to build track map driver list: %s", exc)
 
     driver_entries.sort(key=lambda item: item["driver_number"])
+
+    if retirement_lookup:
+        for entry in driver_entries:
+            driver_number = entry["driver_number"]
+            retirement_info = retirement_lookup.get(driver_number)
+            if retirement_info is None:
+                continue
+
+            retired_lap = retirement_info.get("lap")
+            retired_status = retirement_info.get("status") or "Retired"
+            retired_order = retirement_info.get("order")
+            retired_time = retirement_info.get("time")
+
+            should_flag = False
+            if isinstance(retired_time, Real) and math.isfinite(retired_time) and elapsed_time_seconds is not None:
+                should_flag = elapsed_time_seconds >= float(retired_time)
+            elif retired_lap is None:
+                should_flag = True
+            elif isinstance(retired_lap, int):
+                if current_lap is not None:
+                    should_flag = current_lap >= max(retired_lap, 1)
+                else:
+                    cached_lap = _track_map_driver_laps.get(driver_number)
+                    if isinstance(cached_lap, int):
+                        should_flag = cached_lap >= max(retired_lap, 1)
+
+            if should_flag:
+                entry["retired"] = True
+                entry["retired_lap"] = int(retired_lap) if isinstance(retired_lap, int) else None
+                entry["retired_status"] = retired_status
+                entry["retired_order"] = int(retired_order) if isinstance(retired_order, int) else 0
+                if entry["lap_fallback"] is None and isinstance(retired_lap, int):
+                    entry["lap_fallback"] = retired_lap
+
     return driver_entries
 
 
@@ -4208,8 +4462,6 @@ def update_dashboards(
                 )
                 continue
 
-            track_map_dashboard = get_track_map_dashboard()
-            driver_entries = _build_track_map_driver_data(focused_driver)
             formation_offset_value = track_map_status.get('formation_offset_seconds')
             formation_offset_seconds = (
                 float(formation_offset_value)
@@ -4235,6 +4487,15 @@ def update_dashboards(
                     dash_logger.debug("Unable to read lap for initial track map: %s", exc)
                     initial_lap = 1
 
+            track_map_dashboard = get_track_map_dashboard()
+            retirements = _refresh_track_map_retirements(track_map_dashboard)
+            driver_entries = _build_track_map_driver_data(
+                focused_driver,
+                current_lap=max(initial_lap, 1),
+                retirements=retirements,
+                elapsed_time_seconds=initial_elapsed,
+            )
+
             effective_initial_elapsed = initial_elapsed
             if simulation_controller is not None:
                 try:
@@ -4248,6 +4509,12 @@ def update_dashboards(
 
             if driver_entries:
                 try:
+                    driver_entries = _build_track_map_driver_data(
+                        focused_driver,
+                        current_lap=max(initial_lap, 1),
+                        retirements=retirements,
+                        elapsed_time_seconds=effective_initial_elapsed,
+                    )
                     base_figure = track_map_dashboard.create_figure(
                         current_lap=max(initial_lap, 1),
                         driver_data=driver_entries,
@@ -4594,7 +4861,8 @@ def refresh_race_overview_body(
             session_start_time=session_start_time,
             formation_offset_seconds=formation_offset_seconds,
             current_lap=overview_current_lap,
-            focused_driver_code=driver_code
+            focused_driver_code=driver_code,
+            retirements=_track_map_retirements,
         )
         return overview_content
     except Exception as exc:  # noqa: BLE001
@@ -4643,11 +4911,6 @@ def refresh_track_map_figure(
     _, focus_driver_number = _parse_driver_selector_value(focused_driver_value)
 
     track_dashboard = get_track_map_dashboard()
-    driver_data = _build_track_map_driver_data(focused_driver_value)
-    driver_style_lookup = {
-        entry["driver_number"]: track_dashboard.resolve_marker_style(entry)
-        for entry in driver_data
-    }
 
     elapsed_time = 0.0
     store_elapsed_time = 0.0
@@ -4672,6 +4935,20 @@ def refresh_track_map_figure(
 
     current_lap = max(current_lap, 1)
     effective_elapsed_time = max(elapsed_time, 0.0)
+    retirements = _refresh_track_map_retirements(track_dashboard)
+    driver_data = _build_track_map_driver_data(
+        focused_driver_value,
+        current_lap=current_lap,
+        retirements=retirements,
+        elapsed_time_seconds=effective_elapsed_time,
+    )
+    driver_style_lookup = {
+        entry["driver_number"]: track_dashboard.resolve_marker_style(entry)
+        for entry in driver_data
+    }
+    driver_metadata_lookup = {
+        entry["driver_number"]: entry for entry in driver_data
+    }
     lap_label_text = _format_track_map_lap_label(
         current_lap=current_lap,
         total_laps=total_laps,
@@ -4731,6 +5008,8 @@ def refresh_track_map_figure(
             driver_numbers=_track_map_driver_order,
             elapsed_time=effective_elapsed_time,
         )
+
+        _update_track_map_lap_cache(positions)
 
         if track_map_logger.isEnabledFor(logging.DEBUG):
             debug_driver: Optional[int] = None
@@ -4797,7 +5076,8 @@ def refresh_track_map_figure(
 
     patch = Patch()
 
-    if not positions:
+    has_retired_drivers = any(entry.get('retired') for entry in driver_metadata_lookup.values())
+    if not positions and not has_retired_drivers:
         patch['layout']['annotations'] = [{
             'text': "No position data available",
             'xref': 'paper',
@@ -4812,25 +5092,56 @@ def refresh_track_map_figure(
 
     trace_offset = _track_map_trace_offset or 0
     for idx, driver_number in enumerate(_track_map_driver_order):
+        entry = driver_metadata_lookup.get(driver_number, {})
         position = positions.get(driver_number)
         trace_idx = trace_offset + idx
-        if position is None:
+        is_retired = bool(entry.get('retired'))
+        if position is None and not is_retired:
             continue
 
-        pos_x = position.get('x')
-        pos_y = position.get('y')
-        x_value = float(pos_x) if isinstance(pos_x, (int, float)) else 0.0
-        y_value = float(pos_y) if isinstance(pos_y, (int, float)) else 0.0
+        position_payload = position.copy() if isinstance(position, dict) else {}
+        team_name = entry.get('team_name', 'Unknown')
+
+        lap_hint = entry.get('lap_fallback') if isinstance(entry.get('lap_fallback'), int) else None
+        if not isinstance(lap_hint, int) or lap_hint < 1:
+            lap_hint = _track_map_driver_laps.get(driver_number)
+        if not isinstance(lap_hint, int) or lap_hint < 1:
+            lap_hint = current_lap
+
+        if is_retired:
+            order_index = int(entry.get('retired_order') or 0)
+            anchor_x, anchor_y = track_dashboard.get_retirement_marker_position(order_index)
+            retired_lap = entry.get('retired_lap')
+            if isinstance(retired_lap, int) and retired_lap >= 1:
+                lap_hint = retired_lap
+            position_payload.update({
+                'x': anchor_x,
+                'y': anchor_y,
+                'time': position_payload.get('time', effective_elapsed_time),
+                'query_time': position_payload.get('query_time', effective_elapsed_time),
+                'previous_sample': position_payload.get('previous_sample') or {},
+                'next_sample': position_payload.get('next_sample') or {},
+                'lap_number': lap_hint,
+            })
+            x_value = float(anchor_x)
+            y_value = float(anchor_y)
+        else:
+            pos_x = position_payload.get('x')
+            pos_y = position_payload.get('y')
+            x_value = float(pos_x) if isinstance(pos_x, (int, float)) else 0.0
+            y_value = float(pos_y) if isinstance(pos_y, (int, float)) else 0.0
+            position_payload.setdefault('lap_number', lap_hint)
 
         patch['data'][trace_idx]['x'] = [x_value]
         patch['data'][trace_idx]['y'] = [y_value]
         patch['data'][trace_idx]['text'] = [str(driver_number)]
         customdata = track_dashboard._build_customdata(
             driver_number,
-            position,
-            fallback_lap=current_lap,
+            position_payload,
+            fallback_lap=lap_hint,
         )
         patch['data'][trace_idx]['customdata'] = customdata
+        patch['data'][trace_idx]['hovertemplate'] = track_dashboard.build_hovertemplate(entry, team_name)
 
         styles = driver_style_lookup.get(driver_number)
         if styles:

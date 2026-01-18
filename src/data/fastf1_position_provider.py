@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import logging
+import math
 import pickle
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union, cast
+from numbers import Real
 
 FloatDict = Dict[str, float]
 DriverPosition = Dict[str, Union[float, FloatDict]]
@@ -384,8 +386,8 @@ class FastF1PositionProvider:
             time_val = prev_time + (next_time - prev_time) * ratio
 
             current_lap_val = next_row.get("lap_number")
-            if isinstance(current_lap_val, (int, float)):
-                lap_number_value = int(current_lap_val)
+            if isinstance(current_lap_val, Real) and math.isfinite(float(current_lap_val)):
+                lap_number_value = int(round(float(current_lap_val)))
             else:
                 lap_number_value = int(lap_number) if lap_number is not None else -1
 
