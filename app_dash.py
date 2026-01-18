@@ -16,7 +16,7 @@ import importlib
 import hashlib
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any, List, Tuple, Sequence, Set, cast
+from typing import Optional, Dict, Any, List, Tuple, Sequence, Set, Union, cast
 from numbers import Real
 from uuid import uuid4
 
@@ -1152,55 +1152,134 @@ def get_last_completed_race_context() -> RaceContext:
 
 
 def load_f1_calendar(year: int) -> pd.DataFrame:
-    """
-    Load F1 calendar for specified year using OpenF1 data.
-    Note: OpenF1 provides data from 2023 onwards.
-    """
-    # OpenF1 doesn't have a calendar endpoint, so we'll build from sessions
-    # For now, return a simple structure for 2025 season
+    """Return season schedule tagged with race or testing metadata."""
     if year < 2023:
         logger.warning(f"OpenF1 data not available for year {year}. Use 2023-2025.")
         return pd.DataFrame()
-    
+
     try:
-        # Get all sessions for the year to build calendar
         sessions_params = {"year": year}
         all_sessions = openf1_provider._request("sessions", sessions_params)
-        
         if not all_sessions:
             logger.warning(f"No sessions found for year {year}")
             return pd.DataFrame()
-        
-        # Group by race (meeting_key or location)
+
         df = pd.DataFrame(all_sessions)
-        
-        # Use meeting_key to group races (each meeting has multiple sessions)
-        calendar = df.groupby("meeting_key").agg({
-            "country_name": "first",
-            "location": "first",
-            "date_start": "first",
-            "year": "first",
-            "circuit_short_name": "first"
-        }).reset_index()
-        
-        # Add round number based on date order
-        calendar = calendar.sort_values("date_start")
-        calendar["RoundNumber"] = range(1, len(calendar) + 1)
-        
-        # Create event name from country and location
-        calendar["EventName"] = calendar["country_name"].astype(str) + " Grand Prix"
-        
-        calendar = calendar.rename(columns={
-            "country_name": "Country",
-            "location": "Location",
-            "date_start": "EventDate",
-            "meeting_key": "MeetingKey",
-            "circuit_short_name": "CircuitShortName"
-        })
-        
-        logger.info(f"Loaded {len(calendar)} races for {year}")
+        if df.empty:
+            logger.warning(f"Empty sessions frame for year {year}")
+            return pd.DataFrame()
+
+        meeting_groups: List[Tuple[Optional[pd.Timestamp], int, pd.DataFrame, Dict[str, Any]]] = []
+        for meeting_key, group in df.groupby("meeting_key"):
+            sorted_group = group.sort_values("date_start", kind="stable")
+            first_row = sorted_group.iloc[0]
+            raw_meeting_key = meeting_key if meeting_key is not None else first_row.get("meeting_key")
+            if raw_meeting_key is None:
+                logger.warning("Skipping meeting with missing key in calendar build")
+                continue
+            try:
+                normalized_meeting_key = int(cast(Union[int, float, str], raw_meeting_key))
+            except (TypeError, ValueError):
+                logger.warning("Skipping meeting with non-numeric key: %s", raw_meeting_key)
+                continue
+
+            raw_date = first_row.get("date_start")
+            parsed_date: Optional[pd.Timestamp]
+            if raw_date is None:
+                parsed_date = None
+            else:
+                candidate = pd.to_datetime(str(raw_date), errors="coerce")
+                parsed_date = candidate if isinstance(candidate, pd.Timestamp) else None
+
+            meeting_groups.append((parsed_date, normalized_meeting_key, sorted_group, first_row.to_dict()))
+
+        meeting_groups.sort(
+            key=lambda item: (
+                item[0] if item[0] is not None and pd.notna(item[0]) else pd.Timestamp.max,
+                item[1],
+            )
+        )
+
+        race_counter = 1
+        test_counter = 1
+        records: List[Dict[str, Any]] = []
+
+        for parsed_date, meeting_key, group, first_row in meeting_groups:
+            codes_seen: Set[str] = set()
+            raw_texts: Set[str] = set()
+            for _, row in group.iterrows():
+                for key in ("session_type", "session_code", "session_name"):
+                    raw_value = row.get(key)
+                    if raw_value is None:
+                        continue
+                    text_value = str(raw_value).strip()
+                    if text_value:
+                        raw_texts.add(text_value.lower())
+                    code = CacheGenerationService._canonical_session_code(raw_value)
+                    if code:
+                        codes_seen.add(code)
+
+            practice_codes: Set[str] = {"P1", "P2", "P3"}
+            has_canonical_race = "R" in codes_seen
+            has_competition_hint = bool(codes_seen - practice_codes) or any(
+                "race" in text or "grand prix" in text for text in raw_texts
+            )
+            has_day_hint = any("day" in text for text in raw_texts)
+
+            is_race_weekend = has_canonical_race or has_competition_hint
+            if not is_race_weekend and has_day_hint:
+                is_race_weekend = False
+
+            country = str(first_row.get("country_name") or "")
+            location = str(first_row.get("location") or "")
+            event_year = first_row.get("year")
+            circuit_short_name = first_row.get("circuit_short_name")
+            event_date_val = first_row.get("date_start")
+
+            if is_race_weekend:
+                round_number: Optional[int] = race_counter
+                test_number: Optional[int] = None
+                race_counter += 1
+                event_name = f"{country} Grand Prix" if country else "Grand Prix"
+            else:
+                round_number = None
+                test_number = test_counter
+                test_counter += 1
+                descriptor = location or country
+                event_name = (
+                    f"Pre-season Testing ({descriptor})"
+                    if descriptor
+                    else "Pre-season Testing"
+                )
+
+            records.append({
+                "MeetingKey": meeting_key,
+                "Country": country,
+                "Location": location,
+                "EventDate": event_date_val,
+                "Year": event_year,
+                "CircuitShortName": circuit_short_name,
+                "RoundNumber": round_number,
+                "TestNumber": test_number,
+                "IsRaceWeekend": is_race_weekend,
+                "SessionCodes": sorted(codes_seen),
+                "EventName": event_name,
+            })
+
+        calendar = pd.DataFrame(records)
+        if calendar.empty:
+            logger.warning(f"No meetings constructed for year {year}")
+            return calendar
+
+        logger.info(
+            "Loaded %s meetings for %s (races=%s, tests=%s)",
+            len(calendar),
+            year,
+            calendar["IsRaceWeekend"].sum(),
+            (~calendar["IsRaceWeekend"]).sum(),
+        )
         return calendar
-        
+
     except Exception as e:
         logger.error(f"Error loading calendar for {year}: {e}")
         return pd.DataFrame()
@@ -2366,28 +2445,41 @@ def update_circuits(year, current_circuit):
     }
     
     for _, event in schedule.iterrows():
-        country = event['Country']
-        location = event['Location']
-        round_num = event['RoundNumber']
+        country = str(event.get('Country') or '')
+        location = str(event.get('Location') or '')
         meeting_key = event['MeetingKey']
-        
+        is_race_weekend = bool(event.get('IsRaceWeekend', True))
+        round_num = event.get('RoundNumber')
+        test_num = event.get('TestNumber')
+
         if country == 'United States':
             if 'Miami' in location:
-                display_name = "Miami"
+                display_base = "Miami"
             elif 'Austin' in location:
-                display_name = "USA (Austin)"
+                display_base = "USA (Austin)"
             elif 'Las Vegas' in location:
-                display_name = "Las Vegas"
+                display_base = "Las Vegas"
             else:
-                display_name = circuit_short_names.get(country, country)
+                display_base = circuit_short_names.get(country, country)
         else:
-            display_name = circuit_short_names.get(country, country)
-        
-        # Use meeting_key as value for OpenF1 API calls
+            display_base = circuit_short_names.get(country, country)
+
+        if not display_base:
+            display_base = location or country or "Event"
+
+        if not is_race_weekend:
+            display_base = str(event.get('EventName') or display_base)
+
+        if is_race_weekend and pd.notna(round_num):
+            prefix = f"R{int(round_num)}"
+        elif not is_race_weekend and pd.notna(test_num):
+            prefix = f"Test {int(test_num)}"
+        else:
+            prefix = "Event"
+
         circuit_keys.append(meeting_key)
-        
         circuit_options.append({
-            'label': f"R{round_num} - {display_name}",
+            'label': f"{prefix} - {display_base}",
             'value': meeting_key
         })
     
@@ -2578,25 +2670,40 @@ def update_cache_meetings(year):
 
     options = []
     for _, event in schedule.iterrows():
-        country = event['Country']
-        location = event['Location']
-        round_num = int(event['RoundNumber'])
+        country = str(event.get('Country') or '')
+        location = str(event.get('Location') or '')
         meeting_key = event['MeetingKey']
+        is_race_weekend = bool(event.get('IsRaceWeekend', True))
+        round_num = event.get('RoundNumber')
+        test_num = event.get('TestNumber')
 
         if country == 'United States':
-            if 'Miami' in str(location):
+            if 'Miami' in location:
                 display_name = 'Miami'
-            elif 'Austin' in str(location):
+            elif 'Austin' in location:
                 display_name = 'USA (Austin)'
-            elif 'Las Vegas' in str(location):
+            elif 'Las Vegas' in location:
                 display_name = 'Las Vegas'
             else:
                 display_name = circuit_short_names.get(country, country)
         else:
             display_name = circuit_short_names.get(country, country)
 
+        if not display_name:
+            display_name = location or country or 'Event'
+
+        if not is_race_weekend:
+            display_name = str(event.get('EventName') or display_name)
+
+        if is_race_weekend and pd.notna(round_num):
+            prefix = f"R{int(round_num)}"
+        elif not is_race_weekend and pd.notna(test_num):
+            prefix = f"Test {int(test_num)}"
+        else:
+            prefix = 'Event'
+
         options.append({
-            'label': f"R{round_num} - {display_name}",
+            'label': f"{prefix} - {display_name}",
             'value': meeting_key,
         })
     if options:

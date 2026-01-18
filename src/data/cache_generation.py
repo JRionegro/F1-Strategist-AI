@@ -606,12 +606,28 @@ class CacheGenerationService:
             if not meeting_keys:
                 session_info = self._maybe_resolve_session(year, None, session_code, [artifact])
                 meeting_reference = session_info or self._maybe_resolve_meeting(year, None, [artifact])
+                if artifact.level in {"session", "fastf1"} and session_info is None:
+                    logger.info(
+                        "Skipping artifact %s for meeting selector %s (session %s unavailable)",
+                        artifact.key,
+                        meeting_selector,
+                        session_code or "",
+                    )
+                    continue
                 yield artifact, None, session_info, meeting_reference
                 continue
 
             for resolved_meeting in meeting_keys:
                 session_info = self._maybe_resolve_session(year, resolved_meeting, session_code, [artifact])
                 meeting_reference = session_info or self._maybe_resolve_meeting(year, resolved_meeting, [artifact])
+                if artifact.level in {"session", "fastf1"} and session_info is None:
+                    logger.info(
+                        "Skipping artifact %s for meeting %s (session %s unavailable)",
+                        artifact.key,
+                        resolved_meeting,
+                        session_code or "",
+                    )
+                    continue
                 yield artifact, resolved_meeting, session_info, meeting_reference
 
     def _maybe_resolve_meeting(
@@ -676,9 +692,12 @@ class CacheGenerationService:
         sessions.sort(key=lambda payload: payload.get("date_start", ""))
         exact_matches: List[Dict[str, Any]] = []
         race_candidates: List[Dict[str, Any]] = []
+        available_codes: Set[str] = set()
 
         for payload in sessions:
             codes = extract_codes(payload)
+            if codes:
+                available_codes.update(codes)
             if target_code in codes:
                 exact_matches.append(payload)
             elif "R" in codes:
@@ -694,6 +713,15 @@ class CacheGenerationService:
                 target_code,
             )
             return race_candidates[-1]
+
+        if target_code == "R" and "R" not in available_codes:
+            logger.info(
+                "Skipping meeting %s for session %s; available codes: %s",
+                meeting_key,
+                target_code,
+                ", ".join(sorted(available_codes)) if available_codes else "none",
+            )
+            return None
 
         logger.warning(
             "Could not match session code '%s' for meeting %s; returning last session.",
