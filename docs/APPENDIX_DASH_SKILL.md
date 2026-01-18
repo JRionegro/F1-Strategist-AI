@@ -55,3 +55,11 @@ Use it as a checklist to avoid layout flicker, remounts, or sizing regressions.
 - Multiple writers to the same output without `allow_duplicate=True` and explicit ownership.
 
 Keep this appendix close when touching Dash code to prevent regressions and layout flicker.
+
+## Track Map Inspiration and Credits
+- F1 Race Replay (MIT License) provided the initial idea for animating car sprites over precomputed polylines. See:
+  - `src/arcade_replay.py` (Arcade window setup, game loop, pyglet renderer)
+  - `src/interfaces/race_replay.py` (animation orchestration, frame stepping)
+  - `src/ui_components.py` (track geometry helpers, driver sprite updates)
+- Reuse obligations under MIT: retain the original copyright notice and permission text when sharing binaries or source.
+- Adaptation note: when porting to Dash/Plotly we replace Arcade sprites with scatter traces and feed tween data from `FastF1PositionProvider` caches.

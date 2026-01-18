@@ -493,6 +493,11 @@ class TemplateGenerator:
         if weather_doc:
             documents["weather.md"] = weather_doc
 
+        # Tire analysis document
+        tire_doc = self._generate_tire_doc(year, circuit, template_vars)
+        if tire_doc:
+            documents["tire_analysis.md"] = tire_doc
+
         # Performance document
         performance_doc = self._generate_performance_doc(
             year, circuit, template_vars

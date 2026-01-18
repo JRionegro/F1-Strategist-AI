@@ -475,6 +475,7 @@ MIT License - See LICENSE file for details
 - FastF1 for F1 data access
 - OpenAI/Anthropic for AI models
 - Formula 1 community for inspiration
+- F1 Race Replay by Benjamin Sloane (MIT License) for the track map visualization inspiration (https://github.com/bmsloane/f1-race-replay)
 
 ## Contact
 

@@ -602,6 +602,8 @@ class DocumentLoader:
             return "race_control"
         if "race_position" in filename or "position" in filename:
             return "race_position"
+        if "tire" in filename or "tyre" in filename:
+            return "tire"
         if file_path.parent.name == "global":
             return "global"
 

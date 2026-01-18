@@ -77,6 +77,7 @@ from src.dashboards_dash.ai_assistant_dashboard import AIAssistantDashboard
 from src.dashboards_dash.race_overview_dashboard import RaceOverviewDashboard
 from src.dashboards_dash.race_control_dashboard import RaceControlDashboard
 from src.dashboards_dash.telemetry_dashboard import TelemetryDashboard
+from src.dashboards_dash.track_map_dashboard import get_track_map_dashboard
 from src.dashboards_dash import weather_dashboard
 
 # Predictive pit policy bootstrap
@@ -331,6 +332,61 @@ def _calculate_total_laps(session_obj, circuit_name: Optional[str] = None) -> in
         logger.warning(f"Error calculating total_laps: {e}")
     
     return 57  # Default fallback
+
+
+def _build_track_map_driver_data() -> List[Dict[str, Any]]:
+    """Collect driver metadata for the track map dashboard."""
+    if current_session_obj is None:
+        return []
+
+    driver_entries: List[Dict[str, Any]] = []
+
+    try:
+        results = getattr(current_session_obj, "results", None)
+        if isinstance(results, pd.DataFrame) and not results.empty:
+            seen_numbers: set[int] = set()
+            for _, row in results.iterrows():
+                raw_driver_number = row.get("DriverNumber")
+                if raw_driver_number is None:
+                    continue
+                if isinstance(raw_driver_number, float) and math.isnan(raw_driver_number):
+                    continue
+
+                try:
+                    driver_number = int(raw_driver_number)
+                except (TypeError, ValueError):
+                    continue
+
+                if driver_number in seen_numbers:
+                    continue
+
+                driver_name = (
+                    row.get("BroadcastName")
+                    or row.get("FullName")
+                    or row.get("Driver")
+                    or row.get("Name")
+                    or f"Driver {driver_number}"
+                )
+                team_name = (
+                    row.get("TeamName")
+                    or row.get("Team")
+                    or row.get("ConstructorName")
+                    or row.get("ConstructorTeamName")
+                    or "Unknown"
+                )
+
+                driver_entries.append({
+                    "driver_number": driver_number,
+                    "driver_name": str(driver_name),
+                    "team_name": str(team_name),
+                })
+                seen_numbers.add(driver_number)
+
+    except Exception as exc:  # noqa: BLE001
+        dash_logger.warning("Unable to build track map driver list: %s", exc)
+
+    driver_entries.sort(key=lambda item: item["driver_number"])
+    return driver_entries
 
 
 def get_llm_provider() -> Optional[LLMProvider]:
@@ -637,6 +693,11 @@ def create_sidebar():
                                 "disabled": True  # Must stay visible in sim/live
                             },
                             {"label": " Race Control", "value": "race_control"},
+                            {
+                                "label": " Track Map",
+                                "value": "track_map",
+                                "disabled": True
+                            },
                             {"label": " Weather", "value": "weather"},
                             {"label": " Telemetry", "value": "telemetry"},
                             # Phase 2 Dashboards (Coming Soon)
@@ -1453,12 +1514,56 @@ def enforce_race_overview(selected_dashboards, mode):
 
     # If the required dashboard is missing, add it back preserving order
     if mode in ('sim', 'live') and not required.issubset(selected_set):
-        base_order = ["ai", "race_overview", "race_control", "weather", "telemetry"]
+        base_order = ["ai", "race_overview", "race_control", "track_map", "weather", "telemetry"]
         selected_set.update(required)
         fixed = [item for item in base_order if item in selected_set]
         return fixed
 
     raise PreventUpdate
+
+
+@callback(
+    Output('dashboard-selector', 'options'),
+    Input('mode-selector', 'value'),
+    Input('session-store', 'data'),
+    State('dashboard-selector', 'options'),
+    prevent_initial_call=False
+)
+def sync_dashboard_options(mode, session_data, current_options):
+    """Enable Track Map only when simulation mode has FastF1 cache ready."""
+    if not current_options:
+        raise PreventUpdate
+
+    track_map_ready = bool(session_data and session_data.get('track_map', {}).get('ready'))
+    enable_track_map = mode == 'sim' and track_map_ready
+
+    updated_options: List[Dict[str, Any]] = []
+    changed = False
+
+    for option in current_options:
+        option_copy = option.copy()
+        if option_copy.get('value') == 'track_map':
+            disabled_target = not enable_track_map
+            if option_copy.get('disabled') != disabled_target:
+                option_copy['disabled'] = disabled_target
+                changed = True
+            # Ensure label remains informative without toggling unnecessarily
+            base_label = " Track Map"
+            if enable_track_map:
+                if option_copy.get('label') != base_label:
+                    option_copy['label'] = base_label
+                    changed = True
+            else:
+                locked_label = " Track Map (simulation cache required)"
+                if option_copy.get('label') != locked_label:
+                    option_copy['label'] = locked_label
+                    changed = True
+        updated_options.append(option_copy)
+
+    if not changed:
+        raise PreventUpdate
+
+    return updated_options
 
 
 @callback(
@@ -1665,7 +1770,7 @@ def update_drivers(session, circuit_key, year):
             ),
             type="circle",
             color="#e10600"
-        ), {'loaded': False}
+        ), {'loaded': False, 'track_map': {'ready': False, 'error': None, 'params': None}}
     
     # circuit_key is now the meeting_key from OpenF1
     meeting_key = circuit_key
@@ -1704,7 +1809,7 @@ def update_drivers(session, circuit_key, year):
                 ),
                 type="circle",
                 color="#e10600"
-            ), {'loaded': False}
+            ), {'loaded': False, 'track_map': {'ready': False, 'error': None, 'params': None}}
         
         session_key = sessions[0].get('session_key')
         
@@ -1721,7 +1826,7 @@ def update_drivers(session, circuit_key, year):
                 ),
                 type="circle",
                 color="#e10600"
-            ), {'loaded': False}
+            ), {'loaded': False, 'track_map': {'ready': False, 'error': None, 'params': None}}
         
         # Get full session_info
         session_info = sessions[0]
@@ -1754,11 +1859,64 @@ def update_drivers(session, circuit_key, year):
                 ),
                 type="circle",
                 color="#e10600"
-            ), {'loaded': False}
+            ), {'loaded': False, 'track_map': {'ready': False, 'error': None, 'params': None}}
         
         # Store session_obj globally for use in dashboards
         global current_session_obj
         current_session_obj = session_obj
+
+        # Preload FastF1 telemetry for track map dashboard
+        track_map_status: Dict[str, Any] = {
+            'ready': False,
+            'error': None,
+            'params': None,
+        }
+        try:
+            track_map_dashboard = get_track_map_dashboard()
+            translation = track_map_dashboard.provider.translate_openf1_session(session_info)
+
+            raw_year = translation.get('year', year)
+            try:
+                translation_year = int(raw_year) if raw_year is not None else int(year)
+            except (TypeError, ValueError):
+                translation_year = int(year)
+            translation_country = str(
+                translation.get('round')
+                or session_info.get('country_name')
+                or session_info.get('meeting_name', '')
+            ).strip()
+            translation_identifier = str(
+                translation.get('identifier')
+                or session
+            )
+
+            if translation_country:
+                cache_loaded = track_map_dashboard.load_session(
+                    translation_year,
+                    translation_country,
+                    translation_identifier,
+                )
+                if cache_loaded:
+                    track_map_status.update({
+                        'ready': True,
+                        'error': None,
+                        'params': {
+                            'year': translation_year,
+                            'country': translation_country,
+                            'session_type': translation_identifier,
+                        },
+                    })
+                else:
+                    track_map_status['error'] = (
+                        "FastF1 telemetry cache unavailable for this session."
+                    )
+            else:
+                track_map_status['error'] = (
+                    "Could not determine host country for FastF1 session preload."
+                )
+        except Exception as exc:  # noqa: BLE001
+            track_map_status['error'] = str(exc)
+            logger.warning("Track map preload failed: %s", exc)
 
         # Bootstrap pit policy context once per simulation
         global _pit_policy_context
@@ -1905,7 +2063,8 @@ def update_drivers(session, circuit_key, year):
                 session_obj,
                 str(session_info.get('circuit_short_name')
                     or session_info.get('location') or '')
-            )
+            ),
+            'track_map': track_map_status,
         }
     
     except Exception as e:
@@ -1922,7 +2081,7 @@ def update_drivers(session, circuit_key, year):
             ),
             type="circle",
             color="#e10600"
-        ), {'loaded': False}, {'loaded': False}
+        ), {'loaded': False, 'track_map': {'ready': False, 'error': str(e), 'params': None}}
 
 
 # ============================================================================
@@ -3327,6 +3486,7 @@ def handle_document_editor(
     Output('dashboard-container', 'children'),
     Input('dashboard-selector', 'value'),
     Input('session-store', 'data'),
+    Input('mode-selector', 'value'),
     Input('driver-selector', 'value'),
     Input('circuit-selector', 'value'),
     Input('session-selector', 'value'),
@@ -3337,6 +3497,7 @@ def handle_document_editor(
 def update_dashboards(
     selected_dashboards,
     session_data,
+    mode_value,
     focused_driver,
     selected_circuit,
     selected_session,
@@ -3365,6 +3526,18 @@ def update_dashboards(
     
     # Check if session is loaded (for dashboards that require it)
     session_loaded = session_data and session_data.get('loaded', False)
+    mode_is_simulation = mode_value == 'sim'
+    track_map_status: Dict[str, Any] = {
+        'ready': False,
+        'error': None,
+        'params': None,
+    }
+    if session_data and isinstance(session_data, dict):
+        maybe_track_map = session_data.get('track_map')
+        if isinstance(maybe_track_map, dict):
+            track_map_status = maybe_track_map
+
+    track_map_ready = bool(track_map_status.get('ready'))
     
     # Create dashboards based on selection
     dashboards = []
@@ -3602,6 +3775,117 @@ def update_dashboards(
                         )
                     )
 
+        elif dashboard_id == "track_map":
+            card_id = "track-map-wrapper"
+            base_style = {"height": "620px", "overflow": "hidden"}
+
+            if not mode_is_simulation:
+                dashboards.append(
+                    html.Div(
+                        dbc.Card([
+                            dbc.CardHeader(
+                                html.H5("🗺️ Track Map", className="mb-0", style={"fontSize": "1.2rem"}),
+                                className="py-1"
+                            ),
+                            dbc.CardBody([
+                                html.P(
+                                    "Track Map is available in simulation mode only.",
+                                    className="text-center text-muted mt-5"
+                                )
+                            ], className="p-2")
+                        ], className="mb-3", style=base_style),
+                        id=card_id
+                    )
+                )
+                continue
+
+            if not session_loaded:
+                dashboards.append(
+                    html.Div(
+                        dbc.Card([
+                            dbc.CardHeader(
+                                html.H5("🗺️ Track Map", className="mb-0", style={"fontSize": "1.2rem"}),
+                                className="py-1"
+                            ),
+                            dbc.CardBody([
+                                dcc.Loading(
+                                    html.Div([
+                                        html.P("Preparing simulation session...", className="text-center text-muted mt-4"),
+                                    ]),
+                                    type="circle",
+                                    color="#e10600"
+                                )
+                            ], className="p-2")
+                        ], className="mb-3", style=base_style),
+                        id=card_id
+                    )
+                )
+                continue
+
+            if not track_map_ready:
+                error_message = track_map_status.get('error')
+                message_class = "text-warning" if error_message is None else "text-danger"
+                display_text = (
+                    error_message
+                    if error_message
+                    else "Preloading FastF1 telemetry cache... this can take a minute on first load."
+                )
+                dashboards.append(
+                    html.Div(
+                        dbc.Card([
+                            dbc.CardHeader(
+                                html.H5("🗺️ Track Map", className="mb-0", style={"fontSize": "1.2rem"}),
+                                className="py-1"
+                            ),
+                            dbc.CardBody([
+                                html.P(display_text, className=f"text-center mt-4 {message_class}"),
+                            ], className="p-2")
+                        ], className="mb-3", style=base_style),
+                        id=card_id
+                    )
+                )
+                continue
+
+            track_map_dashboard = get_track_map_dashboard()
+            base_figure = track_map_dashboard.get_circuit_figure()
+            status_badge = dbc.Badge(
+                "FastF1 cache ready",
+                color="success",
+                className="ms-2",
+            )
+            dashboards.append(
+                html.Div(
+                    dbc.Card([
+                        dbc.CardHeader(
+                            dbc.Row([
+                                dbc.Col(
+                                    html.H5(
+                                        "🗺️ Track Map",
+                                        className="mb-0",
+                                        style={"fontSize": "1.2rem"}
+                                    ),
+                                    width="auto"
+                                ),
+                                dbc.Col(status_badge, width="auto", className="ms-auto")
+                            ], className="align-items-center g-0"),
+                            className="py-1"
+                        ),
+                        dbc.CardBody([
+                            dcc.Loading(
+                                dcc.Graph(
+                                    id='track-map-graph',
+                                    figure=base_figure,
+                                    config={'displayModeBar': False},
+                                    style={'height': '100%'}
+                                ),
+                                type="circle",
+                                color="#e10600"
+                            )
+                        ], style={'height': 'calc(100% - 10px)', 'padding': '5px'})
+                    ], className="mb-3 h-100", style=base_style),
+                    id=card_id
+                )
+            )
         elif dashboard_id == "telemetry":
             # Telemetry Dashboard - Speed, Throttle, Brake, Gear for focus driver
             try:
@@ -3839,6 +4123,68 @@ def refresh_race_overview_body(
     except Exception as exc:  # noqa: BLE001
         logger.error("Error refreshing race overview body: %s", exc, exc_info=True)
         raise PreventUpdate
+
+
+@callback(
+    Output('track-map-graph', 'figure'),
+    Input('simulation-time-store', 'data'),
+    Input('session-store', 'data'),
+    State('dashboard-selector', 'value'),
+    State('mode-selector', 'value'),
+    prevent_initial_call=True
+)
+def refresh_track_map_figure(
+    simulation_time_data: Optional[Dict[str, Any]],
+    session_data: Optional[Dict[str, Any]],
+    selected_dashboards: Optional[List[str]],
+    mode_value: Optional[str],
+):
+    """Refresh Track Map markers using cached FastF1 positions and simulation time."""
+    if not selected_dashboards or 'track_map' not in selected_dashboards:
+        raise PreventUpdate
+    if mode_value != 'sim':
+        raise PreventUpdate
+    if not session_data or not session_data.get('loaded'):
+        raise PreventUpdate
+
+    track_map_status = session_data.get('track_map', {})
+    if not track_map_status.get('ready'):
+        raise PreventUpdate
+
+    track_dashboard = get_track_map_dashboard()
+    driver_data = _build_track_map_driver_data()
+    if not driver_data:
+        dash_logger.debug("Track map driver data unavailable; returning base circuit figure")
+        return track_dashboard.get_circuit_figure()
+
+    elapsed_time = 0.0
+    if simulation_time_data and isinstance(simulation_time_data, dict):
+        try:
+            elapsed_time = float(simulation_time_data.get('time', 0.0))
+        except (TypeError, ValueError):
+            elapsed_time = 0.0
+
+    current_lap = 1
+    if simulation_controller is not None:
+        try:
+            elapsed_time = simulation_controller.get_elapsed_seconds()
+        except Exception as exc:  # noqa: BLE001
+            dash_logger.debug("Falling back to store time for track map: %s", exc)
+        try:
+            current_lap = simulation_controller.get_current_lap() or 1
+        except Exception as exc:  # noqa: BLE001
+            dash_logger.debug("Unable to determine current lap for track map: %s", exc)
+
+    try:
+        figure = track_dashboard.create_figure(
+            current_lap=max(current_lap, 1),
+            driver_data=driver_data,
+            elapsed_time=elapsed_time,
+        )
+        return figure
+    except Exception as exc:  # noqa: BLE001
+        dash_logger.error("Error updating track map figure: %s", exc, exc_info=True)
+        return track_dashboard.get_circuit_figure()
 
 
 # NOTE: Render callback REMOVED - chat callback writes directly to container

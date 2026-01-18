@@ -26,7 +26,7 @@ from src.rag.chromadb_store import ChromaDBStore
 @pytest.fixture
 def temp_chromadb_dir():
     """Create temporary directory for ChromaDB."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         yield tmpdir
 
 
