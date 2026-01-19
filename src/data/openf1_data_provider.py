@@ -7,10 +7,12 @@ and live race monitoring, eliminating dual-API complexity.
 
 import logging
 import re
+import threading
+from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
 from time import sleep
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, DefaultDict, Dict, List, Optional, Sequence
 
 import pandas as pd
 import requests
@@ -56,6 +58,8 @@ class OpenF1DataProvider:
         self._last_request_time = None
         self._session_metadata: Dict[int, Dict[str, Any]] = {}
         self._cached_race_dirs: Dict[int, Path] = {}
+        self._api_call_counts: DefaultDict[str, int] = defaultdict(int)
+        self._api_call_lock = threading.Lock()
         logger.info("OpenF1DataProvider initialized")
         if not verify_ssl:
             # Suppress InsecureRequestWarning when SSL verification is disabled
@@ -108,6 +112,7 @@ class OpenF1DataProvider:
         
         for attempt in range(max_retries + 1):
             self._rate_limit()
+            self._increment_api_call_count(endpoint)
             
             try:
                 response = requests.get(url, params=params, timeout=30, verify=self.verify_ssl)
@@ -175,6 +180,47 @@ class OpenF1DataProvider:
                     raise
         
         return []
+
+    def _increment_api_call_count(self, endpoint: str) -> None:
+        """Increment API call counter for diagnostics."""
+        normalized = endpoint.strip("/") or "unknown"
+        with self._api_call_lock:
+            self._api_call_counts[normalized] += 1
+
+    def reset_api_call_counts(self) -> None:
+        """Reset accumulated API call counters."""
+        with self._api_call_lock:
+            self._api_call_counts.clear()
+
+    def get_api_call_counts(self) -> Dict[str, int]:
+        """Return a snapshot of API call counters."""
+        with self._api_call_lock:
+            return dict(self._api_call_counts)
+
+    def log_api_call_summary(
+        self,
+        context: str,
+        reset: bool = False,
+        level: int = logging.INFO,
+    ) -> None:
+        """Log the current API call counters for the given context."""
+        counts = self.get_api_call_counts()
+        if not counts:
+            logger.log(level, "%s: no OpenF1 API calls recorded", context)
+        else:
+            total = sum(counts.values())
+            details = ", ".join(
+                f"{endpoint}={count}" for endpoint, count in sorted(counts.items())
+            )
+            logger.log(
+                level,
+                "%s: %d OpenF1 API call(s) (%s)",
+                context,
+                total,
+                details,
+            )
+        if reset:
+            self.reset_api_call_counts()
 
     def get_session(
         self, 

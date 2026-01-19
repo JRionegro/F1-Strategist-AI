@@ -105,8 +105,13 @@ from src.llm.config import get_claude_config, get_gemini_config
 
 # Centralized logging configuration
 from src.utils.logging_config import (
-    setup_logging, get_logger, LogCategory,
-    enable_category, disable_category, apply_debug_profile
+    setup_logging,
+    get_logger,
+    LogCategory,
+    enable_category,
+    disable_category,
+    apply_debug_profile,
+    set_category_level,
 )
 
 # Load environment variables for API keys from centralized config/.env
@@ -137,7 +142,25 @@ logger.info(
 )
 enable_category(LogCategory.CHAT)
 enable_category(LogCategory.TRACK_MAP)
-enable_category(LogCategory.DATA)
+data_log_level = os.getenv("LOG_LEVEL_F1_DATA")
+if data_log_level:
+    normalized_level = data_log_level.strip().upper()
+    resolved_level = getattr(logging, normalized_level, None)
+    if isinstance(resolved_level, int):
+        set_category_level(LogCategory.DATA, resolved_level)
+        logger.info(
+            "Log level for %s set to %s via LOG_LEVEL_F1_DATA",
+            LogCategory.DATA.value,
+            normalized_level,
+        )
+    else:
+        logger.warning(
+            "Invalid LOG_LEVEL_F1_DATA value: %s (expected logging level name)",
+            data_log_level,
+        )
+        enable_category(LogCategory.DATA)
+else:
+    enable_category(LogCategory.DATA)
 
 # Uncomment to enable specific debugging:
 # enable_category(LogCategory.SIMULATION)  # See simulation updates
@@ -2323,6 +2346,7 @@ def create_main_content():
 app.layout = dbc.Container([
     # Store components for state management
     dcc.Store(id='session-store', data={}),
+    dcc.Store(id='session-bootstrap-store', data={}),
     dcc.Store(id='user-prefs-store', data={
         'focused_driver': 'VER',
         'visible_dashboards': ['circuit', 'ai']
@@ -3611,14 +3635,16 @@ def poll_cache_progress(_interval):
 
 @callback(
     Output('driver-dropdown-container', 'children'),
+    Output('session-store', 'data', allow_duplicate=True),
+    Output('session-bootstrap-store', 'data', allow_duplicate=True),
     Input('year-selector', 'value'),
     Input('circuit-selector', 'value'),
     Input('session-selector', 'value'),
     prevent_initial_call=True
 )
 def clear_driver_dropdown_immediately(year, circuit, session):
-    """Clear dropdown immediately when parameters change."""
-    return dcc.Loading(
+    """Reset driver selector and mark session context as loading."""
+    placeholder = dcc.Loading(
         dcc.Dropdown(
             id='driver-selector',
             options=[],
@@ -3630,68 +3656,81 @@ def clear_driver_dropdown_immediately(year, circuit, session):
         type="circle",
         color="#e10600"
     )
+    loading_session = {
+        'loaded': False,
+        'error': None,
+        'drivers': {},
+        'track_map': {
+            'ready': False,
+            'error': None,
+            'params': None,
+            'formation_offset_seconds': 0.0,
+            'fastf1_lap_one_seconds': None,
+        },
+    }
+    bootstrap_reset = {
+        'ready': False,
+        'driver_options': [],
+        'drivers': {},
+    }
+    return placeholder, loading_session, bootstrap_reset
 
 @callback(
     Output('driver-dropdown-container', 'children', allow_duplicate=True),
-    Output('session-store', 'data', allow_duplicate=True),
+    Output('session-bootstrap-store', 'data', allow_duplicate=True),
     Input('session-selector', 'value'),
     Input('circuit-selector', 'value'),
     Input('year-selector', 'value'),
     prevent_initial_call=True
 )
 def update_drivers(session, circuit_key, year):
-    """Recreate driver dropdown with fresh data using OpenF1."""
+    """Load driver dropdown and stage session metadata before dashboard bootstrap."""
+    placeholder_dropdown = dcc.Loading(
+        dcc.Dropdown(
+            id='driver-selector',
+            options=[],
+            value=None,
+            placeholder="Session not available",
+            className="mb-2",
+            clearable=True
+        ),
+        type="circle",
+        color="#e10600"
+    )
+
+    def _bootstrap_failure(error_message: Optional[str]) -> Dict[str, Any]:
+        return {
+            'ready': False,
+            'error': error_message,
+            'driver_options': [],
+            'drivers': {},
+        }
+
     if not session or not circuit_key or not year:
-        logger.warning(f"Missing parameters: session={session}, circuit_key={circuit_key}, year={year}")
-        # Return empty dropdown
-        return dcc.Loading(
-            dcc.Dropdown(
-                id='driver-selector',
-                options=[],
-                value=None,
-                placeholder="Select year, circuit and session...",
-                className="mb-2",
-                clearable=True
-            ),
-            type="circle",
-            color="#e10600"
-        ), {'loaded': False, 'track_map': {'ready': False, 'error': None, 'params': None}}
-    
-    # circuit_key is now the meeting_key from OpenF1
+        logger.warning(
+            "Missing parameters: session=%s, circuit_key=%s, year=%s",
+            session,
+            circuit_key,
+            year,
+        )
+        bootstrap_reset = _bootstrap_failure("Incomplete context selection")
+        return placeholder_dropdown, bootstrap_reset
+
     meeting_key = circuit_key
     try:
         meeting_key_int = int(meeting_key)
     except (TypeError, ValueError):
         logger.error("Invalid meeting_key received for driver update: %s", meeting_key)
-        return dcc.Loading(
-            dcc.Dropdown(
-                id='driver-selector',
-                options=[],
-                value=None,
-                placeholder="Session not available",
-                className="mb-2",
-                clearable=True
-            ),
-            type="circle",
-            color="#e10600"
-        ), {'loaded': False, 'track_map': {'ready': False, 'error': None, 'params': None}}
+        bootstrap_reset = _bootstrap_failure("Invalid meeting key")
+        return placeholder_dropdown, bootstrap_reset
+
     try:
         year_int = int(year)
     except (TypeError, ValueError):
         logger.error("Invalid year received for driver update: %s", year)
-        return dcc.Loading(
-            dcc.Dropdown(
-                id='driver-selector',
-                options=[],
-                value=None,
-                placeholder="Session not available",
-                className="mb-2",
-                clearable=True
-            ),
-            type="circle",
-            color="#e10600"
-        ), {'loaded': False, 'track_map': {'ready': False, 'error': None, 'params': None}}
-    
+        bootstrap_reset = _bootstrap_failure("Invalid year")
+        return placeholder_dropdown, bootstrap_reset
+
     try:
         logger.info(
             "Loading drivers for year=%s, meeting_key=%s, session=%s",
@@ -3707,21 +3746,10 @@ def update_drivers(session, circuit_key, year):
                 meeting_key_int,
                 session,
             )
-            return dcc.Loading(
-                dcc.Dropdown(
-                    id='driver-selector',
-                    options=[],
-                    value=None,
-                    placeholder="Session not available",
-                    className="mb-2",
-                    clearable=True
-                ),
-                type="circle",
-                color="#e10600"
-            ), {'loaded': False, 'track_map': {'ready': False, 'error': None, 'params': None}}
+            bootstrap_reset = _bootstrap_failure("Session metadata unavailable")
+            return placeholder_dropdown, bootstrap_reset
 
         raw_session_key = _get_session_key(session_info)
-        session_key_int: Optional[int]
         try:
             session_key_int = int(raw_session_key) if raw_session_key is not None else None
         except (TypeError, ValueError):
@@ -3739,349 +3767,58 @@ def update_drivers(session, circuit_key, year):
                 meeting_key_int,
                 session,
             )
-            return dcc.Loading(
-                dcc.Dropdown(
-                    id='driver-selector',
-                    options=[],
-                    value=None,
-                    placeholder="Session not available",
-                    className="mb-2",
-                    clearable=True
-                ),
-                type="circle",
-                color="#e10600"
-                ), {'loaded': False, 'track_map': {'ready': False, 'error': None, 'params': None}}
+            bootstrap_reset = _bootstrap_failure("Session key missing")
+            return placeholder_dropdown, bootstrap_reset
 
-        logger.info(
-            "Session info keys: %s",
-            list(session_info.keys()),
-        )
-        logger.info(
-            "Meeting name from session_info: %s",
-            session_info.get('meeting_name', 'NOT_FOUND'),
-        )
-        logger.info(
-            "Session name from session_info: %s",
-            session_info.get('session_name', 'NOT_FOUND'),
-        )
-
-        resolved_session_name = (
-            session_info.get('session_name')
-            or session_info.get('SessionName')
-            or _SESSION_CODE_TO_LABEL.get(str(session).upper(), session)
-        )
-
-        # Load session using SessionAdapter
         logger.info("Loading session with session_key=%s", session_key_int)
         session_obj = SessionAdapter(
             provider=openf1_provider,
             session_info=session_info,
-            session_key=session_key_int
+            session_key=session_key_int,
         )
-        
+
         try:
             session_obj.load()
-        except Exception as e:
-            logger.error(f"Failed to load session data: {e}")
-            return dcc.Loading(
-                dcc.Dropdown(
-                    id='driver-selector',
-                    options=[],
-                    value=None,
-                    placeholder="Error loading session",
-                    className="mb-2",
-                    clearable=True
-                ),
-                type="circle",
-                color="#e10600"
-            ), {'loaded': False, 'track_map': {'ready': False, 'error': None, 'params': None}}
-        
-        # Store session_obj globally for use in dashboards
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Failed to load session data: %s", exc)
+            bootstrap_reset = _bootstrap_failure("Session load failed")
+            return placeholder_dropdown, bootstrap_reset
+
+        # Store session object for downstream bootstrap callbacks
         global current_session_obj
         global _track_map_trace_offset, _track_map_driver_order
         current_session_obj = session_obj
         _track_map_trace_offset = None
         _track_map_driver_order = []
 
-        # Preload FastF1 telemetry for track map dashboard
-        track_map_status: Dict[str, Any] = {
-            'ready': False,
-            'error': None,
-            'params': None,
-            'formation_offset_seconds': 0.0,
-            'fastf1_lap_one_seconds': None,
-        }
-        try:
-            track_map_dashboard = get_track_map_dashboard()
-            translation = track_map_dashboard.provider.translate_openf1_session(session_info)
-
-            raw_year = translation.get('year', year)
-            try:
-                translation_year = int(raw_year) if raw_year is not None else int(year)
-            except (TypeError, ValueError):
-                translation_year = int(year)
-            translation_country = str(
-                translation.get('round')
-                or session_info.get('country_name')
-                or session_info.get('meeting_name', '')
-            ).strip()
-            translation_identifier = str(
-                translation.get('identifier')
-                or session
-            )
-
-            if translation_country:
-                cache_loaded = track_map_dashboard.load_session(
-                    translation_year,
-                    translation_country,
-                    translation_identifier,
-                )
-                if cache_loaded:
-                    track_map_status.update({
-                        'ready': True,
-                        'error': None,
-                        'params': {
-                            'year': translation_year,
-                            'country': translation_country,
-                            'session_type': translation_identifier,
-                        },
-                    })
-                else:
-                    track_map_status['error'] = (
-                        "FastF1 telemetry cache unavailable for this session."
-                    )
-            else:
-                track_map_status['error'] = (
-                    "Could not determine host country for FastF1 session preload."
-                )
-        except Exception as exc:  # noqa: BLE001
-            track_map_status['error'] = str(exc)
-            logger.warning("Track map preload failed: %s", exc)
-
-        # Bootstrap pit policy context once per simulation
-        global _pit_policy_context
-        try:
-            rag_manager = get_rag_manager()
-            _pit_policy_context = bootstrap_pit_policy_context(rag_manager)
-            logger.info("Pit policy context loaded from RAG (strategy.md)")
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Failed to bootstrap pit policy context: %s", exc)
-            _pit_policy_context = PitPolicyContext()
-
-        # Initialize proactive event detector with RAG tire window overrides
-        global event_detector
-        tire_window_overrides = _load_tire_window_overrides(
-            session_info=session_info,
-            session_obj=session_obj,
-        )
-        event_detector = RaceEventDetector(
-            openf1_provider,
-            tire_windows=tire_window_overrides,
-        )
-        
-        # Initialize simulation controller with session times
-        global simulation_controller
-        try:
-            session_date = session_obj.date
-            laps = session_obj.laps
-
-            if laps.empty or 'LapEndTime_seconds' not in laps.columns:
-                logger.warning("No lap data available for simulation controller")
-                simulation_controller = None
-            else:
-                first_lap_end = laps['LapEndTime_seconds'].min()
-                last_lap_end = laps['LapEndTime_seconds'].max()
-
-                if pd.isna(last_lap_end):
-                    logger.warning("Could not extract lap times for simulation")
-                    simulation_controller = None
-                else:
-                    lap_timing_data: Optional[pd.DataFrame] = None
-                    formation_offset_seconds: float = 0.0
-                    fastf1_lap_one_seconds: Optional[float] = None
-
-                    if {'LapStartTime', 'LapNumber', 'DriverNumber'}.issubset(laps.columns):
-                        driver_numbers = pd.to_numeric(laps['DriverNumber'], errors='coerce')
-                        target_driver_number = 1
-                        leader_mask = driver_numbers == target_driver_number
-
-                        if not leader_mask.any():
-                            fallback_number: Optional[int] = None
-                            results_frame = getattr(session_obj, 'results', None)
-                            if isinstance(results_frame, pd.DataFrame) and not results_frame.empty:
-                                driver_numbers_series = results_frame.get('DriverNumber')
-                                if driver_numbers_series is not None:
-                                    fallback_candidates = pd.to_numeric(driver_numbers_series, errors='coerce').dropna()
-                                    if not fallback_candidates.empty:
-                                        fallback_number = int(fallback_candidates.iloc[0])
-
-                            if fallback_number is None:
-                                valid_numbers = driver_numbers.dropna().astype(int)
-                                if not valid_numbers.empty:
-                                    fallback_number = int(valid_numbers.iloc[0])
-
-                            if fallback_number is not None:
-                                target_driver_number = fallback_number
-                                leader_mask = driver_numbers == target_driver_number
-                                logger.warning(
-                                    "Driver #1 lap data missing; using driver #%s for lap tracking",
-                                    target_driver_number,
-                                )
-                            else:
-                                logger.warning("No valid lap data available for lap tracking")
-
-                        leader_laps = laps.loc[leader_mask].copy()
-                        if not leader_laps.empty:
-                            leader_laps.loc[:, 'DriverNumber'] = int(target_driver_number)
-
-                            select_columns = ['LapNumber', 'LapStartTime', 'LapEndTime', 'DriverNumber']
-                            if 'LapTime' in leader_laps.columns:
-                                select_columns.append('LapTime')
-
-                            lap_timing_candidate = leader_laps[select_columns].copy()
-                            normalized_laps, offset_seconds, lap_one_seconds = _normalize_lap_timing_data(
-                                lap_timing_candidate,
-                                track_map_dashboard,
-                                int(target_driver_number),
-                            )
-
-                            if offset_seconds is not None:
-                                formation_offset_seconds = offset_seconds
-                                logger.info(
-                                    "Applied formation offset %.1fs using FastF1 lap-one %.1fs",
-                                    formation_offset_seconds,
-                                    lap_one_seconds if lap_one_seconds is not None else float('nan'),
-                                )
-
-                            if lap_one_seconds is not None:
-                                fastf1_lap_one_seconds = lap_one_seconds
-
-                            lap_timing_data = normalized_laps
-                            logger.info(
-                                "Prepared lap timing data from driver #%s: %d laps",
-                                target_driver_number,
-                                len(lap_timing_data) if lap_timing_data is not None else 0,
-                            )
-                        else:
-                            logger.warning("Unable to build lap timing data; no laps matched target driver")
-
-                    # Determine simulation start/end using normalized laps if available
-                    def _derive_boundary_seconds() -> Tuple[float, float, float]:
-                        start_seconds = 0.0
-                        lap_one_end_seconds = float(first_lap_end) if pd.notna(first_lap_end) else 0.0
-                        session_end_seconds = float(last_lap_end)
-
-                        if lap_timing_data is not None and not lap_timing_data.empty:
-                            lap_one_mask = pd.Series(False, index=lap_timing_data.index)
-                            if 'LapNumber' in lap_timing_data.columns:
-                                lap_numbers = pd.to_numeric(lap_timing_data['LapNumber'], errors='coerce')
-                                lap_numbers_clean = lap_numbers.dropna()
-                                if not lap_numbers_clean.empty:
-                                    first_lap_number = lap_numbers_clean.min()
-                                    lap_one_mask = lap_numbers == first_lap_number
-
-                            if 'LapStartTime_seconds' in lap_timing_data.columns:
-                                start_series = lap_timing_data.loc[lap_one_mask, 'LapStartTime_seconds'].dropna()
-                                if not start_series.empty:
-                                    start_seconds = float(start_series.iloc[0])
-                            elif 'LapStartTime' in lap_timing_data.columns:
-                                raw_start_series = lap_timing_data.loc[lap_one_mask, 'LapStartTime'].dropna()
-                                if not raw_start_series.empty:
-                                    derived_series = raw_start_series.apply(_timedelta_to_seconds).dropna()
-                                    if not derived_series.empty:
-                                        start_seconds = float(derived_series.iloc[0])
-
-                            if 'LapEndTime_seconds' in lap_timing_data.columns:
-                                end_series = lap_timing_data.loc[lap_one_mask, 'LapEndTime_seconds'].dropna()
-                                if not end_series.empty:
-                                    lap_one_end_seconds = float(end_series.iloc[0])
-                                session_end_candidates = lap_timing_data['LapEndTime_seconds'].dropna()
-                                if not session_end_candidates.empty:
-                                    session_end_seconds = float(session_end_candidates.max())
-                            elif 'LapEndTime' in lap_timing_data.columns:
-                                raw_end_series = lap_timing_data.loc[lap_one_mask, 'LapEndTime'].dropna()
-                                if not raw_end_series.empty:
-                                    derived_end_series = raw_end_series.apply(_timedelta_to_seconds).dropna()
-                                    if not derived_end_series.empty:
-                                        lap_one_end_seconds = float(derived_end_series.iloc[0])
-                                session_end_series = lap_timing_data['LapEndTime'].dropna()
-                                session_value_series = session_end_series.apply(_timedelta_to_seconds).dropna()
-                                if not session_value_series.empty:
-                                    session_end_seconds = float(session_value_series.max())
-
-                        return start_seconds, lap_one_end_seconds, session_end_seconds
-
-                    start_seconds, first_lap_end_seconds, session_end_seconds = _derive_boundary_seconds()
-
-                    start_time = session_date + timedelta(seconds=start_seconds)
-                    end_time = session_date + timedelta(seconds=session_end_seconds)
-
-                    if formation_offset_seconds:
-                        track_map_status['formation_offset_seconds'] = formation_offset_seconds
-                    else:
-                        track_map_status['formation_offset_seconds'] = 0.0
-
-                    if fastf1_lap_one_seconds is not None:
-                        track_map_status['fastf1_lap_one_seconds'] = fastf1_lap_one_seconds
-
-                    simulation_controller = SimulationController(
-                        start_time,
-                        end_time,
-                        lap_data=lap_timing_data
-                    )
-                    simulation_controller.pause()
-
-                    logger.info(
-                        "SimulationController initialized: %s -> %s (lap1 end %.1fs, final lap %.1fs)",
-                        start_time,
-                        end_time,
-                        first_lap_end_seconds,
-                        session_end_seconds,
-                    )
-        except Exception as exc:
-            logger.error(f"Failed to initialize SimulationController: {exc}")
-            simulation_controller = None
-        
         drivers = session_obj.drivers
         results = session_obj.results
-        
-        logger.info(f"Loaded {len(drivers)} drivers from session")
-        
-        driver_options = []
-        
-        # Iterate over results DataFrame to get driver info
+        logger.info("Loaded %s drivers from session", len(drivers))
+
+        driver_options: List[Dict[str, str]] = []
         for _, driver_data in results.iterrows():
             try:
                 driver_num = driver_data['DriverNumber']
                 abbr = driver_data['Abbreviation']
                 full_name = driver_data['FullName']
-                # Format with fixed-width columns for better alignment
-                # #NN AAA - First LASTNAME
                 label = f"#{str(driver_num).rjust(2)} {abbr.ljust(3)} - {full_name}"
                 driver_options.append({
                     'label': label,
-                    'value': f"{abbr}_{year}_{driver_num}"
+                    'value': f"{abbr}_{year}_{driver_num}",
                 })
-            except Exception as e:
-                logger.error(f"Error loading driver: {e}")
+            except Exception as exc:  # noqa: BLE001
+                logger.error("Error loading driver row: %s", exc)
                 continue
-        
-        logger.info(f"Created {len(driver_options)} driver options")
-        
-        # Log first few drivers for debugging
-        driver_names = [opt['label'] for opt in driver_options[:5]]
-        logger.info(f"Sample drivers: {', '.join(driver_names)}")
-        
-        # Reset to None to clear selection
-        default_value = None
-        
-        logger.info(f"Returning {len(driver_options)} options, forcing reset to: {default_value}")
-        
-        # Return dropdown with consistent ID and signal session loaded
-        return dcc.Loading(
+
+        logger.info("Created %s driver options", len(driver_options))
+        sample_labels = [opt['label'] for opt in driver_options[:5]]
+        if sample_labels:
+            logger.info("Sample drivers: %s", ', '.join(sample_labels))
+
+        dropdown_component = dcc.Loading(
             dcc.Dropdown(
                 id='driver-selector',
-                options=driver_options,
+                options=driver_options,  # type: ignore[arg-type]
                 value=None,
                 placeholder="Select a driver...",
                 className="mb-2",
@@ -4089,50 +3826,464 @@ def update_drivers(session, circuit_key, year):
                 style={
                     'fontSize': '12px',
                     'fontFamily': 'monospace',
-                    'lineHeight': '1.2'
-                }
+                    'lineHeight': '1.2',
+                },
             ),
             type="circle",
-            color="#e10600"
-        ), {
-            'loaded': True,
-            'year': year,
-            'meeting_key': meeting_key,
+            color="#e10600",
+        )
+
+        session_info_serializable = json.loads(json.dumps(session_info, default=str))
+        bootstrap_payload = {
+            'ready': True,
+            'year': year_int,
+            'meeting_key': meeting_key_int,
             'session': session,
             'session_key': session_key_int,
-            'race_name': session_info.get('meeting_name', 'Race'),
-            'session_type': resolved_session_name,
-            'drivers': {
-                opt['value']: opt['label'] for opt in driver_options
-            },
-            'total_laps': _calculate_total_laps(
-                session_obj,
-                str(session_info.get('circuit_short_name')
-                    or session_info.get('location') or '')
-            ),
-            'track_map': track_map_status,
+            'session_info': session_info_serializable,
+            'driver_options': driver_options,
+            'drivers': {opt['value']: opt['label'] for opt in driver_options},
         }
-    
-    except Exception as e:
-        logger.error(f"Error loading drivers for {year} meeting_key={meeting_key} {session}: {e}")
-        # Return empty dropdown on error
-        return dcc.Loading(
-            dcc.Dropdown(
-                id='driver-selector',
-                options=[],
-                value=None,
-                placeholder="Error loading drivers",
-                className="mb-2",
-                clearable=True
-            ),
-            type="circle",
-            color="#e10600"
-        ), {'loaded': False, 'track_map': {'ready': False, 'error': str(e), 'params': None}}
+
+        return dropdown_component, bootstrap_payload
+
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Unexpected error while preparing drivers for %s/%s/%s: %s",
+            year,
+            circuit_key,
+            session,
+            exc,
+        )
+        bootstrap_reset = _bootstrap_failure(str(exc))
+        return placeholder_dropdown, bootstrap_reset
 
 
 # ============================================================================
 # RAG DOCUMENT CALLBACKS
 # ============================================================================
+
+def _build_session_store_payload(
+    session_obj: SessionAdapter,
+    session_info: Dict[str, Any],
+    year: int,
+    meeting_key: int,
+    session_code: str,
+    driver_options: Sequence[Dict[str, str]],
+) -> Dict[str, Any]:
+    """Return session-store payload after preparing dashboards."""
+    track_map_status: Dict[str, Any] = {
+        'ready': False,
+        'error': None,
+        'params': None,
+        'formation_offset_seconds': 0.0,
+        'fastf1_lap_one_seconds': None,
+    }
+
+    track_map_dashboard: Optional[TrackMapDashboard] = None
+    try:
+        track_map_dashboard = get_track_map_dashboard()
+        translation = track_map_dashboard.provider.translate_openf1_session(session_info)
+
+        raw_year = translation.get('year', year)
+        try:
+            translation_year = int(raw_year) if raw_year is not None else year
+        except (TypeError, ValueError):  # pragma: no cover - defensive
+            translation_year = year
+
+        translation_country = str(
+            translation.get('round')
+            or session_info.get('country_name')
+            or session_info.get('meeting_name', '')
+        ).strip()
+        translation_identifier = str(
+            translation.get('identifier')
+            or session_code
+        )
+
+        if translation_country:
+            cache_loaded = track_map_dashboard.load_session(
+                translation_year,
+                translation_country,
+                translation_identifier,
+            )
+            if cache_loaded:
+                track_map_status.update({
+                    'ready': True,
+                    'error': None,
+                    'params': {
+                        'year': translation_year,
+                        'country': translation_country,
+                        'session_type': translation_identifier,
+                    },
+                })
+            else:
+                track_map_status['error'] = (
+                    "FastF1 telemetry cache unavailable for this session."
+                )
+        else:
+            track_map_status['error'] = (
+                "Could not determine host country for FastF1 session preload."
+            )
+    except Exception as exc:  # noqa: BLE001
+        track_map_status['error'] = str(exc)
+        logger.warning("Track map preload failed: %s", exc)
+
+    # Bootstrap pit policy context once per simulation
+    global _pit_policy_context
+    try:
+        rag_manager = get_rag_manager()
+        _pit_policy_context = bootstrap_pit_policy_context(rag_manager)
+        logger.info("Pit policy context loaded from RAG (strategy.md)")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to bootstrap pit policy context: %s", exc)
+        _pit_policy_context = PitPolicyContext()
+
+    # Initialize proactive event detector with RAG tire window overrides
+    global event_detector
+    tire_window_overrides = _load_tire_window_overrides(
+        session_info=session_info,
+        session_obj=session_obj,
+    )
+    event_detector = RaceEventDetector(
+        openf1_provider,
+        tire_windows=tire_window_overrides,
+    )
+
+    # Initialize simulation controller with session times
+    global simulation_controller
+    try:
+        session_date = session_obj.date
+        laps = session_obj.laps
+
+        if laps.empty or 'LapEndTime_seconds' not in laps.columns:
+            logger.warning("No lap data available for simulation controller")
+            simulation_controller = None
+        else:
+            first_lap_end = laps['LapEndTime_seconds'].min()
+            last_lap_end = laps['LapEndTime_seconds'].max()
+
+            if pd.isna(last_lap_end):
+                logger.warning("Could not extract lap times for simulation")
+                simulation_controller = None
+            else:
+                lap_timing_data: Optional[pd.DataFrame] = None
+                formation_offset_seconds: float = 0.0
+                fastf1_lap_one_seconds: Optional[float] = None
+
+                if {'LapStartTime', 'LapNumber', 'DriverNumber'}.issubset(laps.columns):
+                    driver_numbers = pd.to_numeric(laps['DriverNumber'], errors='coerce')
+                    target_driver_number = 1
+                    leader_mask = driver_numbers == target_driver_number
+
+                    if not leader_mask.any():
+                        fallback_number: Optional[int] = None
+                        results_frame = getattr(session_obj, 'results', None)
+                        if isinstance(results_frame, pd.DataFrame) and not results_frame.empty:
+                            driver_numbers_series = results_frame.get('DriverNumber')
+                            if driver_numbers_series is not None:
+                                fallback_candidates = pd.to_numeric(
+                                    driver_numbers_series,
+                                    errors='coerce',
+                                ).dropna()
+                                if not fallback_candidates.empty:
+                                    fallback_number = int(fallback_candidates.iloc[0])
+
+                        if fallback_number is None:
+                            valid_numbers = driver_numbers.dropna().astype(int)
+                            if not valid_numbers.empty:
+                                fallback_number = int(valid_numbers.iloc[0])
+
+                        if fallback_number is not None:
+                            target_driver_number = fallback_number
+                            leader_mask = driver_numbers == target_driver_number
+                            logger.warning(
+                                "Driver #1 lap data missing; using driver #%s for lap tracking",
+                                target_driver_number,
+                            )
+                        else:
+                            logger.warning("No valid lap data available for lap tracking")
+
+                    leader_laps = laps.loc[leader_mask].copy()
+                    if not leader_laps.empty:
+                        leader_laps.loc[:, 'DriverNumber'] = int(target_driver_number)
+
+                        select_columns = ['LapNumber', 'LapStartTime', 'LapEndTime', 'DriverNumber']
+                        if 'LapTime' in leader_laps.columns:
+                            select_columns.append('LapTime')
+
+                        lap_timing_candidate = leader_laps[select_columns].copy()
+                        if track_map_dashboard is not None:
+                            normalized_laps, offset_seconds, lap_one_seconds = _normalize_lap_timing_data(
+                                lap_timing_candidate,
+                                track_map_dashboard,
+                                int(target_driver_number),
+                            )
+                        else:
+                            normalized_laps = lap_timing_candidate
+                            offset_seconds = None
+                            lap_one_seconds = None
+                            logger.warning(
+                                "Track map dashboard unavailable; skipping lap timing normalization",
+                            )
+
+                        if offset_seconds is not None:
+                            formation_offset_seconds = offset_seconds
+                            logger.info(
+                                "Applied formation offset %.1fs using FastF1 lap-one %.1fs",
+                                formation_offset_seconds,
+                                lap_one_seconds if lap_one_seconds is not None else float('nan'),
+                            )
+
+                        if lap_one_seconds is not None:
+                            fastf1_lap_one_seconds = lap_one_seconds
+
+                        lap_timing_data = normalized_laps
+                        logger.info(
+                            "Prepared lap timing data from driver #%s: %d laps",
+                            target_driver_number,
+                            len(lap_timing_data) if lap_timing_data is not None else 0,
+                        )
+                    else:
+                        logger.warning("Unable to build lap timing data; no laps matched target driver")
+
+                def _derive_boundary_seconds() -> Tuple[float, float, float]:
+                    start_seconds = 0.0
+                    lap_one_end_seconds = float(first_lap_end) if pd.notna(first_lap_end) else 0.0
+                    session_end_seconds = float(last_lap_end)
+
+                    if lap_timing_data is not None and not lap_timing_data.empty:
+                        lap_one_mask = pd.Series(False, index=lap_timing_data.index)
+                        if 'LapNumber' in lap_timing_data.columns:
+                            lap_numbers = pd.to_numeric(lap_timing_data['LapNumber'], errors='coerce')
+                            lap_numbers_clean = lap_numbers.dropna()
+                            if not lap_numbers_clean.empty:
+                                first_lap_number = lap_numbers_clean.min()
+                                lap_one_mask = lap_numbers == first_lap_number
+
+                        if 'LapStartTime_seconds' in lap_timing_data.columns:
+                            start_series = lap_timing_data.loc[lap_one_mask, 'LapStartTime_seconds'].dropna()
+                            if not start_series.empty:
+                                start_seconds = float(start_series.iloc[0])
+                        elif 'LapStartTime' in lap_timing_data.columns:
+                            raw_start_series = lap_timing_data.loc[lap_one_mask, 'LapStartTime'].dropna()
+                            if not raw_start_series.empty:
+                                derived_series = raw_start_series.apply(_timedelta_to_seconds).dropna()
+                                if not derived_series.empty:
+                                    start_seconds = float(derived_series.iloc[0])
+
+                        if 'LapEndTime_seconds' in lap_timing_data.columns:
+                            end_series = lap_timing_data.loc[lap_one_mask, 'LapEndTime_seconds'].dropna()
+                            if not end_series.empty:
+                                lap_one_end_seconds = float(end_series.iloc[0])
+                            session_end_candidates = lap_timing_data['LapEndTime_seconds'].dropna()
+                            if not session_end_candidates.empty:
+                                session_end_seconds = float(session_end_candidates.max())
+                        elif 'LapEndTime' in lap_timing_data.columns:
+                            raw_end_series = lap_timing_data.loc[lap_one_mask, 'LapEndTime'].dropna()
+                            if not raw_end_series.empty:
+                                derived_end_series = raw_end_series.apply(_timedelta_to_seconds).dropna()
+                                if not derived_end_series.empty:
+                                    lap_one_end_seconds = float(derived_end_series.iloc[0])
+                            session_end_series = lap_timing_data['LapEndTime'].dropna()
+                            session_value_series = session_end_series.apply(_timedelta_to_seconds).dropna()
+                            if not session_value_series.empty:
+                                session_end_seconds = float(session_value_series.max())
+
+                    return start_seconds, lap_one_end_seconds, session_end_seconds
+
+                start_seconds, first_lap_end_seconds, session_end_seconds = _derive_boundary_seconds()
+
+                start_time = session_date + timedelta(seconds=start_seconds)
+                end_time = session_date + timedelta(seconds=session_end_seconds)
+
+                track_map_status['formation_offset_seconds'] = formation_offset_seconds
+                track_map_status['fastf1_lap_one_seconds'] = fastf1_lap_one_seconds
+
+                simulation_controller = SimulationController(
+                    start_time,
+                    end_time,
+                    lap_data=lap_timing_data,
+                )
+                simulation_controller.pause()
+
+                logger.info(
+                    "SimulationController initialized: %s -> %s (lap1 end %.1fs, final lap %.1fs)",
+                    start_time,
+                    end_time,
+                    first_lap_end_seconds,
+                    session_end_seconds,
+                )
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to initialize SimulationController: %s", exc)
+        simulation_controller = None
+
+    resolved_session_name = (
+        session_info.get('session_name')
+        or session_info.get('SessionName')
+        or _SESSION_CODE_TO_LABEL.get(str(session_code).upper(), session_code)
+    )
+    race_name = session_info.get('meeting_name', 'Race')
+
+    total_laps = _calculate_total_laps(
+        session_obj,
+        str(
+            session_info.get('circuit_short_name')
+            or session_info.get('location')
+            or '',
+        ),
+    )
+
+    return {
+        'loaded': True,
+        'year': year,
+        'meeting_key': meeting_key,
+        'session': session_code,
+        'session_key': session_obj.session_key,
+        'race_name': race_name,
+        'session_type': resolved_session_name,
+        'drivers': {opt['value']: opt['label'] for opt in driver_options},
+        'total_laps': total_laps,
+        'track_map': track_map_status,
+    }
+
+
+@callback(
+    Output('session-store', 'data', allow_duplicate=True),
+    Input('session-bootstrap-store', 'data'),
+    prevent_initial_call=True
+)
+def finalize_session_store(bootstrap_data):
+    """Complete session bootstrap before dashboards render."""
+    if not bootstrap_data:
+        raise PreventUpdate
+
+    drivers_map = bootstrap_data.get('drivers', {}) if isinstance(bootstrap_data, dict) else {}
+
+    def _empty_track_map() -> Dict[str, Any]:
+        return {
+            'ready': False,
+            'error': None,
+            'params': None,
+            'formation_offset_seconds': 0.0,
+            'fastf1_lap_one_seconds': None,
+        }
+
+    if not bootstrap_data.get('ready'):
+        error_message = bootstrap_data.get('error')
+        if error_message:
+            logger.warning("Session bootstrap aborted: %s", error_message)
+        return {
+            'loaded': False,
+            'error': error_message,
+            'drivers': drivers_map,
+            'track_map': _empty_track_map(),
+        }
+
+    session_key = bootstrap_data.get('session_key')
+    year_value = bootstrap_data.get('year')
+    meeting_value = bootstrap_data.get('meeting_key')
+    session_code_raw = bootstrap_data.get('session')
+    session_info = bootstrap_data.get('session_info') or {}
+    driver_options = bootstrap_data.get('driver_options') or []
+
+    global current_session_obj
+    if current_session_obj is None or getattr(current_session_obj, 'session_key', None) != session_key:
+        logger.warning(
+            "Session object missing or mismatched (expected %s)",
+            session_key,
+        )
+        return {
+            'loaded': False,
+            'error': "Session object unavailable",
+            'drivers': drivers_map,
+            'track_map': _empty_track_map(),
+        }
+
+    if year_value is None:
+        logger.error("Missing year in bootstrap payload")
+        return {
+            'loaded': False,
+            'error': "Invalid year",
+            'drivers': drivers_map,
+            'track_map': _empty_track_map(),
+        }
+
+    if isinstance(year_value, int):
+        year_int = year_value
+    else:
+        try:
+            year_int = int(year_value)
+        except (TypeError, ValueError):  # pragma: no cover - validation guard
+            logger.error("Invalid year in bootstrap payload: %s", year_value)
+            return {
+                'loaded': False,
+                'error': "Invalid year",
+                'drivers': drivers_map,
+                'track_map': _empty_track_map(),
+            }
+
+    if meeting_value is None:
+        logger.error("Missing meeting key in bootstrap payload")
+        return {
+            'loaded': False,
+            'error': "Invalid meeting key",
+            'drivers': drivers_map,
+            'track_map': _empty_track_map(),
+        }
+
+    if isinstance(meeting_value, int):
+        meeting_key_int = meeting_value
+    else:
+        try:
+            meeting_key_int = int(meeting_value)
+        except (TypeError, ValueError):  # pragma: no cover - validation guard
+            logger.error("Invalid meeting key in bootstrap payload: %s", meeting_value)
+            return {
+                'loaded': False,
+                'error': "Invalid meeting key",
+                'drivers': drivers_map,
+                'track_map': _empty_track_map(),
+            }
+
+    if session_code_raw is None:
+        logger.error("Missing session code in bootstrap payload")
+        return {
+            'loaded': False,
+            'error': "Invalid session code",
+            'drivers': drivers_map,
+            'track_map': _empty_track_map(),
+        }
+
+    session_code = (
+        session_code_raw
+        if isinstance(session_code_raw, str)
+        else str(session_code_raw)
+    )
+
+    try:
+        payload = _build_session_store_payload(
+            session_obj=current_session_obj,
+            session_info=session_info,
+            year=year_int,
+            meeting_key=meeting_key_int,
+            session_code=session_code,
+            driver_options=driver_options,
+        )
+        logger.info(
+            "Session bootstrap completed for session_key=%s",
+            session_key,
+        )
+        return payload
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to finalize session bootstrap: %s", exc)
+        return {
+            'loaded': False,
+            'error': str(exc),
+            'drivers': drivers_map,
+            'track_map': _empty_track_map(),
+        }
+
 
 def _format_doc_list(docs: list, category: str = "unknown") -> list:
     """
@@ -5629,6 +5780,8 @@ def update_dashboards(
                     )
                 else:
                     overview_logger.info("Rendering race overview dashboard...")
+                    openf1_provider.reset_api_call_counts()
+                    overview_logger.debug("Race overview API counters reset")
                     # Get session_key from loaded session
                     session_key = None
                     simulation_time = None
@@ -5683,6 +5836,12 @@ def update_dashboards(
                         formation_offset_seconds=formation_offset_seconds,
                         current_lap=overview_current_lap,
                         focused_driver_code=driver_code
+                    )
+                    context_label = f"Race overview render (session {session_key})"
+                    openf1_provider.log_api_call_summary(
+                        context_label,
+                        reset=True,
+                        level=logging.INFO,
                     )
                     
                     # Build lap info for header
