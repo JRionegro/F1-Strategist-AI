@@ -761,51 +761,121 @@ def _update_track_map_lap_cache(positions: Dict[int, Any]) -> None:
 
 
 def _interpolate_cached_track_positions(
-    lap_payload: Optional[Dict[str, Any]],
+    laps_section: Optional[Dict[str, Any]],
+    current_lap: int,
     driver_order: Sequence[int],
     session_time: float,
 ) -> Dict[int, Dict[str, Any]]:
     """Convert cached lap trajectories into instantaneous marker positions."""
-    if not lap_payload or not isinstance(lap_payload, dict):
+    if not isinstance(laps_section, dict) or not laps_section:
         return {}
+
+    lap_payload_cache: Dict[int, Dict[str, Any]] = {}
+    for lap_key, lap_payload in laps_section.items():
+        if not isinstance(lap_payload, dict):
+            continue
+        try:
+            lap_number = int(lap_key)
+        except (TypeError, ValueError):
+            continue
+        lap_payload_cache[lap_number] = lap_payload
+
+    if not lap_payload_cache:
+        return {}
+
+    candidate_laps = sorted(
+        lap_payload_cache.keys(),
+        key=lambda lap_num: (abs(lap_num - current_lap), lap_num),
+    )
 
     interpolated: Dict[int, Dict[str, Any]] = {}
     for driver_number in driver_order:
         driver_key = str(driver_number)
-        driver_payload = lap_payload.get(driver_key)
-        if not isinstance(driver_payload, dict):
+        best_payload: Optional[Dict[str, Any]] = None
+        best_lap_number: Optional[int] = None
+        best_distance: float = float("inf")
+
+        for lap_number in candidate_laps:
+            lap_payload = lap_payload_cache.get(lap_number)
+            if lap_payload is None:
+                continue
+            driver_payload = lap_payload.get(driver_key)
+            if not isinstance(driver_payload, dict):
+                continue
+
+            time_values_raw = driver_payload.get("time")
+            x_values_raw = driver_payload.get("x")
+            y_values_raw = driver_payload.get("y")
+            if (
+                not isinstance(time_values_raw, list)
+                or not isinstance(x_values_raw, list)
+                or not isinstance(y_values_raw, list)
+                or not time_values_raw
+            ):
+                continue
+
+            try:
+                time_values = [float(value) for value in time_values_raw]
+                x_values = [float(value) for value in x_values_raw]
+                y_values = [float(value) for value in y_values_raw]
+            except (TypeError, ValueError):
+                continue
+
+            start_time = time_values[0]
+            end_time = time_values[-1]
+
+            if start_time <= session_time <= end_time:
+                best_payload = {
+                    "time": time_values,
+                    "x": x_values,
+                    "y": y_values,
+                }
+                best_lap_number = lap_number
+                break
+
+            if session_time < start_time:
+                distance = start_time - session_time
+            else:
+                distance = session_time - end_time
+
+            if distance < best_distance:
+                best_distance = distance
+                best_payload = {
+                    "time": time_values,
+                    "x": x_values,
+                    "y": y_values,
+                }
+                best_lap_number = lap_number
+
+        if best_payload is None or best_lap_number is None:
             continue
 
-        time_values = driver_payload.get("time")
-        x_values = driver_payload.get("x")
-        y_values = driver_payload.get("y")
-        if not isinstance(time_values, list) or not isinstance(x_values, list) or not isinstance(y_values, list):
-            continue
-        if not time_values:
-            continue
+        time_values = best_payload["time"]
+        x_values = best_payload["x"]
+        y_values = best_payload["y"]
 
-        try:
-            insert_idx = bisect_left(time_values, session_time)
-        except TypeError:
-            continue
+        start_time = time_values[0]
+        end_time = time_values[-1]
+        if start_time <= end_time:
+            clamped_time = min(max(session_time, start_time), end_time)
+        else:
+            clamped_time = session_time
 
+        insert_idx = bisect_left(time_values, clamped_time)
         prev_idx = max(insert_idx - 1, 0)
         next_idx = min(insert_idx, len(time_values) - 1)
 
-        try:
-            prev_time = float(time_values[prev_idx])
-            next_time = float(time_values[next_idx])
-            prev_x = float(x_values[prev_idx])
-            prev_y = float(y_values[prev_idx])
-            next_x = float(x_values[next_idx])
-            next_y = float(y_values[next_idx])
-        except (TypeError, ValueError):
-            continue
+        prev_time = time_values[prev_idx]
+        next_time = time_values[next_idx]
+        prev_x = x_values[prev_idx]
+        prev_y = y_values[prev_idx]
+        next_x = x_values[next_idx]
+        next_y = y_values[next_idx]
 
         if next_time <= prev_time:
             ratio = 0.0
         else:
-            ratio = (session_time - prev_time) / (next_time - prev_time)
+            ratio = (clamped_time - prev_time) / (next_time - prev_time)
             ratio = max(0.0, min(float(ratio), 1.0))
 
         interpolated_time = prev_time + (next_time - prev_time) * ratio
@@ -815,21 +885,6 @@ def _interpolate_cached_track_positions(
         previous_sample = {"time": prev_time, "x": prev_x, "y": prev_y}
         next_sample = {"time": next_time, "x": next_x, "y": next_y}
 
-        lap_value_raw = driver_payload.get("lap")
-        lap_candidate = None
-        if isinstance(lap_value_raw, list) and lap_value_raw:
-            try:
-                lap_candidate = float(lap_value_raw[-1])
-            except (TypeError, ValueError):
-                lap_candidate = None
-        elif isinstance(lap_value_raw, Real):
-            lap_candidate = float(lap_value_raw)
-
-        if lap_candidate is not None and math.isfinite(lap_candidate):
-            lap_number = int(round(lap_candidate))
-        else:
-            lap_number = -1
-
         interpolated[driver_number] = {
             "x": interpolated_x,
             "y": interpolated_y,
@@ -838,7 +893,7 @@ def _interpolate_cached_track_positions(
             "query_time": session_time,
             "previous_sample": previous_sample,
             "next_sample": next_sample,
-            "lap_number": lap_number,
+            "lap_number": int(best_lap_number),
         }
 
     return interpolated
@@ -6263,6 +6318,13 @@ def update_dashboards(
                 color="success",
                 className="ms-2",
             )
+            lap_badge = dbc.Badge(
+                initial_lap_label,
+                id="track-map-lap-label",
+                color="light",
+                className="ms-3 text-dark border border-secondary",
+                style={"fontSize": "0.85rem"},
+            )
             dashboards.append(
                 html.Div(
                     dbc.Card([
@@ -6276,6 +6338,7 @@ def update_dashboards(
                                     ),
                                     width="auto"
                                 ),
+                                dbc.Col(lap_badge, width="auto"),
                                 dbc.Col(status_badge, width="auto", className="ms-auto")
                             ], className="align-items-center g-0"),
                             className="py-1"
@@ -6283,30 +6346,38 @@ def update_dashboards(
                         dbc.CardBody(
                             [
                                 html.Div(
-                                    dcc.Loading(
-                                        dcc.Graph(
-                                            id='track-map-graph',
-                                            figure=base_figure,
-                                            config={'displayModeBar': False, 'responsive': True},
-                                            responsive=True,
-                                            style={'height': '100%', 'width': '100%'}
+                                    [
+                                        html.Button(
+                                            "↺",
+                                            id='track-map-reset-view-btn',
+                                            className='btn btn-sm btn-dark text-white',
+                                            title='Reset view',
+                                            style={
+                                                'position': 'absolute',
+                                                'top': '8px',
+                                                'left': '8px',
+                                                'zIndex': 20,
+                                                'padding': '2px 8px',
+                                                'transform': 'scale(0.4)',
+                                                'transformOrigin': 'top left',
+                                            },
                                         ),
-                                        type="circle",
-                                        color="#e10600",
-                                        style={'flex': '1 1 auto'},
-                                        delay_show=750,
-                                        show_initially=False
-                                    ),
-                                    style={'flex': '1 1 auto', 'minHeight': '360px'}
-                                ),
-                                html.Div(
-                                    html.Span(
-                                        initial_lap_label,
-                                        id="track-map-lap-label",
-                                        className="fw-semibold text-white",
-                                    ),
-                                    className="mt-2 text-center",
-                                    style={'fontSize': '0.95rem'}
+                                        dcc.Loading(
+                                            dcc.Graph(
+                                                id='track-map-graph',
+                                                figure=base_figure,
+                                                config={'displayModeBar': False, 'responsive': True},
+                                                responsive=True,
+                                                style={'height': '100%', 'width': '100%'}
+                                            ),
+                                            type="circle",
+                                            color="#e10600",
+                                            style={'flex': '1 1 auto'},
+                                            delay_show=750,
+                                            show_initially=False
+                                        ),
+                                    ],
+                                    style={'flex': '1 1 auto', 'minHeight': '360px', 'position': 'relative'}
                                 ),
                             ],
                             style={
@@ -6845,15 +6916,18 @@ def refresh_track_map_figure(
         if provider is not None:
             session_time = provider.clamp_session_time(effective_elapsed_time)
 
-        lap_payload: Optional[Dict[str, Any]] = None
-        if isinstance(trajectory_store, dict):
-            laps_section = trajectory_store.get('laps')
-            if isinstance(laps_section, dict):
-                lap_payload = laps_section.get(str(current_lap))
-
         cache_driver_order = _track_map_driver_order or driver_numbers
+        laps_section: Optional[Dict[str, Any]] = None
+        laps_available = False
+        if isinstance(trajectory_store, dict):
+            candidate_section = trajectory_store.get('laps')
+            if isinstance(candidate_section, dict) and candidate_section:
+                laps_section = candidate_section
+                laps_available = True
+
         positions = _interpolate_cached_track_positions(
-            lap_payload,
+            laps_section,
+            current_lap,
             cache_driver_order,
             session_time,
         )
@@ -6867,7 +6941,7 @@ def refresh_track_map_figure(
                 elapsed_time=effective_elapsed_time,
             )
 
-        if positions and not used_cache and lap_payload is None and provider is not None:
+        if positions and not used_cache and provider is not None and not laps_available:
             session_time = provider.clamp_session_time(effective_elapsed_time)
 
         _update_track_map_lap_cache(positions)
@@ -7026,6 +7100,28 @@ def refresh_track_map_figure(
     return patch, lap_label_text
 
 
+@callback(
+    Output('track-map-graph', 'figure', allow_duplicate=True),
+    Input('track-map-reset-view-btn', 'n_clicks'),
+    prevent_initial_call=True
+)
+def reset_track_map_zoom(n_clicks: Optional[int]):
+    """Restore default track map zoom extents when the reset button is pressed."""
+    if not n_clicks:
+        raise PreventUpdate
+
+    dashboard = get_track_map_dashboard()
+    axis_ranges = dashboard.get_axis_ranges()
+    if not axis_ranges:
+        raise PreventUpdate
+
+    x_range, y_range = axis_ranges
+    patch = Patch()
+    patch['layout']['xaxis']['range'] = list(x_range)
+    patch['layout']['yaxis']['range'] = list(y_range)
+    return patch
+
+
 # NOTE: Render callback REMOVED - chat callback writes directly to container
 # This avoids Dash callback conflicts with allow_duplicate=True
 
@@ -7041,6 +7137,24 @@ def toggle_playback_visibility(mode):
     if mode == 'live':
         return {'display': 'none'}
     return {'display': 'block'}
+
+
+@callback(
+    Output('telemetry-graph', 'figure', allow_duplicate=True),
+    Input('telemetry-reset-view-btn', 'n_clicks'),
+    prevent_initial_call=True
+)
+def reset_telemetry_zoom(n_clicks: Optional[int]):
+    """Reset telemetry charts to their default zoom ranges."""
+    if not n_clicks:
+        raise PreventUpdate
+
+    patch = Patch()
+    for axis_key in ('xaxis', 'xaxis2', 'xaxis3', 'xaxis4'):
+        patch['layout'][axis_key]['autorange'] = True
+        patch['layout'][axis_key]['range'] = None
+    patch['layout']['uirevision'] = f"telemetry-reset-{n_clicks}"
+    return patch
 
 
 # Callback: Save API Keys to .env file

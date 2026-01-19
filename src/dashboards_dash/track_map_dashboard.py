@@ -180,7 +180,7 @@ class TrackMapDashboard:
             base_x = 4800.0
             base_y = 4800.0
             step_y = 180.0
-            return base_x, base_y - order_index * step_y
+            return base_x, base_y - (order_index + 1) * step_y
 
         (x_min, x_max), (y_min, y_max) = self._axis_ranges
         x_span = x_max - x_min
@@ -188,8 +188,12 @@ class TrackMapDashboard:
         x_offset = max(250.0, x_span * 0.12)
         y_step = max(160.0, y_span * 0.08)
         anchor_x = x_max + x_offset
-        anchor_y = y_max - order_index * y_step
+        anchor_y = y_max - (order_index + 1) * y_step
         return float(anchor_x), float(anchor_y)
+
+    def get_axis_ranges(self) -> Optional[Tuple[Tuple[float, float], Tuple[float, float]]]:
+        """Expose cached axis ranges for zoom resets."""
+        return self._axis_ranges
 
     def load_session(self, year: int, country: str, session_type: str = "R") -> bool:
         """Load FastF1 telemetry and cache the circuit outline."""

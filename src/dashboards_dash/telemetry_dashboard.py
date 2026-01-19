@@ -249,8 +249,24 @@ class TelemetryDashboard:
                     ),
                     dbc.CardBody(
                         [
+                            html.Button(
+                                "↺",
+                                id="telemetry-reset-view-btn",
+                                className="btn btn-sm btn-dark text-white",
+                                title="Reset view",
+                                style={
+                                    "position": "absolute",
+                                    "top": "8px",
+                                    "left": "8px",
+                                    "zIndex": 20,
+                                    "padding": "2px 8px",
+                                    "transform": "scale(0.4)",
+                                    "transformOrigin": "top left",
+                                },
+                            ),
                             # Telemetry graph
                             dcc.Graph(
+                                id="telemetry-graph",
                                 figure=fig,
                                 config={
                                     "responsive": True,
@@ -259,8 +275,12 @@ class TelemetryDashboard:
                                 style={"height": "560px"}
                             ),
                         ],
-                        className="p-0",
-                        style={"backgroundColor": "#1e1e1e"}
+                        className="p-0 position-relative",
+                        style={
+                            "backgroundColor": "#1e1e1e",
+                            "position": "relative",
+                            "overflow": "hidden",
+                        }
                     ),
                 ],
                 className="mb-2 border border-secondary",
@@ -875,7 +895,7 @@ class TelemetryDashboard:
                     symbol="square",
                     line=dict(color="#00C853", width=1)
                 ),
-                name="DRS (Focus)",
+                name="",
                 showlegend=True,
                 legendgroup="drs_legend"
             ),
