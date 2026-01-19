@@ -16,7 +16,7 @@ import importlib
 import hashlib
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any, List, Tuple, Sequence, Set, Union, cast
+from typing import Optional, Dict, Any, List, Tuple, Sequence, Set, Union, Mapping, cast
 from numbers import Real
 from uuid import uuid4
 
@@ -29,7 +29,7 @@ import pandas as pd
 # OpenF1 data provider (replaces FastF1)
 from src.data.openf1_adapter import get_session as get_openf1_session, SessionAdapter
 from src.data.cache_generation import CacheGenerationService, MeetingSelector, SessionCode
-from src.data.cache_config import DEFAULT_CACHE_CONFIG
+from src.data.cache_config import DEFAULT_CACHE_CONFIG, DataType
 from src.data.openf1_data_provider import OpenF1DataProvider
 from src.data.last_race_finder import (
     get_last_completed_race,
@@ -137,6 +137,7 @@ logger.info(
 )
 enable_category(LogCategory.CHAT)
 enable_category(LogCategory.TRACK_MAP)
+enable_category(LogCategory.DATA)
 
 # Uncomment to enable specific debugging:
 # enable_category(LogCategory.SIMULATION)  # See simulation updates
@@ -190,6 +191,12 @@ _cache_job_snapshot: Dict[str, Any] = {
     "context": None,
 }
 
+CACHE_FILE_EXTENSION = DEFAULT_CACHE_CONFIG.get_file_extension()
+PROCESSED_CACHE_DIR = DEFAULT_CACHE_CONFIG.processed_dir
+RACES_CACHE_DIR = DEFAULT_CACHE_CONFIG.races_dir
+_CALENDAR_CACHE: Dict[int, pd.DataFrame] = {}
+_CALENDAR_METADATA: Dict[int, Dict[int, Dict[str, Any]]] = {}
+
 
 def _set_cache_job_state(**updates: Any) -> None:
     with _cache_job_lock:
@@ -215,6 +222,320 @@ def _cache_progress_payload() -> Dict[str, Any]:
             "context",
         ]
     }
+
+
+def _read_cache_dataframe(path: Path) -> Optional[pd.DataFrame]:
+    """Load a cached dataframe from disk if available."""
+    if not path.exists():
+        return None
+    try:
+        if path.suffix == ".parquet":
+            return pd.read_parquet(path)
+        if path.suffix == ".csv":
+            return pd.read_csv(path)
+        logger.warning("Unsupported cache format for %s", path)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to load cache %s: %s", path, exc)
+    return None
+
+
+def _normalize_record_keys(
+    raw_records: Sequence[Mapping[Any, Any]]
+) -> List[Dict[str, Any]]:
+    """Return a copy of the records with string keys for type safety."""
+    normalized: List[Dict[str, Any]] = []
+    for raw in raw_records:
+        normalized.append({str(key): value for key, value in raw.items()})
+    return normalized
+
+
+_SESSION_NAME_FIELDS: Sequence[str] = [
+    "session_name",
+    "SessionName",
+    "name",
+    "Session",
+]
+_SESSION_TYPE_FIELDS: Sequence[str] = ["session_type", "SessionType"]
+_SESSION_CODE_FIELDS: Sequence[str] = ["session_code", "SessionCode"]
+_SESSION_NAME_TO_CODE: Dict[str, str] = {
+    "Practice 1": "P1",
+    "Practice 2": "P2",
+    "Practice 3": "P3",
+    "Qualifying": "Q",
+    "Sprint": "S",
+    "Sprint Qualifying": "SQ",
+    "Sprint Shootout": "SS",
+    "Race": "R",
+}
+_SESSION_CODE_TO_LABEL: Dict[str, str] = {
+    "P1": "Practice 1",
+    "P2": "Practice 2",
+    "P3": "Practice 3",
+    "FP1": "Practice 1",
+    "FP2": "Practice 2",
+    "FP3": "Practice 3",
+    "Q": "Qualifying",
+    "QUALIFYING": "Qualifying",
+    "SQ": "Sprint Qualifying",
+    "SS": "Sprint Shootout",
+    "S": "Sprint",
+    "SPRINT": "Sprint",
+    "R": "Race",
+    "RACE": "Race",
+}
+
+
+def _load_cached_session_list(year: int, meeting_key: int) -> Optional[List[Dict[str, Any]]]:
+    """Return cached session metadata for the meeting when available."""
+    session_dir = PROCESSED_CACHE_DIR / "session_list" / str(year)
+    if not session_dir.exists():
+        return None
+
+    candidate_paths: List[Path] = []
+    meta = _CALENDAR_METADATA.get(year, {}).get(meeting_key)
+    slug = meta.get("cache_slug") if meta else None
+    if slug:
+        candidate_paths.append(session_dir / f"{slug}{CACHE_FILE_EXTENSION}")
+    if not candidate_paths:
+        candidate_paths.extend(sorted(session_dir.glob(f"*{CACHE_FILE_EXTENSION}")))
+
+    for path in candidate_paths:
+        cached_df = _read_cache_dataframe(path)
+        if cached_df is None or cached_df.empty:
+            continue
+        raw_records = cached_df.to_dict("records")
+        if not raw_records:
+            continue
+        records = _normalize_record_keys(raw_records)
+        sample = records[0]
+        meeting_key_val = sample.get("meeting_key") or sample.get("MeetingKey")
+        if meeting_key_val is None:
+            continue
+        try:
+            meeting_key_int = int(meeting_key_val)
+        except (TypeError, ValueError):
+            continue
+        if meeting_key_int == meeting_key:
+            return records
+    return None
+
+
+def _extract_session_field(payload: Dict[str, Any], field_names: Sequence[str]) -> str:
+    """Return the first non-empty string value for the given field names."""
+    for field in field_names:
+        value = payload.get(field)
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped:
+                return stripped
+        elif value not in (None, ""):
+            return str(value)
+    return ""
+
+
+def _interpret_session_payload(payload: Dict[str, Any]) -> Tuple[str, str, str]:
+    """Return normalized session code, label, and name for a payload."""
+    session_name = _extract_session_field(payload, _SESSION_NAME_FIELDS)
+    session_type_raw = _extract_session_field(payload, _SESSION_TYPE_FIELDS)
+    session_code_raw = _extract_session_field(payload, _SESSION_CODE_FIELDS)
+
+    candidate_code = (
+        (session_code_raw or session_type_raw).upper()
+        if (session_code_raw or session_type_raw)
+        else ""
+    )
+    if not candidate_code:
+        fallback = _SESSION_NAME_TO_CODE.get(session_name)
+        if fallback:
+            candidate_code = fallback
+        elif session_name:
+            candidate_code = session_name.upper()
+        else:
+            candidate_code = "SESSION"
+
+    normalized_code = candidate_code.upper()
+    label = _SESSION_CODE_TO_LABEL.get(normalized_code)
+
+    if label is None:
+        name_lower = session_name.lower()
+        if "practice" in name_lower or name_lower.startswith("fp"):
+            if "3" in name_lower:
+                normalized_code = "P3"
+                label = "Practice 3"
+            elif "2" in name_lower:
+                normalized_code = "P2"
+                label = "Practice 2"
+            else:
+                normalized_code = "P1"
+                label = "Practice 1"
+        elif "qualifying" in name_lower and "shootout" in name_lower:
+            normalized_code = "SS"
+            label = "Sprint Shootout"
+        elif "qualifying" in name_lower:
+            normalized_code = "Q"
+            label = "Qualifying"
+        elif "shootout" in name_lower:
+            normalized_code = "SS"
+            label = "Sprint Shootout"
+        elif "sprint" in name_lower:
+            normalized_code = "S"
+            label = "Sprint"
+        elif "race" in name_lower:
+            normalized_code = "R"
+            label = "Race"
+        elif session_name:
+            label = session_name
+        else:
+            label = normalized_code.title()
+
+    return normalized_code.upper(), label, session_name
+
+
+def _build_session_selector_options(sessions: Sequence[Dict[str, Any]]) -> List[Dict[str, str]]:
+    """Normalize raw session payloads into selector options."""
+    normalized_sessions = _normalize_record_keys(sessions)
+    options: List[Dict[str, str]] = []
+    seen_values: Set[str] = set()
+
+    for payload in normalized_sessions:
+        normalized_code, label, _session_name = _interpret_session_payload(payload)
+        if normalized_code in seen_values:
+            continue
+        seen_values.add(normalized_code)
+        options.append({"label": label, "value": normalized_code})
+
+    return options
+
+
+def _find_session_payload(
+    records: Sequence[Dict[str, Any]],
+    target_code: str,
+) -> Optional[Dict[str, Any]]:
+    """Return session payload matching the target code if present."""
+    if not records:
+        return None
+
+    normalized_target = target_code.upper()
+    for payload in _normalize_record_keys(records):
+        normalized_code, _label, _name = _interpret_session_payload(payload)
+        if normalized_code == normalized_target:
+            return payload
+    return None
+
+
+def _get_session_key(payload: Dict[str, Any]) -> Optional[Union[int, str]]:
+    return payload.get("session_key") or payload.get("SessionKey")
+
+
+def _resolve_session_payload(
+    year: int,
+    meeting_key: int,
+    session_code: str,
+) -> Optional[Dict[str, Any]]:
+    """Return canonical session payload for the requested session code."""
+    normalized_code = session_code.upper()
+    candidate: Optional[Dict[str, Any]] = None
+
+    try:
+        cached_records = _load_cached_session_list(int(year), int(meeting_key))
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Failed to load cached sessions for %s/%s: %s", year, meeting_key, exc)
+        cached_records = None
+
+    if cached_records:
+        logger.info(
+            "Session resolver cache hit (year=%s meeting_key=%s entries=%s)",
+            year,
+            meeting_key,
+            len(cached_records),
+        )
+        candidate = _find_session_payload(cached_records, normalized_code)
+        if candidate and _get_session_key(candidate):
+            logger.info(
+                "Session resolver returning cached payload (meeting_key=%s session_code=%s session_key=%s)",
+                meeting_key,
+                normalized_code,
+                _get_session_key(candidate),
+            )
+            return candidate
+    else:
+        logger.info(
+            "Session resolver cache miss (year=%s meeting_key=%s)",
+            year,
+            meeting_key,
+        )
+
+    def _request_sessions(params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        try:
+            payloads = openf1_provider._request("sessions", params)
+            if isinstance(payloads, list):
+                return [
+                    record if isinstance(record, dict) else {}
+                    for record in payloads
+                ]
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("OpenF1 session request failed %s: %s", params, exc)
+        return []
+
+    api_records = _request_sessions({"year": year, "meeting_key": meeting_key})
+    api_candidate = _find_session_payload(api_records, normalized_code)
+    if api_candidate and _get_session_key(api_candidate):
+        logger.info(
+            "Session resolver using API payload from meeting/year request (meeting_key=%s session_code=%s session_key=%s)",
+            meeting_key,
+            normalized_code,
+            _get_session_key(api_candidate),
+        )
+        return api_candidate
+
+    if api_candidate is None and candidate and _get_session_key(candidate):
+        logger.info(
+            "Session resolver fallback to cached payload without initial API match (meeting_key=%s session_code=%s session_key=%s)",
+            meeting_key,
+            normalized_code,
+            _get_session_key(candidate),
+        )
+        return candidate
+
+    # Targeted requests using session_code and session_name fallbacks
+    for query in (
+        {"year": year, "meeting_key": meeting_key, "session_code": normalized_code},
+        {
+            "year": year,
+            "meeting_key": meeting_key,
+            "session_name": _SESSION_CODE_TO_LABEL.get(normalized_code, normalized_code),
+        },
+    ):
+        targeted_records = _request_sessions(query)
+        targeted_candidate = _find_session_payload(targeted_records, normalized_code)
+        if targeted_candidate and _get_session_key(targeted_candidate):
+            logger.info(
+                "Session resolver using API payload from targeted query %s (session_key=%s)",
+                {key: query[key] for key in sorted(query)},
+                _get_session_key(targeted_candidate),
+            )
+            return targeted_candidate
+
+    if api_candidate:
+        logger.warning(
+            "Session resolver returning API payload without session_key (meeting_key=%s session_code=%s)",
+            meeting_key,
+            normalized_code,
+        )
+        return api_candidate
+    if candidate:
+        logger.warning(
+            "Session resolver returning cached payload without session_key (meeting_key=%s session_code=%s)",
+            meeting_key,
+            normalized_code,
+        )
+        return candidate
+    logger.error(
+        "Session resolver failed to locate payload (meeting_key=%s session_code=%s)",
+        meeting_key,
+        normalized_code,
+    )
+    return None
 
 
 def _run_cache_job(
@@ -1153,136 +1474,245 @@ def get_last_completed_race_context() -> RaceContext:
 
 def load_f1_calendar(year: int) -> pd.DataFrame:
     """Return season schedule tagged with race or testing metadata."""
+    if year in _CALENDAR_CACHE:
+        return _CALENDAR_CACHE[year]
+
     if year < 2023:
         logger.warning(f"OpenF1 data not available for year {year}. Use 2023-2025.")
         return pd.DataFrame()
 
-    try:
-        sessions_params = {"year": year}
-        all_sessions = openf1_provider._request("sessions", sessions_params)
-        if not all_sessions:
-            logger.warning(f"No sessions found for year {year}")
+    calendar_cache_path = PROCESSED_CACHE_DIR / "calendar" / f"{year}_calendar{CACHE_FILE_EXTENSION}"
+    meetings_df = _read_cache_dataframe(calendar_cache_path)
+    if meetings_df is not None and not meetings_df.empty:
+        logger.info(
+            "Loaded %s meetings for %s from cache (%s)",
+            len(meetings_df),
+            year,
+            calendar_cache_path,
+        )
+    else:
+        meetings_df = openf1_provider.get_meetings(year=year)
+        if meetings_df is None or meetings_df.empty:
+            logger.warning(f"No meeting data available for year {year}")
             return pd.DataFrame()
 
-        df = pd.DataFrame(all_sessions)
-        if df.empty:
-            logger.warning(f"Empty sessions frame for year {year}")
-            return pd.DataFrame()
+    meetings_df = meetings_df.copy()
+    rename_map = {
+        "meeting_key": "MeetingKey",
+        "MeetingKey": "MeetingKey",
+        "meeting_name": "MeetingName",
+        "MeetingName": "MeetingName",
+        "meeting_official_name": "OfficialName",
+        "official_name": "OfficialName",
+        "MeetingOfficialName": "OfficialName",
+        "location": "Location",
+        "Location": "Location",
+        "country_name": "Country",
+        "Country": "Country",
+        "circuit_short_name": "CircuitShortName",
+        "Circuit": "CircuitShortName",
+        "year": "Year",
+        "StartDate": "EventDate",
+        "date_start": "EventDate",
+        "meeting_start": "EventDate",
+    }
+    meetings_df = meetings_df.rename(columns=rename_map)
 
-        meeting_groups: List[Tuple[Optional[pd.Timestamp], int, pd.DataFrame, Dict[str, Any]]] = []
-        for meeting_key, group in df.groupby("meeting_key"):
-            sorted_group = group.sort_values("date_start", kind="stable")
-            first_row = sorted_group.iloc[0]
-            raw_meeting_key = meeting_key if meeting_key is not None else first_row.get("meeting_key")
-            if raw_meeting_key is None:
-                logger.warning("Skipping meeting with missing key in calendar build")
+    if "EventDate" in meetings_df.columns:
+        meetings_df["EventDate"] = pd.to_datetime(meetings_df["EventDate"], errors="coerce")
+    else:
+        meetings_df["EventDate"] = pd.NaT
+
+    if "EventName" not in meetings_df.columns:
+        if "MeetingName" in meetings_df.columns and meetings_df["MeetingName"].notna().any():
+            meetings_df["EventName"] = meetings_df["MeetingName"].fillna("")
+        else:
+            country_series = meetings_df.get("Country")
+            if isinstance(country_series, pd.Series):
+                meetings_df["EventName"] = country_series.fillna("").astype(str) + " Grand Prix"
+            else:
+                meetings_df["EventName"] = "Grand Prix"
+
+    meetings_records = _normalize_record_keys(meetings_df.to_dict("records"))
+
+    session_cache_dir = PROCESSED_CACHE_DIR / "session_list" / str(year)
+    cached_session_keys: Set[int] = set()
+    sessions_by_meeting: Dict[int, List[Dict[str, Any]]] = {}
+    if session_cache_dir.exists():
+        for cache_file in session_cache_dir.glob(f"*{CACHE_FILE_EXTENSION}"):
+            cached_df = _read_cache_dataframe(cache_file)
+            if cached_df is None or cached_df.empty:
+                continue
+            cached_records_raw = cached_df.to_dict("records")
+            if not cached_records_raw:
+                continue
+            cached_records = _normalize_record_keys(cached_records_raw)
+            sample = cached_records[0]
+            meeting_key_val = sample.get("meeting_key") or sample.get("MeetingKey")
+            if meeting_key_val is None:
                 continue
             try:
-                normalized_meeting_key = int(cast(Union[int, float, str], raw_meeting_key))
+                meeting_key_int = int(meeting_key_val)
             except (TypeError, ValueError):
-                logger.warning("Skipping meeting with non-numeric key: %s", raw_meeting_key)
                 continue
+            sessions_by_meeting[meeting_key_int] = cached_records
+            cached_session_keys.add(meeting_key_int)
 
-            raw_date = first_row.get("date_start")
-            parsed_date: Optional[pd.Timestamp]
-            if raw_date is None:
-                parsed_date = None
-            else:
-                candidate = pd.to_datetime(str(raw_date), errors="coerce")
-                parsed_date = candidate if isinstance(candidate, pd.Timestamp) else None
+    meeting_keys: List[int] = []
+    for record in meetings_records:
+        meeting_key_val = record.get("MeetingKey")
+        if meeting_key_val is None:
+            continue
+        try:
+            meeting_key_int = int(meeting_key_val)
+        except (TypeError, ValueError):
+            continue
+        meeting_keys.append(meeting_key_int)
 
-            meeting_groups.append((parsed_date, normalized_meeting_key, sorted_group, first_row.to_dict()))
+    missing_session_keys = [key for key in meeting_keys if key not in sessions_by_meeting]
 
-        meeting_groups.sort(
-            key=lambda item: (
-                item[0] if item[0] is not None and pd.notna(item[0]) else pd.Timestamp.max,
-                item[1],
-            )
+    session_payloads_by_meeting: Dict[int, List[Dict[str, Any]]] = {
+        key: value for key, value in sessions_by_meeting.items()
+    }
+
+    if missing_session_keys:
+        try:
+            session_payloads = openf1_provider._request("sessions", {"year": year})
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Failed to load sessions for %s: %s", year, exc)
+            session_payloads = []
+
+        grouped_sessions: Dict[int, List[Dict[str, Any]]] = {}
+        for payload in session_payloads:
+            normalized_payload = {str(key): value for key, value in payload.items()}
+            key_val = normalized_payload.get("meeting_key") or normalized_payload.get("MeetingKey")
+            if key_val is None:
+                continue
+            try:
+                key_int = int(key_val)
+            except (TypeError, ValueError):
+                continue
+            grouped_sessions.setdefault(key_int, []).append(normalized_payload)
+
+        for key in missing_session_keys:
+            if key in grouped_sessions:
+                session_payloads_by_meeting[key] = grouped_sessions[key]
+
+    race_counter = 1
+    test_counter = 1
+    records: List[Dict[str, Any]] = []
+    calendar_metadata: Dict[int, Dict[str, Any]] = {}
+
+    def _build_slug_from_record(record: Dict[str, Any]) -> str:
+        payload = {
+            "date_start": record.get("EventDate"),
+            "meeting_start": record.get("EventDate"),
+            "meeting_name": record.get("MeetingName") or record.get("EventName"),
+            "official_name": record.get("OfficialName"),
+            "location": record.get("Location"),
+            "country_name": record.get("Country"),
+            "year": record.get("Year") or year,
+        }
+        return cache_generation_service._build_meeting_slug(payload)
+
+    for record in meetings_records:
+        meeting_key_val = record.get("MeetingKey")
+        if meeting_key_val is None:
+            logger.warning("Skipping meeting with missing key value")
+            continue
+        try:
+            meeting_key = int(meeting_key_val)
+        except (TypeError, ValueError):
+            logger.warning("Skipping meeting with invalid key: %s", meeting_key_val)
+            continue
+
+        session_payloads = session_payloads_by_meeting.get(meeting_key, [])
+        codes_seen: Set[str] = set()
+        raw_texts: Set[str] = set()
+        for payload in session_payloads:
+            for key in ("session_type", "session_code", "session_name"):
+                raw_value = payload.get(key)
+                if raw_value is None:
+                    continue
+                text_value = str(raw_value).strip()
+                if text_value:
+                    raw_texts.add(text_value.lower())
+                code = CacheGenerationService._canonical_session_code(raw_value)
+                if code:
+                    codes_seen.add(code)
+
+        practice_codes: Set[str] = {"P1", "P2", "P3"}
+        has_canonical_race = "R" in codes_seen
+        has_competition_hint = bool(codes_seen - practice_codes) or any(
+            "race" in text or "grand prix" in text for text in raw_texts
         )
+        has_day_hint = any("day" in text for text in raw_texts)
 
-        race_counter = 1
-        test_counter = 1
-        records: List[Dict[str, Any]] = []
-
-        for parsed_date, meeting_key, group, first_row in meeting_groups:
-            codes_seen: Set[str] = set()
-            raw_texts: Set[str] = set()
-            for _, row in group.iterrows():
-                for key in ("session_type", "session_code", "session_name"):
-                    raw_value = row.get(key)
-                    if raw_value is None:
-                        continue
-                    text_value = str(raw_value).strip()
-                    if text_value:
-                        raw_texts.add(text_value.lower())
-                    code = CacheGenerationService._canonical_session_code(raw_value)
-                    if code:
-                        codes_seen.add(code)
-
-            practice_codes: Set[str] = {"P1", "P2", "P3"}
-            has_canonical_race = "R" in codes_seen
-            has_competition_hint = bool(codes_seen - practice_codes) or any(
-                "race" in text or "grand prix" in text for text in raw_texts
-            )
-            has_day_hint = any("day" in text for text in raw_texts)
-
-            is_race_weekend = has_canonical_race or has_competition_hint
-            if not is_race_weekend and has_day_hint:
+        is_race_weekend = has_canonical_race or has_competition_hint
+        if not is_race_weekend and has_day_hint:
+            is_race_weekend = False
+        if not session_payloads and isinstance(record.get("EventName"), str):
+            if "testing" in record["EventName"].lower():
                 is_race_weekend = False
 
-            country = str(first_row.get("country_name") or "")
-            location = str(first_row.get("location") or "")
-            event_year = first_row.get("year")
-            circuit_short_name = first_row.get("circuit_short_name")
-            event_date_val = first_row.get("date_start")
+        country = str(record.get("Country") or "")
+        location = str(record.get("Location") or "")
+        event_year = record.get("Year") or year
+        circuit_short_name = record.get("CircuitShortName")
+        event_date_val = record.get("EventDate")
+        event_name = record.get("EventName") or (f"{country} Grand Prix" if country else "Grand Prix")
 
-            if is_race_weekend:
-                round_number: Optional[int] = race_counter
-                test_number: Optional[int] = None
-                race_counter += 1
-                event_name = f"{country} Grand Prix" if country else "Grand Prix"
-            else:
-                round_number = None
-                test_number = test_counter
-                test_counter += 1
-                descriptor = location or country
-                event_name = (
-                    f"Pre-season Testing ({descriptor})"
-                    if descriptor
-                    else "Pre-season Testing"
-                )
+        if is_race_weekend:
+            round_number: Optional[int] = race_counter
+            test_number: Optional[int] = None
+            race_counter += 1
+        else:
+            round_number = None
+            test_number = test_counter
+            test_counter += 1
 
-            records.append({
-                "MeetingKey": meeting_key,
-                "Country": country,
-                "Location": location,
-                "EventDate": event_date_val,
-                "Year": event_year,
-                "CircuitShortName": circuit_short_name,
-                "RoundNumber": round_number,
-                "TestNumber": test_number,
-                "IsRaceWeekend": is_race_weekend,
-                "SessionCodes": sorted(codes_seen),
-                "EventName": event_name,
-            })
+        cache_slug = _build_slug_from_record(record)
+        records.append({
+            "MeetingKey": meeting_key,
+            "Country": country,
+            "Location": location,
+            "EventDate": event_date_val,
+            "Year": event_year,
+            "CircuitShortName": circuit_short_name,
+            "RoundNumber": round_number,
+            "TestNumber": test_number,
+            "IsRaceWeekend": is_race_weekend,
+            "SessionCodes": sorted(codes_seen),
+            "EventName": event_name,
+            "CacheSlug": cache_slug,
+            "SessionSource": "cache" if meeting_key in cached_session_keys else "api",
+        })
 
-        calendar = pd.DataFrame(records)
-        if calendar.empty:
-            logger.warning(f"No meetings constructed for year {year}")
-            return calendar
+        calendar_metadata[meeting_key] = {
+            "cache_slug": cache_slug,
+            "is_race_weekend": is_race_weekend,
+            "session_codes": sorted(codes_seen),
+            "session_source": "cache" if meeting_key in cached_session_keys else "api",
+        }
 
-        logger.info(
-            "Loaded %s meetings for %s (races=%s, tests=%s)",
-            len(calendar),
-            year,
-            calendar["IsRaceWeekend"].sum(),
-            (~calendar["IsRaceWeekend"]).sum(),
-        )
+    calendar = pd.DataFrame(records)
+    if calendar.empty:
+        logger.warning(f"No meetings constructed for year {year}")
         return calendar
 
-    except Exception as e:
-        logger.error(f"Error loading calendar for {year}: {e}")
-        return pd.DataFrame()
+    calendar = calendar.sort_values("EventDate")
+
+    logger.info(
+        "Loaded %s meetings for %s (races=%s, tests=%s)",
+        len(calendar),
+        year,
+        calendar["IsRaceWeekend"].sum(),
+        (~calendar["IsRaceWeekend"]).sum(),
+    )
+
+    _CALENDAR_CACHE[year] = calendar
+    _CALENDAR_METADATA[year] = calendar_metadata
+    return calendar
 
 
 def get_available_sessions(
@@ -2536,51 +2966,54 @@ def update_sessions(circuit_key, year, current_session):
     force_clear = triggered_id == 'circuit-selector'
     
     try:
-        # meeting_key is now the circuit_key value from dropdown
         meeting_key = circuit_key
-        
-        # Get sessions for this meeting from OpenF1
-        sessions_params = {"year": year, "meeting_key": meeting_key}
-        sessions = openf1_provider._request("sessions", sessions_params)
-        
-        if not sessions:
-            logger.warning(f"No sessions found for meeting_key={meeting_key}, year={year}")
-            return [], None
-        
-        # Create session options from OpenF1 data
-        session_map = {
-            'Practice 1': 'P1',
-            'Practice 2': 'P2',
-            'Practice 3': 'P3',
-            'Qualifying': 'Q',
-            'Sprint': 'S',
-            'Sprint Qualifying': 'SQ',
-            'Sprint Shootout': 'SS',
-            'Race': 'R'
-        }
-        
-        session_options = []
-        for session in sessions:
-            session_name = session.get('session_name', '')
-            session_type = session_map.get(session_name, session_name)
-            session_options.append({
-                'label': session_name,
-                'value': session_type
-            })
-        
-        # When circuit changes, clear session and let user select
+
+        cached_sessions: Optional[List[Dict[str, Any]]] = None
+        try:
+            cached_sessions = _load_cached_session_list(int(year), int(meeting_key))
+        except (TypeError, ValueError):
+            cached_sessions = None
+
+        if cached_sessions is not None:
+            sessions = cached_sessions
+            logger.info(
+                "Loaded %s sessions for meeting_key=%s from cache",
+                len(sessions),
+                meeting_key,
+            )
+        else:
+            sessions_params = {"year": year, "meeting_key": meeting_key}
+            sessions = openf1_provider._request("sessions", sessions_params)
+            if not sessions:
+                logger.warning(
+                    "No sessions found for meeting_key=%s year=%s",
+                    meeting_key,
+                    year,
+                )
+                return [], None
+
+        session_options = _build_session_selector_options(sessions)
         session_values = [opt['value'] for opt in session_options]
+
         if force_clear:
-            logger.info(f"Circuit changed, clearing session selection. Found {len(session_options)} sessions for meeting_key={meeting_key}")
+            logger.info(
+                "Circuit changed, clearing session selection. Found %s sessions for meeting_key=%s",
+                len(session_options),
+                meeting_key,
+            )
             default_value = None
         elif current_session and current_session in session_values:
             default_value = current_session
         else:
-            default_value = None  # Don't auto-select, let user choose
-        
-        logger.info(f"Found {len(session_options)} sessions for meeting_key={meeting_key}")
+            default_value = None
+
+        logger.info(
+            "Session selector populated with %s options for meeting_key=%s",
+            len(session_options),
+            meeting_key,
+        )
         return session_options, default_value
-    
+
     except Exception as e:
         logger.error(f"Error updating sessions: {e}")
         return [], None
@@ -2736,95 +3169,37 @@ def update_cache_sessions(meeting_key, year):
         ]
         return options, 'R'
 
-    sessions_params = {"year": year, "meeting_key": meeting_key}
-    sessions = openf1_provider._request("sessions", sessions_params)
-    if not sessions:
-        return [], None
+    cached_sessions: Optional[List[Dict[str, Any]]] = None
+    try:
+        cached_sessions = _load_cached_session_list(int(year), int(meeting_key))
+    except (TypeError, ValueError):
+        cached_sessions = None
 
-    session_map = {
-        'Practice 1': 'P1',
-        'Practice 2': 'P2',
-        'Practice 3': 'P3',
-        'Qualifying': 'Q',
-        'Sprint': 'S',
-        'Sprint Qualifying': 'SQ',
-        'Sprint Shootout': 'SS',
-        'Race': 'R',
-    }
-    value_to_label = {
-        'P1': 'Practice 1',
-        'P2': 'Practice 2',
-        'P3': 'Practice 3',
-        'FP1': 'Practice 1',
-        'FP2': 'Practice 2',
-        'FP3': 'Practice 3',
-        'Q': 'Qualifying',
-        'SQ': 'Sprint Qualifying',
-        'SS': 'Sprint Shootout',
-        'S': 'Sprint',
-        'SPRINT': 'Sprint',
-        'R': 'Race',
-        'RACE': 'Race',
-    }
+    if cached_sessions is not None:
+        sessions = cached_sessions
+        logger.info(
+            "Loaded %s sessions for meeting_key=%s from cache",
+            len(sessions),
+            meeting_key,
+        )
+    else:
+        sessions_params = {"year": year, "meeting_key": meeting_key}
+        sessions = openf1_provider._request("sessions", sessions_params)
+        if not sessions:
+            logger.warning(
+                "No sessions found for meeting_key=%s year=%s",
+                meeting_key,
+                year,
+            )
+            return [], None
 
-    options: List[Dict[str, str]] = []
-    seen_values: Set[str] = set()
-
-    for session in sessions:
-        session_name = str(session.get('session_name', '') or '')
-        session_type_raw = session.get('session_type') or session.get('session_code')
-        if isinstance(session_type_raw, str):
-            code = session_type_raw.upper()
-        elif session_type_raw is not None:
-            code = str(session_type_raw).upper()
-        else:
-            code = session_map.get(session_name, session_name).upper()
-
-        normalized_code = code.upper()
-
-        label = value_to_label.get(normalized_code)
-        if label is None:
-            name_lower = session_name.lower()
-            if 'practice' in name_lower:
-                if '1' in name_lower:
-                    label = 'Practice 1'
-                    normalized_code = 'P1'
-                elif '2' in name_lower:
-                    label = 'Practice 2'
-                    normalized_code = 'P2'
-                elif '3' in name_lower:
-                    label = 'Practice 3'
-                    normalized_code = 'P3'
-                else:
-                    label = 'Practice'
-            elif 'qualifying' in name_lower and 'shootout' in name_lower:
-                label = 'Sprint Shootout'
-                normalized_code = 'SS'
-            elif 'qualifying' in name_lower:
-                if 'sprint' in name_lower:
-                    label = 'Sprint Qualifying'
-                    normalized_code = 'SQ'
-                else:
-                    label = 'Qualifying'
-                    normalized_code = 'Q'
-            elif 'sprint' in name_lower:
-                label = 'Sprint'
-                normalized_code = 'S'
-            elif 'race' in name_lower:
-                label = 'Race'
-                normalized_code = 'R'
-            else:
-                label = session_name or normalized_code.title()
-
-        if normalized_code in seen_values:
-            continue
-        seen_values.add(normalized_code)
-
-        options.append({'label': label, 'value': normalized_code})
-
+    options = _build_session_selector_options(sessions)
     default_value = None
     if options:
-        race_option = next((opt['value'] for opt in options if opt['value'] in {'R', 'RACE'}), None)
+        race_option = next(
+            (opt['value'] for opt in options if opt['value'] in {'R', 'RACE'}),
+            None,
+        )
         default_value = race_option or options[0]['value']
 
     return options, default_value
@@ -3284,30 +3659,54 @@ def update_drivers(session, circuit_key, year):
     
     # circuit_key is now the meeting_key from OpenF1
     meeting_key = circuit_key
+    try:
+        meeting_key_int = int(meeting_key)
+    except (TypeError, ValueError):
+        logger.error("Invalid meeting_key received for driver update: %s", meeting_key)
+        return dcc.Loading(
+            dcc.Dropdown(
+                id='driver-selector',
+                options=[],
+                value=None,
+                placeholder="Session not available",
+                className="mb-2",
+                clearable=True
+            ),
+            type="circle",
+            color="#e10600"
+        ), {'loaded': False, 'track_map': {'ready': False, 'error': None, 'params': None}}
+    try:
+        year_int = int(year)
+    except (TypeError, ValueError):
+        logger.error("Invalid year received for driver update: %s", year)
+        return dcc.Loading(
+            dcc.Dropdown(
+                id='driver-selector',
+                options=[],
+                value=None,
+                placeholder="Session not available",
+                className="mb-2",
+                clearable=True
+            ),
+            type="circle",
+            color="#e10600"
+        ), {'loaded': False, 'track_map': {'ready': False, 'error': None, 'params': None}}
     
     try:
-        logger.info(f"Loading drivers for year={year}, meeting_key={meeting_key}, session={session}")
-        
-        # Get session_key from OpenF1 using meeting_key and session type
-        session_map_reverse = {
-            'P1': 'Practice 1',
-            'P2': 'Practice 2',
-            'P3': 'Practice 3',
-            'Q': 'Qualifying',
-            'S': 'Sprint',
-            'SQ': 'Sprint Qualifying',
-            'SS': 'Sprint Shootout',
-            'R': 'Race'
-        }
-        
-        session_name = session_map_reverse.get(session.upper(), session)
-        
-        # Get session info from OpenF1
-        sessions_params = {"year": year, "meeting_key": meeting_key, "session_name": session_name}
-        sessions = openf1_provider._request("sessions", sessions_params)
-        
-        if not sessions:
-            logger.error(f"No session found for meeting_key={meeting_key}, session={session_name}")
+        logger.info(
+            "Loading drivers for year=%s, meeting_key=%s, session=%s",
+            year_int,
+            meeting_key_int,
+            session,
+        )
+
+        session_info = _resolve_session_payload(year_int, meeting_key_int, session)
+        if not session_info:
+            logger.error(
+                "No session payload found for meeting_key=%s, session_code=%s",
+                meeting_key_int,
+                session,
+            )
             return dcc.Loading(
                 dcc.Dropdown(
                     id='driver-selector',
@@ -3320,11 +3719,26 @@ def update_drivers(session, circuit_key, year):
                 type="circle",
                 color="#e10600"
             ), {'loaded': False, 'track_map': {'ready': False, 'error': None, 'params': None}}
-        
-        session_key = sessions[0].get('session_key')
-        
-        if not session_key:
-            logger.error(f"No session_key found for meeting_key={meeting_key}, session={session_name}")
+
+        raw_session_key = _get_session_key(session_info)
+        session_key_int: Optional[int]
+        try:
+            session_key_int = int(raw_session_key) if raw_session_key is not None else None
+        except (TypeError, ValueError):
+            session_key_int = None
+
+        if isinstance(session_info, dict):
+            calendar_meta = _CALENDAR_METADATA.get(year_int, {}).get(meeting_key_int)
+            cache_slug = (calendar_meta or {}).get("cache_slug")
+            if cache_slug and not session_info.get("cache_slug"):
+                session_info["cache_slug"] = cache_slug
+
+        if session_key_int is None:
+            logger.error(
+                "Resolved session lacks session_key for meeting_key=%s, session_code=%s",
+                meeting_key_int,
+                session,
+            )
             return dcc.Loading(
                 dcc.Dropdown(
                     id='driver-selector',
@@ -3336,22 +3750,33 @@ def update_drivers(session, circuit_key, year):
                 ),
                 type="circle",
                 color="#e10600"
-            ), {'loaded': False, 'track_map': {'ready': False, 'error': None, 'params': None}}
-        
-        # Get full session_info
-        session_info = sessions[0]
-        
-        # DEBUG: Log session_info keys and meeting_name
-        logger.info(f"Session info keys: {session_info.keys()}")
-        logger.info(f"Meeting name from session_info: {session_info.get('meeting_name', 'NOT_FOUND')}")
-        logger.info(f"Session name from session_info: {session_info.get('session_name', 'NOT_FOUND')}")
-        
+                ), {'loaded': False, 'track_map': {'ready': False, 'error': None, 'params': None}}
+
+        logger.info(
+            "Session info keys: %s",
+            list(session_info.keys()),
+        )
+        logger.info(
+            "Meeting name from session_info: %s",
+            session_info.get('meeting_name', 'NOT_FOUND'),
+        )
+        logger.info(
+            "Session name from session_info: %s",
+            session_info.get('session_name', 'NOT_FOUND'),
+        )
+
+        resolved_session_name = (
+            session_info.get('session_name')
+            or session_info.get('SessionName')
+            or _SESSION_CODE_TO_LABEL.get(str(session).upper(), session)
+        )
+
         # Load session using SessionAdapter
-        logger.info(f"Loading session with session_key={session_key}")
+        logger.info("Loading session with session_key=%s", session_key_int)
         session_obj = SessionAdapter(
             provider=openf1_provider,
             session_info=session_info,
-            session_key=session_key
+            session_key=session_key_int
         )
         
         try:
@@ -3674,9 +4099,9 @@ def update_drivers(session, circuit_key, year):
             'year': year,
             'meeting_key': meeting_key,
             'session': session,
-            'session_key': session_key,
+            'session_key': session_key_int,
             'race_name': session_info.get('meeting_name', 'Race'),
-            'session_type': session_name,
+            'session_type': resolved_session_name,
             'drivers': {
                 opt['value']: opt['label'] for opt in driver_options
             },
@@ -5618,7 +6043,7 @@ def update_dashboards(
                                     html.Span(
                                         initial_lap_label,
                                         id="track-map-lap-label",
-                                        className="fw-semibold text-light",
+                                        className="fw-semibold text-white",
                                     ),
                                     className="mt-2 text-center",
                                     style={'fontSize': '0.95rem'}

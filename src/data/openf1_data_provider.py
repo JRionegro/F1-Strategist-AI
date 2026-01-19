@@ -6,16 +6,27 @@ and live race monitoring, eliminating dual-API complexity.
 """
 
 import logging
-from typing import Optional, List, Dict, Any
+import re
 from datetime import datetime, timedelta
+from pathlib import Path
+from time import sleep
+from typing import Any, Dict, List, Optional, Sequence
+
 import pandas as pd
 import requests
-from time import sleep
 
 from src.utils.logging_config import get_logger, LogCategory
 
+from .cache_config import DataType, DEFAULT_CACHE_CONFIG
+
 # Use categorized logger for API/data operations
 logger = get_logger(LogCategory.DATA)
+
+
+def _slugify(value: str) -> str:
+    """Return a filesystem-safe slug representation."""
+    normalized = re.sub(r"[^a-z0-9]+", "_", value.lower())
+    return normalized.strip("_") or "value"
 
 
 class OpenF1DataProvider:
@@ -43,11 +54,23 @@ class OpenF1DataProvider:
         self.rate_limit_delay = rate_limit_delay
         self.verify_ssl = verify_ssl
         self._last_request_time = None
+        self._session_metadata: Dict[int, Dict[str, Any]] = {}
+        self._cached_race_dirs: Dict[int, Path] = {}
         logger.info("OpenF1DataProvider initialized")
         if not verify_ssl:
             # Suppress InsecureRequestWarning when SSL verification is disabled
             import urllib3
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    def register_session_metadata(self, session_key: Optional[int], metadata: Dict[str, Any]) -> None:
+        """Store session metadata to resolve cache paths for subsequent requests."""
+        if session_key is None:
+            return
+        try:
+            key = int(session_key)
+        except (TypeError, ValueError):
+            return
+        self._session_metadata[key] = dict(metadata)
 
     def _rate_limit(self) -> None:
         """Enforce rate limiting between requests."""
@@ -209,13 +232,22 @@ class OpenF1DataProvider:
         Returns:
             DataFrame with driver information
         """
+        cached_df = self._load_cached_race_dataframe(session_key, DataType.DRIVER_INFO)
+        if cached_df is not None and not cached_df.empty:
+            logger.info(
+                "Loaded %s drivers from cache for session %s",
+                len(cached_df),
+                session_key,
+            )
+            return cached_df
+
         params = {"session_key": session_key}
         drivers = self._request("drivers", params)
-        
+
         if not drivers:
             logger.warning(f"No drivers found for session {session_key}")
             return pd.DataFrame()
-            
+
         df = pd.DataFrame(drivers)
         
         # Normalize column names for compatibility
@@ -232,41 +264,279 @@ class OpenF1DataProvider:
         
         return df
 
-    def get_laps(
-        self, 
+    # ------------------------------------------------------------------
+    # Cache helpers
+    # ------------------------------------------------------------------
+
+    def _load_cached_race_dataframe(
+        self,
         session_key: int,
-        driver_number: Optional[int] = None
+        data_type: DataType,
+    ) -> Optional[pd.DataFrame]:
+        """Return cached race-level dataframe for the session when available."""
+        metadata = self._session_metadata.get(int(session_key))
+        if metadata is None:
+            return None
+
+        race_dir = self._find_cached_race_directory(int(session_key), metadata)
+        if race_dir is None:
+            return None
+
+        extension = DEFAULT_CACHE_CONFIG.get_file_extension()
+        cache_file = race_dir / f"{data_type.value}{extension}"
+        if not cache_file.exists():
+            return None
+
+        cached_frame = self._read_cache_file(cache_file)
+        if cached_frame is None or cached_frame.empty:
+            return None
+
+        # Ensure meeting/session keys propagate from cache when missing
+        if "meeting_key" not in cached_frame.columns and metadata.get("meeting_key") is not None:
+            cached_frame = cached_frame.assign(meeting_key=metadata.get("meeting_key"))
+        if "session_key" not in cached_frame.columns:
+            cached_frame = cached_frame.assign(session_key=int(session_key))
+        return cached_frame
+
+    def _find_cached_race_directory(
+        self,
+        session_key: int,
+        metadata: Dict[str, Any],
+    ) -> Optional[Path]:
+        """Resolve the cache directory matching the session metadata."""
+        cached = self._cached_race_dirs.get(session_key)
+        if cached is not None and cached.exists():
+            return cached
+
+        year = self._extract_session_year(metadata)
+        date_str = self._extract_session_date(metadata)
+        if year is None or date_str is None:
+            return None
+
+        year_dir = DEFAULT_CACHE_CONFIG.races_dir / str(year)
+        if not year_dir.exists():
+            return None
+
+        slug_candidates = self._collect_slug_candidates(metadata, date_str)
+        for slug in slug_candidates:
+            race_dir = year_dir / slug
+            if race_dir.exists():
+                self._cached_race_dirs[session_key] = race_dir
+                return race_dir
+
+        date_matches = sorted(path for path in year_dir.glob(f"{date_str}_*") if path.is_dir())
+        if len(date_matches) == 1:
+            self._cached_race_dirs[session_key] = date_matches[0]
+            return date_matches[0]
+
+        if date_matches:
+            meeting_key = str(metadata.get("meeting_key") or metadata.get("MeetingKey") or "").lower()
+            circuit_key = str(metadata.get("circuit_key") or metadata.get("CircuitKey") or "").lower()
+            identifiers = {value for value in (meeting_key, circuit_key) if value}
+            for candidate in date_matches:
+                lowered = candidate.name.lower()
+                if any(identifier in lowered for identifier in identifiers):
+                    self._cached_race_dirs[session_key] = candidate
+                    return candidate
+            selected = date_matches[0]
+            self._cached_race_dirs[session_key] = selected
+            return selected
+
+        return None
+
+    @staticmethod
+    def _extract_session_year(metadata: Dict[str, Any]) -> Optional[int]:
+        """Try to coerce the session year from metadata fields."""
+        year_candidates = [metadata.get("year"), metadata.get("Year")]
+        for candidate in year_candidates:
+            if candidate is None:
+                continue
+            try:
+                return int(candidate)
+            except (TypeError, ValueError):
+                continue
+
+        date_text = metadata.get("date_start") or metadata.get("session_start") or metadata.get("meeting_start")
+        if date_text:
+            parsed = pd.to_datetime(date_text, format="mixed", errors="coerce")
+            if pd.notna(parsed):
+                return int(parsed.year)
+        return None
+
+    @staticmethod
+    def _extract_session_date(metadata: Dict[str, Any]) -> Optional[str]:
+        """Return ISO date string for the session start."""
+        date_text = metadata.get("date_start") or metadata.get("session_start") or metadata.get("meeting_start")
+        if not date_text:
+            year_value = metadata.get("year") or metadata.get("Year")
+            if year_value is None:
+                return None
+            try:
+                return str(int(year_value))
+            except (TypeError, ValueError):
+                return None
+
+        parsed = pd.to_datetime(date_text, format="mixed", errors="coerce")
+        if pd.isna(parsed):
+            return None
+        return parsed.date().isoformat()
+
+    def _collect_slug_candidates(self, metadata: Dict[str, Any], date_str: str) -> List[str]:
+        """Build possible cache directory slugs for the session."""
+        candidate_slugs: List[str] = []
+
+        raw_cache_slug = metadata.get("cache_slug") or metadata.get("CacheSlug")
+        if isinstance(raw_cache_slug, str) and raw_cache_slug.strip():
+            normalized_slug = raw_cache_slug.strip()
+            if normalized_slug.startswith(date_str):
+                candidate_slugs.append(normalized_slug)
+            else:
+                candidate_slugs.append(f"{date_str}_{_slugify(normalized_slug)}")
+
+        name_keys = [
+            ("meeting_name", "MeetingName"),
+            ("official_name", "OfficialName"),
+            ("event_name", "EventName"),
+            ("location", "Location"),
+            ("circuit_short_name", "CircuitShortName"),
+            ("country_name", "CountryName", "Country"),
+        ]
+        seen_slugs: set[str] = set(candidate_slugs)
+        for aliases in name_keys:
+            value = self._first_metadata_value(metadata, aliases)
+            if not value:
+                continue
+            slug = f"{date_str}_{_slugify(value)}"
+            if slug not in seen_slugs:
+                candidate_slugs.append(slug)
+                seen_slugs.add(slug)
+
+        meeting_key = metadata.get("meeting_key") or metadata.get("MeetingKey")
+        if meeting_key is not None:
+            slug = f"{date_str}_{_slugify(str(meeting_key))}"
+            if slug not in seen_slugs:
+                candidate_slugs.append(slug)
+
+        return candidate_slugs
+
+    @staticmethod
+    def _first_metadata_value(metadata: Dict[str, Any], keys: tuple[str, ...]) -> Optional[str]:
+        """Return the first non-empty metadata value for the provided keys."""
+        for key in keys:
+            value = metadata.get(key)
+            if value is None:
+                continue
+            text = str(value).strip()
+            if text:
+                return text
+        return None
+
+    @staticmethod
+    def _read_cache_file(file_path: Path) -> Optional[pd.DataFrame]:
+        """Read cached dataframe from disk handling parquet/csv formats."""
+        try:
+            if file_path.suffix == ".parquet":
+                return pd.read_parquet(file_path)
+            if file_path.suffix == ".csv":
+                return pd.read_csv(file_path)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to read cache file %s: %s", file_path, exc)
+        return None
+
+    @staticmethod
+    def _filter_by_driver(
+        data_frame: pd.DataFrame,
+        driver_number: Optional[int],
     ) -> pd.DataFrame:
-        """
-        Get lap data for a session.
-        
-        Args:
-            session_key: OpenF1 session identifier
-            driver_number: Filter by specific driver (optional)
-            
-        Returns:
-            DataFrame with lap times and metadata
-        """
+        """Return dataframe filtered by driver when driver data is requested."""
+        if driver_number is None:
+            return data_frame
+        if "DriverNumber" not in data_frame.columns:
+            return data_frame
+        mask = data_frame["DriverNumber"] == driver_number
+        return data_frame.loc[mask].copy()
+
+    @staticmethod
+    def _coerce_datetime_columns(
+        data_frame: pd.DataFrame,
+        columns: Sequence[str],
+    ) -> pd.DataFrame:
+        """Ensure the provided columns are timezone-aware datetimes when present."""
+        if not columns:
+            return data_frame
+        coerced = data_frame.copy()
+        for column in columns:
+            if column in coerced.columns:
+                coerced[column] = pd.to_datetime(
+                    coerced[column],
+                    format="mixed",
+                    errors="coerce",
+                )
+        return coerced
+
+    @staticmethod
+    def _filter_by_time_range(
+        data_frame: pd.DataFrame,
+        column: str,
+        start: Optional[str],
+        end: Optional[str],
+    ) -> pd.DataFrame:
+        """Filter dataframe rows by ISO datetime range if both parameters are provided."""
+        if column not in data_frame.columns:
+            return data_frame
+
+        filtered = data_frame.copy()
+        if start:
+            start_dt = pd.to_datetime(start, format="mixed", errors="coerce")
+            if pd.notna(start_dt):
+                filtered = filtered.loc[filtered[column] >= start_dt]
+        if end:
+            end_dt = pd.to_datetime(end, format="mixed", errors="coerce")
+            if pd.notna(end_dt):
+                filtered = filtered.loc[filtered[column] <= end_dt]
+        return filtered
+
+    def get_laps(
+        self,
+        session_key: int,
+        driver_number: Optional[int] = None,
+    ) -> pd.DataFrame:
+        """Return lap data for a session optionally filtered by driver."""
+        cached_df = self._load_cached_race_dataframe(
+            session_key,
+            DataType.LAP_TIMES,
+        )
+        if cached_df is not None:
+            df = cached_df.copy()
+            df = self._filter_by_driver(df, driver_number)
+            df = self._coerce_datetime_columns(df, ["LapStartTime", "LapEndTime"])
+            logger.info(
+                "Loaded %s laps for session %s from cache",
+                len(df),
+                session_key,
+            )
+            return df.reset_index(drop=True)
+
         params = {"session_key": session_key}
         if driver_number:
             params["driver_number"] = driver_number
-            
+
         laps = self._request("laps", params)
-        
+
         if not laps:
             logger.warning(f"No laps found for session {session_key}")
             return pd.DataFrame()
-            
+
         df = pd.DataFrame(laps)
-        
+
         # Convert timestamps to datetime
         if "date_start" in df.columns:
-            df["date_start"] = pd.to_datetime(df["date_start"], format='mixed')
-        
+            df["date_start"] = pd.to_datetime(df["date_start"], format="mixed")
+
         # Calculate lap duration in seconds
         if "lap_duration" in df.columns:
             df["lap_duration_seconds"] = df["lap_duration"]
-        
+
         # Normalize column names
         column_mapping = {
             "driver_number": "DriverNumber",
@@ -278,13 +548,13 @@ class OpenF1DataProvider:
         }
         
         df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
-        
+
         # Add LapEndTime calculation
         if "LapStartTime" in df.columns and "LapTime_seconds" in df.columns:
             df["LapEndTime"] = df["LapStartTime"] + pd.to_timedelta(df["LapTime_seconds"], unit="s")
-        
+
         logger.info(f"Loaded {len(df)} laps for session {session_key}")
-        
+
         return df
 
     def get_positions(
@@ -302,6 +572,18 @@ class OpenF1DataProvider:
         Returns:
             DataFrame with position updates
         """
+        cached_df = self._load_cached_race_dataframe(session_key, DataType.POSITIONS)
+        if cached_df is not None:
+            df = cached_df.copy()
+            df = self._filter_by_driver(df, driver_number)
+            df = self._coerce_datetime_columns(df, ["Timestamp"])
+            logger.info(
+                "Loaded %s position updates for session %s from cache",
+                len(df),
+                session_key,
+            )
+            return df.reset_index(drop=True)
+
         params = {"session_key": session_key}
         if driver_number:
             params["driver_number"] = driver_number
@@ -345,6 +627,17 @@ class OpenF1DataProvider:
         Returns:
             DataFrame with stint/tire data
         """
+        cached_df = self._load_cached_race_dataframe(session_key, DataType.TIRE_STRATEGY)
+        if cached_df is not None:
+            df = cached_df.copy()
+            df = self._filter_by_driver(df, driver_number)
+            logger.info(
+                "Loaded %s stints for session %s from cache",
+                len(df),
+                session_key,
+            )
+            return df.reset_index(drop=True)
+
         params = {"session_key": session_key}
         if driver_number:
             params["driver_number"] = driver_number
@@ -385,6 +678,17 @@ class OpenF1DataProvider:
         Returns:
             DataFrame with race control events
         """
+        cached_df = self._load_cached_race_dataframe(session_key, DataType.RACE_CONTROL)
+        if cached_df is not None:
+            df = cached_df.copy()
+            df = self._coerce_datetime_columns(df, ["Time"])
+            logger.info(
+                "Loaded %s race control messages for session %s from cache",
+                len(df),
+                session_key,
+            )
+            return df.reset_index(drop=True)
+
         params = {"session_key": session_key}
         messages = self._request("race_control", params)
         
@@ -425,6 +729,18 @@ class OpenF1DataProvider:
         Returns:
             DataFrame with pit stop information
         """
+        cached_df = self._load_cached_race_dataframe(session_key, DataType.PIT_STOPS)
+        if cached_df is not None:
+            df = cached_df.copy()
+            df = self._filter_by_driver(df, driver_number)
+            df = self._coerce_datetime_columns(df, ["Time"])
+            logger.info(
+                "Loaded %s pit stops for session %s from cache",
+                len(df),
+                session_key,
+            )
+            return df.reset_index(drop=True)
+
         params = {"session_key": session_key}
         if driver_number:
             params["driver_number"] = driver_number
@@ -466,6 +782,17 @@ class OpenF1DataProvider:
         Returns:
             DataFrame with weather conditions
         """
+        cached_df = self._load_cached_race_dataframe(session_key, DataType.WEATHER)
+        if cached_df is not None:
+            df = cached_df.copy()
+            df = self._coerce_datetime_columns(df, ["Time"])
+            logger.info(
+                "Loaded %s weather records for session %s from cache",
+                len(df),
+                session_key,
+            )
+            return df.reset_index(drop=True)
+
         params = {"session_key": session_key}
         weather = self._request("weather", params)
         
@@ -510,6 +837,18 @@ class OpenF1DataProvider:
         Returns:
             DataFrame with interval data
         """
+        cached_df = self._load_cached_race_dataframe(session_key, DataType.INTERVALS)
+        if cached_df is not None:
+            df = cached_df.copy()
+            df = self._filter_by_driver(df, driver_number)
+            df = self._coerce_datetime_columns(df, ["Timestamp"])
+            logger.info(
+                "Loaded %s interval records for session %s from cache",
+                len(df),
+                session_key,
+            )
+            return df.reset_index(drop=True)
+
         params = {"session_key": session_key}
         if driver_number:
             params["driver_number"] = driver_number
@@ -559,6 +898,19 @@ class OpenF1DataProvider:
         Returns:
             DataFrame with car telemetry data
         """
+        cached_df = self._load_cached_race_dataframe(session_key, DataType.CAR_DATA)
+        if cached_df is not None:
+            df = cached_df.copy()
+            df = self._filter_by_driver(df, driver_number)
+            df = self._coerce_datetime_columns(df, ["Timestamp"])
+            df = self._filter_by_time_range(df, "Timestamp", date_start, date_end)
+            logger.info(
+                "Loaded %s car data records for session %s from cache",
+                len(df),
+                session_key,
+            )
+            return df.reset_index(drop=True)
+
         params: Dict[str, Any] = {"session_key": session_key}
         if driver_number:
             params["driver_number"] = driver_number

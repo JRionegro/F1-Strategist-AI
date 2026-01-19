@@ -41,6 +41,8 @@ class SessionAdapter:
         self.provider = provider
         self.session_info = session_info
         self.session_key = session_key
+
+        self.provider.register_session_metadata(session_key, session_info)
         
         # Cache loaded data
         self._laps = None

@@ -6,6 +6,7 @@ Shows live positions, gaps, tire compounds using Intervals API for accuracy.
 
 import logging
 import math
+import re
 from datetime import datetime
 from numbers import Real
 from typing import Any, Dict, Optional
@@ -889,6 +890,34 @@ class RaceOverviewDashboard:
                 className="text-center p-5",
             )
 
+    @staticmethod
+    def _parse_timing_value(value: Any) -> Optional[float]:
+        """Convert timing values (gap/interval) to floats when possible."""
+        if value is None:
+            return None
+        if isinstance(value, Real) and not isinstance(value, bool):
+            if isinstance(value, float) and math.isnan(value):
+                return None
+            return float(value)
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return None
+            upper = stripped.upper()
+            if upper in {"-", "PIT", "OUT", "IN", "RET", "DNF", "DSQ"}:
+                return None
+            cleaned = stripped.replace(",", ".")
+            cleaned = cleaned.lstrip("+")
+            cleaned = cleaned.replace("−", "-")
+            cleaned = cleaned.replace("s", "").replace("S", "")
+            match = re.search(r"-?\d+(?:\.\d+)?", cleaned)
+            if match:
+                try:
+                    return float(match.group())
+                except ValueError:
+                    return None
+        return None
+
     def _build_leaderboard_table(
         self,
         leaderboard_data: pd.DataFrame,
@@ -926,24 +955,24 @@ class RaceOverviewDashboard:
             retired_status = row.get('RetiredStatus') or 'DNF'
 
             # Format gaps
-            gap_to_leader = row.get('GapToLeader', None)
+            gap_to_leader = self._parse_timing_value(row.get('GapToLeader'))
             if is_retired:
                 gap_str = retired_status
             elif position == 1:
                 gap_str = "Leader"
-            elif gap_to_leader is None or pd.isna(gap_to_leader):
+            elif gap_to_leader is None:
                 gap_str = "-"
             elif abs(gap_to_leader) < 0.001:  # Very close to 0
                 gap_str = "-"
             else:
                 gap_str = f"+{gap_to_leader:.3f}s"
 
-            interval = row.get('Interval', None)
+            interval = self._parse_timing_value(row.get('Interval'))
             if is_retired:
                 interval_str = "-"
             elif position == 1:
                 interval_str = "-"
-            elif interval is None or pd.isna(interval):
+            elif interval is None:
                 interval_str = "-"
             elif abs(interval) < 0.001:  # Very close to 0
                 interval_str = "-"
