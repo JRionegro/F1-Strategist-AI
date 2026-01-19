@@ -279,6 +279,73 @@ class FastF1PositionProvider:
         size_mb = cache_path.stat().st_size / (1024 * 1024)
         logger.info("Saved position cache (%.2f MB): %s", size_mb, cache_path.name)
 
+    def get_session_time_offset(self) -> float:
+        """Return the cached session time offset in seconds."""
+        return float(self._session_time_offset)
+
+    def get_time_bounds(self) -> Tuple[float, float]:
+        """Return the minimum and maximum cached session timestamps."""
+        if self._time_bounds == (0.0, 0.0):
+            return self._calculate_time_bounds()
+        return self._time_bounds
+
+    def clamp_session_time(self, elapsed_time: float) -> float:
+        """Clamp an elapsed simulation time to the cached session timeline."""
+        min_time, max_time = self.get_time_bounds()
+        adjusted_time = float(elapsed_time) + self._session_time_offset
+        return float(np.clip(adjusted_time, min_time, max_time))
+
+    def get_lap_trajectories(
+        self,
+        lap_number: int,
+        driver_numbers: Optional[List[int]] = None,
+    ) -> Dict[str, Dict[str, List[float]]]:
+        """Return raw lap trajectories for the provided drivers."""
+        if self.positions_df is None or self.positions_df.empty:
+            return {}
+
+        lap_df = self.positions_df
+        if "lap_number" in lap_df.columns:
+            try:
+                lap_mask = lap_df["lap_number"].astype(int) == int(lap_number)
+            except Exception:  # noqa: BLE001
+                lap_mask = lap_df["lap_number"] == lap_number
+            lap_df = lap_df.loc[lap_mask]
+
+        if lap_df.empty:
+            return {}
+
+        allowed_drivers: Optional[set[str]]
+        if driver_numbers is None:
+            allowed_drivers = None
+        else:
+            allowed_drivers = {str(number) for number in driver_numbers}
+
+        trajectories: Dict[str, Dict[str, List[float]]] = {}
+        grouped = lap_df.groupby("driver_number")
+        for driver_id, driver_df in grouped:
+            driver_key = str(driver_id)
+            if allowed_drivers is not None and driver_key not in allowed_drivers:
+                continue
+
+            sorted_df = driver_df.sort_values("time")
+            time_values = sorted_df["time"].astype(float).tolist()
+            x_values = sorted_df["x"].astype(float).tolist()
+            y_values = sorted_df["y"].astype(float).tolist()
+            if not time_values:
+                continue
+
+            lap_values = sorted_df["lap_number"].astype(float).tolist()
+            lap_value = lap_values[-1] if lap_values else float(lap_number)
+            trajectories[driver_key] = {
+                "time": time_values,
+                "x": x_values,
+                "y": y_values,
+                "lap": [float(lap_value)],
+            }
+
+        return trajectories
+
     def get_driver_abbreviation(self, driver_number: int) -> Optional[str]:
         return self._driver_mapping.get(driver_number)
 
@@ -327,12 +394,7 @@ class FastF1PositionProvider:
             logger.warning("Elapsed time not provided; unable to map positions")
             return {}
 
-        min_time, max_time = self._time_bounds
-        if max_time <= min_time:
-            min_time, max_time = self._calculate_time_bounds()
-
-        adjusted_time = float(elapsed_time) + self._session_time_offset
-        adjusted_time = max(min_time, min(adjusted_time, max_time))
+        adjusted_time = self.clamp_session_time(float(elapsed_time))
 
         positions: Dict[int, DriverPosition] = {}
         for driver_number in driver_numbers:

@@ -14,6 +14,7 @@ import math
 import threading
 import importlib
 import hashlib
+from bisect import bisect_left
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List, Tuple, Sequence, Set, Union, Mapping, cast
@@ -696,6 +697,7 @@ _track_map_focus_driver: Optional[int] = None
 _track_map_driver_laps: Dict[int, int] = {}
 _track_map_retirements: Dict[int, Dict[str, Any]] = {}
 _track_map_retirement_order: List[int] = []
+TRACK_MAP_TRAJECTORY_CACHE_LIMIT = 4
 
 
 def _extract_track_map_trace_offset(figure: Any) -> Optional[int]:
@@ -756,6 +758,95 @@ def _update_track_map_lap_cache(positions: Dict[int, Any]) -> None:
             lap_value = float(lap_raw)
             if math.isfinite(lap_value) and lap_value >= 1.0:
                 _track_map_driver_laps[driver_number] = int(lap_value)
+
+
+def _interpolate_cached_track_positions(
+    lap_payload: Optional[Dict[str, Any]],
+    driver_order: Sequence[int],
+    session_time: float,
+) -> Dict[int, Dict[str, Any]]:
+    """Convert cached lap trajectories into instantaneous marker positions."""
+    if not lap_payload or not isinstance(lap_payload, dict):
+        return {}
+
+    interpolated: Dict[int, Dict[str, Any]] = {}
+    for driver_number in driver_order:
+        driver_key = str(driver_number)
+        driver_payload = lap_payload.get(driver_key)
+        if not isinstance(driver_payload, dict):
+            continue
+
+        time_values = driver_payload.get("time")
+        x_values = driver_payload.get("x")
+        y_values = driver_payload.get("y")
+        if not isinstance(time_values, list) or not isinstance(x_values, list) or not isinstance(y_values, list):
+            continue
+        if not time_values:
+            continue
+
+        try:
+            insert_idx = bisect_left(time_values, session_time)
+        except TypeError:
+            continue
+
+        prev_idx = max(insert_idx - 1, 0)
+        next_idx = min(insert_idx, len(time_values) - 1)
+
+        try:
+            prev_time = float(time_values[prev_idx])
+            next_time = float(time_values[next_idx])
+            prev_x = float(x_values[prev_idx])
+            prev_y = float(y_values[prev_idx])
+            next_x = float(x_values[next_idx])
+            next_y = float(y_values[next_idx])
+        except (TypeError, ValueError):
+            continue
+
+        if next_time <= prev_time:
+            ratio = 0.0
+        else:
+            ratio = (session_time - prev_time) / (next_time - prev_time)
+            ratio = max(0.0, min(float(ratio), 1.0))
+
+        interpolated_time = prev_time + (next_time - prev_time) * ratio
+        interpolated_x = prev_x + (next_x - prev_x) * ratio
+        interpolated_y = prev_y + (next_y - prev_y) * ratio
+
+        previous_sample = {"time": prev_time, "x": prev_x, "y": prev_y}
+        next_sample = {"time": next_time, "x": next_x, "y": next_y}
+
+        lap_value_raw = driver_payload.get("lap")
+        lap_candidate = None
+        if isinstance(lap_value_raw, list) and lap_value_raw:
+            try:
+                lap_candidate = float(lap_value_raw[-1])
+            except (TypeError, ValueError):
+                lap_candidate = None
+        elif isinstance(lap_value_raw, Real):
+            lap_candidate = float(lap_value_raw)
+
+        if lap_candidate is not None and math.isfinite(lap_candidate):
+            lap_number = int(round(lap_candidate))
+        else:
+            lap_number = -1
+
+        interpolated[driver_number] = {
+            "x": interpolated_x,
+            "y": interpolated_y,
+            "z": 0.0,
+            "time": interpolated_time,
+            "query_time": session_time,
+            "previous_sample": previous_sample,
+            "next_sample": next_sample,
+            "lap_number": lap_number,
+        }
+
+    return interpolated
+
+
+def _default_track_map_trajectory_store() -> Dict[str, Any]:
+    """Return the baseline payload for the track map trajectory cache."""
+    return {"time_offset": 0.0, "time_bounds": [0.0, 0.0], "laps": {}}
 
 
 def _resolve_track_map_total_laps(session_payload: Optional[Dict[str, Any]]) -> Optional[int]:
@@ -2355,6 +2446,10 @@ app.layout = dbc.Container([
     dcc.Store(id='sidebar-visible-store', data=True),
     dcc.Store(id='simulation-time-store', data={'time': 0.0, 'timestamp': 0}),
     dcc.Store(id='current-lap-store', data={'lap': 1, 'total': 57}),  # For fast lap updates
+    dcc.Store(
+        id='track-map-trajectory-store',
+        data={'time_offset': 0.0, 'time_bounds': [0.0, 0.0], 'laps': {}},
+    ),
     dcc.Store(id='weather-last-update-store', data={'timestamp': 0, 'state': None}),
     
     # Telemetry comparison driver store
@@ -2496,27 +2591,33 @@ app.layout = dbc.Container([
         dbc.ModalBody([
             html.H5("🚀 Quick Start", className="mb-2"),
             html.Ul([
-                html.Li("Select Mode: Live or Simulation"),
-                html.Li("Set Context: Year, circuit, session, driver"),
-                html.Li("Choose Dashboards: Pick which views to display"),
-                html.Li("Start Analyzing: Use AI Assistant or explore data")
+                html.Li("Load a race via the year / event selectors and let the FastF1 cache warm up."),
+                html.Li("Choose Simulation mode to unlock the playback controls and track map dashboards."),
+                html.Li("Pick the dashboards you need from the sidebar; the layout updates immediately."),
+                html.Li("Press Play to drive the synchronized dashboards; use lap jump buttons for quick rewinds."),
             ], className="mb-3"),
-            
-            html.H5("🤖 AI Agents", className="mb-2"),
+
+            html.H5("📊 Core Dashboards", className="mb-2"),
             html.Ul([
-                html.Li("🎯 Strategy Agent: Race/qualifying strategy"),
-                html.Li("🌤️ Weather Agent: Meteorological analysis"),
-                html.Li("⚡ Performance Agent: Lap times & telemetry"),
-                html.Li("🚦 Race Control Agent: Flags & incidents"),
-                html.Li("🏁 Position Agent: Gaps & overtakes")
+                html.Li("Track Map: FastF1 telemetry with cached interpolation for smooth XY animation."),
+                html.Li("Race Overview: Leaderboard, stints, and driver focus with cached OpenF1 data."),
+                html.Li("Weather & Race Control: Real-time flags, incidents, and weather trends."),
+                html.Li("Telemetry Comparison: Overlay lap telemetry once drivers are selected."),
             ], className="mb-3"),
-            
-            html.H5("ℹ️ About", className="mb-2"),
-            html.P([
-                html.Strong("F1 Strategist AI v1.0.0"), html.Br(),
-                "Multi-agent F1 strategy assistant with real-time analysis.", html.Br(),
-                html.Small("Tech: Dash, Claude/Gemini, FastF1, ChromaDB", className="text-muted")
-            ])
+
+            html.H5("🤖 AI Toolkit", className="mb-2"),
+            html.Ul([
+                html.Li("Hybrid router automatically chooses Claude or Gemini based on availability."),
+                html.Li("Strategy prompts read the same simulation state used by dashboards."),
+                html.Li("RAG answers come from indexed PDFs and session reports stored in ChromaDB."),
+            ], className="mb-3"),
+
+            html.H5("🧰 Troubleshooting", className="mb-2"),
+            html.Ul([
+                html.Li("Use Cache Manager to regenerate FastF1 or OpenF1 artifacts before race weekends."),
+                html.Li("If telemetry freezes, restart playback and check the track map cache status badge."),
+                html.Li("Verify API keys under Configuration when AI responses fail."),
+            ], className="mb-0"),
         ]),
         dbc.ModalFooter(
             dbc.Button("Close", id="close-help-modal", className="ms-auto", n_clicks=0)
@@ -6472,11 +6573,145 @@ def refresh_race_overview_body(
 
 
 @callback(
+    Output('track-map-trajectory-store', 'data'),
+    Input('simulation-time-store', 'data'),
+    Input('session-store', 'data'),
+    Input('driver-selector', 'value'),
+    State('dashboard-selector', 'value'),
+    State('track-map-trajectory-store', 'data'),
+    prevent_initial_call=True
+)
+def cache_track_map_trajectories(
+    simulation_time_data: Optional[Dict[str, Any]],
+    session_data: Optional[Dict[str, Any]],
+    focused_driver_value: Optional[str],
+    selected_dashboards: Optional[List[str]],
+    existing_store: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Populate the track map trajectory store with per-lap XY telemetry."""
+    default_store = _default_track_map_trajectory_store()
+
+    if not session_data or not session_data.get('loaded'):
+        if isinstance(existing_store, dict) and existing_store == default_store:
+            raise PreventUpdate
+        return default_store
+
+    track_map_status = session_data.get('track_map', {}) if isinstance(session_data, dict) else {}
+    if not track_map_status.get('ready'):
+        if isinstance(existing_store, dict) and existing_store == default_store:
+            raise PreventUpdate
+        return default_store
+
+    if not selected_dashboards or 'track_map' not in selected_dashboards:
+        raise PreventUpdate
+
+    elapsed_time = 0.0
+    if isinstance(simulation_time_data, dict):
+        try:
+            elapsed_time = float(simulation_time_data.get('time', 0.0))
+        except (TypeError, ValueError):
+            elapsed_time = 0.0
+
+    if simulation_controller is not None:
+        try:
+            elapsed_time = simulation_controller.get_elapsed_seconds()
+        except Exception as exc:  # noqa: BLE001
+            dash_logger.debug("Unable to read simulation time for trajectory cache: %s", exc)
+
+    current_lap = 1
+    if simulation_controller is not None:
+        try:
+            current_lap = simulation_controller.get_current_lap() or 1
+        except Exception as exc:  # noqa: BLE001
+            dash_logger.debug("Unable to read lap for trajectory cache: %s", exc)
+
+    if current_lap < 1 and isinstance(existing_store, dict):
+        laps_section = existing_store.get('laps')
+        if isinstance(laps_section, dict) and laps_section:
+            try:
+                current_lap = max(int(key) for key in laps_section.keys())
+            except ValueError:
+                current_lap = 1
+
+    current_lap = max(current_lap, 1)
+    lap_key = str(current_lap)
+
+    track_dashboard = get_track_map_dashboard()
+    retirements = _refresh_track_map_retirements(track_dashboard)
+    driver_entries = _build_track_map_driver_data(
+        focused_driver_value,
+        current_lap=current_lap,
+        retirements=retirements,
+        elapsed_time_seconds=elapsed_time,
+    )
+    if not driver_entries:
+        raise PreventUpdate
+
+    driver_numbers = sorted(entry['driver_number'] for entry in driver_entries)
+    provider = track_dashboard.provider
+    if provider is None:
+        raise PreventUpdate
+
+    store_payload: Dict[str, Any] = {
+        'time_offset': provider.get_session_time_offset(),
+        'time_bounds': [float(bound) for bound in provider.get_time_bounds()],
+        'laps': {},
+    }
+
+    if isinstance(existing_store, dict):
+        existing_laps = existing_store.get('laps')
+        if isinstance(existing_laps, dict):
+            store_payload['laps'] = dict(existing_laps)
+
+    if lap_key in store_payload['laps']:
+        previous_offset = 0.0
+        previous_bounds = [0.0, 0.0]
+        if isinstance(existing_store, dict):
+            previous_offset = float(existing_store.get('time_offset', 0.0))
+            maybe_bounds = existing_store.get('time_bounds')
+            if isinstance(maybe_bounds, list) and len(maybe_bounds) == 2:
+                previous_bounds = [float(maybe_bounds[0]), float(maybe_bounds[1])]
+
+        if (
+            math.isclose(store_payload['time_offset'], previous_offset, rel_tol=1e-6, abs_tol=1e-6)
+            and store_payload['time_bounds'] == previous_bounds
+        ):
+            raise PreventUpdate
+
+    trajectories = provider.get_lap_trajectories(current_lap, driver_numbers=driver_numbers)
+    if not trajectories:
+        track_map_logger.debug("No lap trajectories available for lap %s", lap_key)
+        raise PreventUpdate
+
+    store_payload['laps'][lap_key] = trajectories
+
+    try:
+        lap_keys_sorted = sorted(store_payload['laps'].keys(), key=lambda key: int(key))
+    except ValueError:
+        lap_keys_sorted = list(store_payload['laps'].keys())
+
+    while len(lap_keys_sorted) > TRACK_MAP_TRAJECTORY_CACHE_LIMIT:
+        oldest_key = lap_keys_sorted.pop(0)
+        store_payload['laps'].pop(oldest_key, None)
+
+    if isinstance(existing_store, dict) and store_payload == existing_store:
+        raise PreventUpdate
+
+    track_map_logger.debug(
+        "[TrajectoryCache] Stored lap %s with %d drivers",
+        lap_key,
+        len(trajectories),
+    )
+    return store_payload
+
+
+@callback(
     Output('track-map-graph', 'figure'),
     Output('track-map-lap-label', 'children'),
     Input('simulation-time-store', 'data'),
     Input('session-store', 'data'),
     Input('driver-selector', 'value'),
+    Input('track-map-trajectory-store', 'data'),
     State('dashboard-selector', 'value'),
     State('mode-selector', 'value'),
     State('track-map-graph', 'figure'),
@@ -6486,6 +6721,7 @@ def refresh_track_map_figure(
     simulation_time_data: Optional[Dict[str, Any]],
     session_data: Optional[Dict[str, Any]],
     focused_driver_value: Optional[str],
+    trajectory_store: Optional[Dict[str, Any]],
     selected_dashboards: Optional[List[str]],
     mode_value: Optional[str],
     _existing_figure: Optional[Dict[str, Any]],
@@ -6604,11 +6840,35 @@ def refresh_track_map_figure(
             full_figure.update_layout(title=dict(text=""))
             return full_figure, lap_label_text
 
-        positions = track_dashboard.provider.get_all_driver_positions(
-            lap_number=None,
-            driver_numbers=_track_map_driver_order,
-            elapsed_time=effective_elapsed_time,
+        provider = track_dashboard.provider
+        session_time = effective_elapsed_time
+        if provider is not None:
+            session_time = provider.clamp_session_time(effective_elapsed_time)
+
+        lap_payload: Optional[Dict[str, Any]] = None
+        if isinstance(trajectory_store, dict):
+            laps_section = trajectory_store.get('laps')
+            if isinstance(laps_section, dict):
+                lap_payload = laps_section.get(str(current_lap))
+
+        cache_driver_order = _track_map_driver_order or driver_numbers
+        positions = _interpolate_cached_track_positions(
+            lap_payload,
+            cache_driver_order,
+            session_time,
         )
+
+        used_cache = bool(positions)
+
+        if not positions and provider is not None:
+            positions = provider.get_all_driver_positions(
+                lap_number=None,
+                driver_numbers=cache_driver_order,
+                elapsed_time=effective_elapsed_time,
+            )
+
+        if positions and not used_cache and lap_payload is None and provider is not None:
+            session_time = provider.clamp_session_time(effective_elapsed_time)
 
         _update_track_map_lap_cache(positions)
 
@@ -6626,6 +6886,7 @@ def refresh_track_map_figure(
                 next_time_value = float('nan')
                 query_time_value = float('nan')
                 sample_time_value = float('nan')
+                source_text = 'cache' if used_cache else 'provider'
 
                 if isinstance(cache_entry, dict):
                     cache_lap_raw = cache_entry.get('lap_number')
@@ -6654,11 +6915,12 @@ def refresh_track_map_figure(
 
                 track_map_logger.debug(
                     (
-                        "[TrackMap] driver=%s sim_elapsed_store=%.3f sim_elapsed_ctrl=%.3f "
+                        "[TrackMap] driver=%s source=%s sim_elapsed_store=%.3f sim_elapsed_ctrl=%.3f "
                         "sim_elapsed_clamped=%.3f sim_lap=%s cache_lap=%s prev_time=%.3f next_time=%.3f "
                         "query_time=%.3f sample_time=%.3f"
                     ),
                     debug_driver,
+                    source_text,
                     store_elapsed_time,
                     elapsed_time,
                     effective_elapsed_time,
