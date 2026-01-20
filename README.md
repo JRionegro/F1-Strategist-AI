@@ -44,6 +44,7 @@ An AI-powered Formula 1 race strategy assistant with unified OpenF1 data source 
   - ✅ API key configuration via sidebar UI
   - ✅ Auto-clear chat on context change
   - ✅ Proactive alerts during simulation
+  - ✅ Quick Actions: AI Gaps, Tire Status, Pit Window, **Overtake Prediction** 🆕
 - **RAG Document Management** 🆕:
   - ✅ One-click document upload (PDF, DOCX, Markdown)
   - ✅ 7 document categories (Global, Strategy, Weather, etc.)
@@ -51,6 +52,10 @@ An AI-powered Formula 1 race strategy assistant with unified OpenF1 data source 
   - ✅ Automatic PDF/DOCX to Markdown conversion
   - ✅ Real-time ChromaDB indexing
   - ✅ Document backup and version control
+- **Predictive AI** 🆕:
+  - ✅ Overtake probability prediction (heuristic model)
+  - ✅ Integrated into AI Assistant quick actions
+  - 📋 Advanced ML models (see Roadmap below)
 - **Live Mode**: 
   - ✅ Automatic availability detection (±3 hours window)
   - ✅ Context controls locking when Live mode active
@@ -59,7 +64,57 @@ An AI-powered Formula 1 race strategy assistant with unified OpenF1 data source 
 - **Layout**: 65%/35% column split with responsive grid
 - **Simulation Mode**: Full playback controls with speed adjustment
 
-See [UI_UX_SPECIFICATION.md](docs/UI_UX_SPECIFICATION.md) for complete UI documentation.
+See [UI_UX_SPECIFICATION.md](docs/project_development/UI_UX_SPECIFICATION.md) for complete UI documentation.
+
+---
+
+## 🚧 MVP Pending Features
+
+### Dashboards Not Yet Implemented
+
+- **📊 Tire Strategy Dashboard**: Visual tire compound analysis, degradation tracking, compound comparison
+- **⏱️ Lap Analysis Dashboard**: Sector times breakdown, stint progression analysis, pace comparison
+- **🏁 Qualifying Dashboard**: Qualifying session progression, elimination tracking, best lap highlights
+- **🎯 Track Map (Interactive)**: Enhanced 3D track visualization with driver positions overlay
+- **📈 Performance Trends**: Long-term driver/team performance analytics across multiple races
+
+### Predictive AI Expansion
+
+Current implementation uses heuristic-based models. Future ML integration:
+
+- **Pit Stop Timing Predictor**: Train on historical pit window data (FastF1 2018-2022)
+- **Overtake Probability Model**: ML classifier using gap, tire age, DRS availability
+- **Tire Degradation Model**: Predict compound lifespan per circuit/driver
+- **Race Result Predictor**: Monte Carlo simulation with ML-powered probability distributions
+- **Safety Car Predictor**: Incident probability based on historical race control patterns
+
+See [PHASE_4_PREDICTIVE_AI.md](docs/project_development/PHASE_4_PREDICTIVE_AI.md) for detailed roadmap.
+
+### FastF1 Integration for Pre-2023 Data
+
+Current data coverage: **OpenF1 API (2023-present only)**
+
+Planned hybrid data layer:
+
+- **OpenF1 Primary**: Live sessions + 2023+ historical data
+- **FastF1 Fallback**: 2018-2022 historical race data
+- **Unified Interface**: Seamless provider switching based on year
+- **Cache Strategy**: Parquet format for both sources
+- **Telemetry Enhancement**: High-frequency telemetry data from FastF1 cache
+
+Benefits:
+- 5+ years of additional historical data
+- Enhanced telemetry resolution for analysis
+- Training data for predictive ML models
+- Comparative analysis across regulation eras
+
+### Known Limitations
+
+- **Data Coverage**: Limited to 2023+ (OpenF1 API constraint)
+- **Telemetry Frequency**: Lower resolution than FastF1 for recent seasons
+- **Predictive Models**: Currently heuristic-based, not ML-trained
+- **Real-Time Latency**: 5-second update interval (OpenF1 API limitation)
+- **Track Map**: Static images, no real-time driver animation yet
 
 ---
 

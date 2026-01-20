@@ -8,6 +8,68 @@ insights for Formula 1 racing. The system combines cutting-edge AI technologies
 including multi-agent architectures, Retrieval-Augmented Generation (RAG), and
 real-time data processing to deliver comprehensive strategic analysis.
 
+### 🎓 Academic Context
+
+This project was developed as a **Capstone Project** for the **Master's program in 
+"Desarrollador 10x con IA"** (10x Developer with AI) at the **Instituto de Inteligencia 
+Artificial** (Artificial Intelligence Institute). The project integrates advanced 
+methodologies and technologies learned throughout the program, including:
+
+- **AI-Assisted Development**: Leveraging Visual Studio Code with GitHub Copilot and AI-powered development workflows
+- **Vibe Coding**: Rapid prototyping and iterative development with LLM assistance
+- **Large Language Models (LLMs)**: Integration of Claude and Gemini for intelligent reasoning
+- **Multi-Agent Systems**: Orchestration of specialized AI agents for complex problem-solving
+- **Retrieval-Augmented Generation (RAG)**: Context-aware responses using vector databases
+- **Model Context Protocol (MCP)**: Structured tool interfaces for AI-human collaboration
+
+The project demonstrates practical application of modern AI development practices 
+in a real-world domain, showcasing how AI can enhance developer productivity and 
+create sophisticated intelligent systems.
+
+### 🤖 Three-Pillar AI Approach
+
+The system implements AI capabilities through three complementary approaches:
+
+#### 1. **Conversational AI (Chatbot)** 💬
+Interactive question-answering system powered by LLMs with RAG enhancement. Users can 
+query race data, request strategic recommendations, and receive context-aware responses 
+in natural language. The chatbot combines Claude and Gemini models for optimal 
+performance across query complexity levels.
+
+**Key Features:**
+- Natural language understanding of race strategy queries
+- Multi-turn conversations with session context retention
+- Quick actions for common queries (gaps, tire status, pit windows)
+- RAG-powered responses using circuit-specific knowledge base
+
+#### 2. **Proactive AI** 🚨
+Autonomous monitoring system that anticipates user needs and delivers timely alerts 
+without explicit queries. The system continuously analyzes race conditions and 
+proactively notifies users of critical events and opportunities.
+
+**Capabilities (Planned):**
+- Strategy window alerts when optimal pit windows open
+- Tire degradation warnings before performance drops
+- Weather change notifications for strategic adaptation
+- Race incident predictions based on pattern recognition
+- Position opportunity alerts for overtaking scenarios
+
+#### 3. **Predictive AI** 🔮
+Machine learning models that forecast future race events and outcomes based on 
+historical patterns and real-time conditions. These predictions enable strategic 
+planning and scenario analysis.
+
+**Current Implementation:**
+- Heuristic-based overtake probability analysis
+- Pit stop window recommendations
+
+**Planned ML Models:**
+- Pit stop timing predictor (trained on 2018-2022 FastF1 data)
+- Tire degradation forecasting per circuit/compound
+- Race result probability distributions (Monte Carlo + ML)
+- Safety car incident predictor
+- Strategy optimizer using reinforcement learning
+
 **Version**: 1.0.0  
 **Date**: January 2026  
 **Status**: Production Ready ✅
@@ -33,11 +95,16 @@ real-time data processing to deliver comprehensive strategic analysis.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         USER INTERFACE LAYER                            │
+│                         USER INTERFACE LAYER (Dash)                     │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌────────────┐  │
-│  │   Chatbot    │  │    Race      │  │   Weather    │  │    Race    │  │
-│  │  Interface   │  │   Overview   │  │  Dashboard   │  │   Control  │  │
+│  │ AI Assistant │  │    Race      │  │   Weather    │  │    Race    │  │
+│  │  (Chatbot +  │  │   Overview   │  │  Dashboard   │  │   Control  │  │
+│  │  RAG + LLM)  │  │ (Leaderboard)│  │  (Forecasts) │  │  (Flags)   │  │
 │  └──────────────┘  └──────────────┘  └──────────────┘  └────────────┘  │
+│  ┌──────────────┐  ┌──────────────┐                                     │
+│  │  Telemetry   │  │ Track Map    │  [5 Active Dashboards]             │
+│  │ (Multi-car)  │  │  (Circuit)   │  [Live + Simulation Modes]         │
+│  └──────────────┘  └──────────────┘                                     │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -412,7 +479,82 @@ python app_dash.py
 
 ---
 
-## 📊 Performance Metrics
+## � MVP Pending Features
+
+### Dashboards Not Yet Implemented
+
+The following dashboards are planned for future releases:
+
+- **📊 Tire Strategy Dashboard**: Visual tire compound analysis, degradation tracking, compound comparison charts
+- **⏱️ Lap Analysis Dashboard**: Sector times breakdown, stint progression analysis, pace comparison across drivers
+- **🏁 Qualifying Dashboard**: Qualifying session progression, elimination tracking, best lap highlights, Q1/Q2/Q3 analysis
+- **🎯 Interactive Track Map (Enhanced)**: 3D track visualization with real-time driver positions overlay and replay animation
+- **📈 Performance Trends**: Long-term driver/team performance analytics across multiple races and seasons
+
+### AI Proactive Features (Pending)
+
+Current implementation provides reactive AI responses. Planned proactive features:
+
+- **🚨 Race Incident Prediction**: AI-generated alerts before potential incidents based on pattern recognition
+- **⏰ Strategy Window Alerts**: Proactive notifications when optimal pit windows open
+- **🌧️ Weather Change Warnings**: Advance alerts for changing track conditions
+- **🔋 Tire Degradation Alerts**: Automatic warnings when tire performance degrades beyond threshold
+- **📊 Position Opportunity Alerts**: Real-time alerts when overtake opportunities emerge
+
+### Predictive AI Expansion
+
+Current implementation uses heuristic-based models. Planned ML integration:
+
+#### Phase 1: Basic ML Models
+- **Pit Stop Timing Predictor**: ML model trained on historical pit window data (FastF1 2018-2022)
+- **Overtake Probability Model**: Classification model using gap, tire age, DRS availability, and track characteristics
+- **Tire Degradation Model**: Regression model to predict compound lifespan per circuit/driver/temperature
+
+#### Phase 2: Advanced ML Models
+- **Race Result Predictor**: Monte Carlo simulation with ML-powered probability distributions
+- **Safety Car Predictor**: Incident probability based on historical race control patterns and driver behavior
+- **Strategy Optimizer**: Reinforcement learning model for optimal pit stop sequences
+
+See [PHASE_4_PREDICTIVE_AI.md](project_development/PHASE_4_PREDICTIVE_AI.md) for detailed ML roadmap and test gates.
+
+### FastF1 Integration for Pre-2023 Data
+
+**Current Coverage**: OpenF1 API (2023-present only)
+
+**Planned Hybrid Data Layer**:
+
+| Component | OpenF1 (Primary) | FastF1 (Fallback) |
+|-----------|------------------|-------------------|
+| **Coverage** | 2023-present | 2018-2022 |
+| **Live Data** | ✅ Real-time | ❌ Not available |
+| **Historical** | ✅ 2023+ | ✅ 2018-2022 |
+| **Telemetry** | Standard resolution | High frequency |
+| **Cache Format** | Parquet | Parquet (compatible) |
+
+**Benefits**:
+- 5+ years of additional historical data for analysis
+- Enhanced telemetry resolution (10Hz vs 1Hz)
+- Training dataset for ML predictive models (3000+ race sessions)
+- Comparative analysis across regulation eras (2018-2021 vs 2022+)
+
+**Implementation Strategy**:
+1. Unified provider interface supporting both OpenF1 and FastF1
+2. Automatic year-based provider selection
+3. Seamless cache system integration
+4. Backward-compatible API for existing dashboards
+
+### Known Limitations
+
+- **Data Coverage**: Limited to 2023+ seasons (OpenF1 API constraint)
+- **Telemetry Frequency**: Lower resolution than FastF1 for detailed analysis
+- **Predictive Models**: Currently heuristic-based, not ML-trained
+- **Real-Time Latency**: 5-second update interval (OpenF1 API limitation)
+- **Track Map Animation**: Static images only, no real-time driver sprite animation
+- **Proactive Alerts**: Manual query required, no automatic notifications yet
+
+---
+
+## �📊 Performance Metrics
 
 | Metric | Target | Achieved |
 |--------|--------|----------|
@@ -455,11 +597,51 @@ Development documentation located in `docs/project_development/`.
 
 This project is developed for educational purposes as part of a Capstone project.
 
+### ⚖️ Third-Party License Compliance
+
+This project uses code derived from:
+
+**[F1 Race Replay](https://github.com/IAmTomShaw/f1-race-replay)** by Tom Shaw  
+Licensed under **MIT License**
+
+**Original Copyright Notice:**
+```
+MIT License
+
+Copyright (c) 2024 Tom Shaw
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+**Usage in this project:**
+- Track map visualization concepts and circuit layout data
+- Polyline-based track rendering approach
+- Driver position animation framework adapted to Dash/Plotly
+
+The original F1 Race Replay project uses Arcade/Pyglet for desktop rendering. This project adapts those concepts to web-based Dash dashboards with Plotly visualizations.
+
 ---
 
 ## 🙏 Acknowledgments
 
+- **[F1 Race Replay](https://github.com/IAmTomShaw/f1-race-replay)** by Tom Shaw (MIT License) - Track map visualization inspiration and circuit data
 - **OpenF1** - Real-time F1 data API
 - **Anthropic** - Claude AI models
 - **Google** - Gemini AI models
-- **Plotly** - Dash framework and visualizations
+- **Plotly/Dash** - Interactive web-based dashboards and visualizations

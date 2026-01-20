@@ -67,6 +67,25 @@ The AI Chatbot uses real LLM providers (Claude and/or Gemini) for intelligent F1
 - **Session-aware**: Responses include context from the selected session
 - **RAG-enhanced**: Uses circuit-specific knowledge from the knowledge base
 
+### AI Quick Actions 🚀
+
+The chatbot includes one-click quick actions for common queries:
+
+| Button | Description | Feature |
+|--------|-------------|----------|
+| **📊 AI Gaps** | Current gaps to cars ahead/behind focus driver | Live/Simulation |
+| **🔧 Tire Status** | Tire compound, age, and degradation for focus driver | Live/Simulation |
+| **🏁 Pit Window** | Optimal pit window recommendation | Simulation |
+| **🔮 Predict** 🆕 | Overtake probability for next 5-10 laps | Simulation |
+
+**Overtake Prediction** uses a heuristic model analyzing:
+- Gap to car ahead
+- Tire age differential
+- Current tire compounds
+- Track characteristics
+
+Future versions will use ML models trained on historical overtake data.
+
 ### Managing RAG Documents 📚 **NEW!**
 
 The application includes an integrated document management system to enhance AI responses with custom knowledge.
@@ -362,23 +381,67 @@ mypy src/
 4. **Commit Regularly**: Make small, focused commits
 5. **Follow PEP 8**: Use black and flake8 to maintain code quality
 
-## Current Status
+## Current Status (MVP - January 2026)
 
-- ✅ Project structure created
-- ✅ Git repository initialized
-- ✅ Documentation written
-- ✅ Configuration files created
-- ⏳ Ready to start Phase 1: Foundation
+### ✅ Completed Phases
+
+- ✅ **Phase 1-2: Foundation & Data Layer** - OpenF1 unified data source, hybrid cache system
+- ✅ **Phase 2D: Architecture Planning** - 5-agent system, LLM hybrid router, RAG with ChromaDB
+- ✅ **Phase 3A: LangChain Foundation** - LLM providers, vector store, 79/81 tests passing
+- ✅ **Phase 4: Dash UI** - 5 active dashboards, AI chatbot with RAG, live/simulation modes
+
+### 🚀 Ready to Use
+
+The application is **fully functional** and ready for:
+- Historical race analysis (2023+)
+- Live race monitoring (±3 hours detection window)
+- AI-powered strategy recommendations
+- Multi-dashboard visualization
+- Custom RAG document integration
+
+### 🚧 Pending Features (Post-MVP)
+
+See [README.md](../README.md#-mvp-pending-features) for detailed roadmap:
+- Additional dashboards (Tire Strategy, Lap Analysis, Qualifying)
+- ML-based predictive models (currently heuristic)
+- FastF1 integration for pre-2023 historical data
 
 ## Next Immediate Steps
 
-1. **Create virtual environment** (see instructions above)
-2. **Install dependencies** from requirements.txt
-3. **Configure environment** variables in config/.env
-4. **Start Phase 1** following the DEVELOPMENT_GUIDE.md
+### For First-Time Users
+
+1. **Activate virtual environment** (Python 3.13 required)
+   ```powershell
+   .\venv\Scripts\Activate.ps1
+   ```
+
+2. **Install dependencies** (if not already done)
+   ```powershell
+   pip install -r requirements.txt
+   ```
+
+3. **Configure API keys** (via UI or .env file)
+   - Anthropic API Key for Claude
+   - Google API Key for Gemini (optional but recommended)
+
+4. **Launch the application**
+   ```powershell
+   python app_dash.py
+   ```
+   Open [http://localhost:8050](http://localhost:8050) in your browser
+
+5. **Try it out!**
+   - Select a recent race (e.g., Qatar 2025)
+   - Choose a driver to focus on
+   - Use AI quick actions or ask questions in chat
+   - Toggle dashboards to explore different views
+
+### For Developers
+
+- Review [DEVELOPMENT_GUIDE.md](project_development/DEVELOPMENT_GUIDE.md) for coding standards
+- Check [APPENDIX_DASH_SKILL.md](project_development/APPENDIX_DASH_SKILL.md) for dashboard development rules
+- See [PHASE_4_PREDICTIVE_AI.md](project_development/PHASE_4_PREDICTIVE_AI.md) for ML integration roadmap
 
 ---
 
-**Ready to build something amazing! 🚀**
-
-Good luck with your F1 Strategist AI project!
+**MVP Complete - Ready for F1 Strategy Analysis! 🏁🚀**

@@ -56,6 +56,7 @@ are located in the [project_development/](project_development/) folder.
 | [DEVELOPMENT_GUIDE.md](project_development/DEVELOPMENT_GUIDE.md) | Development workflow and logging system |
 | [PYTHON_ENVIRONMENTS.md](project_development/PYTHON_ENVIRONMENTS.md) | Python 3.13 setup |
 | [PROJECT_STATUS.md](project_development/PROJECT_STATUS.md) | Current status and progress |
+| [APPENDIX_DASH_SKILL.md](project_development/APPENDIX_DASH_SKILL.md) | Dash dashboard rules and best practices |
 
 ### Phase Reports
 
