@@ -168,6 +168,14 @@ class AIAssistantDashboard:
                             outline=True,
                             color="info",
                             n_clicks=0
+                        ),
+                        dbc.Button(
+                            "🔮 Predict",
+                            id='quick-predict-btn',
+                            size="sm",
+                            outline=True,
+                            color="warning",
+                            n_clicks=0
                         )
                     ], size="sm", className="me-2"),
                     dbc.Button(

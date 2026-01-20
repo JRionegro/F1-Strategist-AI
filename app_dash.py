@@ -8114,6 +8114,7 @@ def _ensure_json_safe_messages(raw_messages: Any) -> list[dict]:
     Input('quick-pit-btn', 'n_clicks'),
     Input('quick-weather-btn', 'n_clicks'),
     Input('quick-gap-btn', 'n_clicks'),
+    Input('quick-predict-btn', 'n_clicks'),
     State('chat-input', 'value'),
     State('chat-messages-store', 'data'),
     State('session-store', 'data'),
@@ -8127,6 +8128,7 @@ def handle_chat_send(
     pit_clicks,
     weather_clicks,
     gap_clicks,
+    predict_clicks,
     user_input,
     current_messages,
     session_data,
@@ -8201,6 +8203,81 @@ def handle_chat_send(
             raise PreventUpdate
         driver = focused_driver if focused_driver not in (None, 'none', '') else 'our driver'
         query = f"What are the gaps around {driver}? Any overtake opportunities?"
+    elif triggered_id == 'quick-predict-btn':
+        if not predict_clicks or predict_clicks <= 0:
+            chat_logger.debug("[CHAT] Ignoring predict trigger with zero clicks")
+            raise PreventUpdate
+        if not session_data or not session_data.get('loaded'):
+            chat_logger.info("[CHAT] Ignoring quick predict: no session loaded")
+            raise PreventUpdate
+        driver = focused_driver if focused_driver not in (None, 'none', '') else 'our driver'
+        
+        # Generate prediction using overtake predictor
+        try:
+            from src.predictive.overtake_predictor import predict_overtake_window
+            
+            # Get race state snapshot for prediction
+            snapshot = get_race_state_snapshot(
+                session_data=session_data,
+                sim_time_data=sim_time_data,
+                focused_driver=focused_driver
+            )
+            
+            if snapshot and 'error' not in snapshot:
+                leaderboard = snapshot.get('leaderboard', {})
+                focus = leaderboard.get('focus_driver')
+                
+                if focus:
+                    # Parse gaps
+                    ahead_gap_str = focus.get('gap_ahead', 'N/A')
+                    behind_gap_str = focus.get('gap_behind', 'N/A')
+                    
+                    ahead_gap = None
+                    behind_gap = None
+                    
+                    if ahead_gap_str not in ('N/A', 'CLOSED', 'LEADER'):
+                        try:
+                            ahead_gap = float(ahead_gap_str.replace('s', ''))
+                        except (ValueError, AttributeError):
+                            pass
+                    
+                    if behind_gap_str not in ('N/A', 'CLOSED'):
+                        try:
+                            behind_gap = float(behind_gap_str.replace('s', ''))
+                        except (ValueError, AttributeError):
+                            pass
+                    
+                    # Generate prediction
+                    prediction = predict_overtake_window(
+                        driver=driver,
+                        ahead_gap=ahead_gap,
+                        behind_gap=behind_gap,
+                        tire_age=focus.get('age', 0),
+                        track_position=focus.get('pos', 0)
+                    )
+                    
+                    # Format query with prediction
+                    query = (
+                        f"🔮 Overtake Prediction for {driver}:\n"
+                        f"Probability (next 5 laps): {prediction['probability']:.1%}\n"
+                        f"Optimal window: Laps {prediction['optimal_laps']}\n"
+                        f"Gap ahead: {ahead_gap_str}\n"
+                        f"Gap behind: {behind_gap_str}\n"
+                        f"Tire age: {focus.get('age')} laps\n"
+                        f"Confidence: {prediction['confidence']}\n\n"
+                        f"Should I attempt an overtake now or wait for a better opportunity?"
+                    )
+                else:
+                    query = f"Cannot predict overtakes for {driver} - no position data available."
+            else:
+                query = f"Cannot predict overtakes for {driver} - race snapshot unavailable."
+                
+        except ImportError:
+            chat_logger.warning("[CHAT] Predictive module not available")
+            query = "🔮 Predictive AI module is not available. This feature requires the predictive package."
+        except Exception as e:
+            chat_logger.error(f"[CHAT] Prediction failed: {e}")
+            query = f"🔮 Prediction failed: {str(e)}"
     else:
         chat_logger.debug(f"[CHAT] Unknown trigger: {triggered_id}")
         raise PreventUpdate
