@@ -545,12 +545,34 @@ See [PHASE_4_PREDICTIVE_AI.md](project_development/PHASE_4_PREDICTIVE_AI.md) for
 
 ### Known Limitations
 
+#### Data & Coverage
 - **Data Coverage**: Limited to 2023+ seasons (OpenF1 API constraint)
 - **Telemetry Frequency**: Lower resolution than FastF1 for detailed analysis
+
+#### AI Capabilities
 - **Predictive Models**: Currently heuristic-based, not ML-trained
+- **Proactive Alerts**: Manual query required, no automatic notifications yet
+
+#### Technical Constraints
 - **Real-Time Latency**: 5-second update interval (OpenF1 API limitation)
 - **Track Map Animation**: Static images only, no real-time driver sprite animation
-- **Proactive Alerts**: Manual query required, no automatic notifications yet
+
+#### Testing Scope ⚠️
+
+**Session Types Tested:**
+- ✅ **Race Sessions**: Fully tested with multiple 2023-2025 Grand Prix races
+- ❌ **Qualifying**: Not tested (Q1/Q2/Q3 sessions)
+- ❌ **Free Practice**: Not tested (FP1/FP2/FP3 sessions)
+- ❌ **Sprint Races**: Not tested (Sprint Qualifying/Sprint Race)
+
+**Live Mode Testing:**
+- ❌ **Live Sessions**: Not validated with actual ongoing F1 sessions
+- ⚠️ Live detection logic is implemented but untested in production conditions
+- ⚠️ Real-time data updates (±3 hour window detection) not verified with active races
+
+**Recommendation:** Use primarily for historical race analysis and simulation. Live mode 
+functionality exists but requires validation during actual F1 race weekends before 
+production deployment.
 
 ---
 
