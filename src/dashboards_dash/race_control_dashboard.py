@@ -5,8 +5,7 @@ Shows Safety Car, VSC, flags, penalties, and incidents using OpenF1 race_control
 Synchronized with simulation time for historical playback.
 """
 
-import logging
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 from datetime import datetime, timedelta
 import re
 
@@ -24,143 +23,11 @@ class RaceControlDashboard:
     """Race Control dashboard using OpenF1 race_control endpoint."""
 
     def __init__(self, openf1_provider):
-        """
-        Initialize Race Control Dashboard.
-
-        Args:
-            openf1_provider: OpenF1DataProvider instance
-        """
+        """Initialize Race Control Dashboard."""
         self.provider = openf1_provider
         self._cached_session_key = None
         self._cached_messages = None
         self._cached_drivers = None
-
-    def render(
-        self,
-        session_key: Optional[int] = None,
-        simulation_time: Optional[float] = None,
-        session_start_time: Optional[pd.Timestamp] = None,
-        focused_driver: Optional[str] = None,
-        current_lap: Optional[int] = None
-    ):
-        """
-        Render the Race Control Dashboard with real-time messages.
-
-        Args:
-            session_key: OpenF1 session key
-            simulation_time: Current simulation time in seconds from session start
-            session_start_time: Session start timestamp
-            focused_driver: Driver number being tracked (for highlighting)
-            current_lap: Current lap number (from simulation or real-time calculation)
-
-        Returns:
-            Dash Card component with race control information
-        """
-        if session_key is None:
-            return self._render_no_session()
-
-        try:
-            logger.info(
-                f"Rendering Race Control for session {session_key} "
-                f"at simulation time {simulation_time}s"
-            )
-
-            messages, drivers = self._get_messages_and_drivers(session_key)
-
-            if messages is None or drivers is None:
-                return self._render_no_data()
-
-            filtered_messages = self._filter_messages_by_time(
-                messages,
-                simulation_time,
-                session_start_time
-            )
-
-            # Extract current status
-            if current_lap is None:
-                # Fallback: Calculate lap from available data
-                current_lap = self._calculate_current_lap_from_data(
-                    session_key,
-                    simulation_time,
-                    session_start_time,
-                    filtered_messages
-                )
-            current_flag, sc_status = self._extract_current_status(
-                filtered_messages,
-                current_lap=current_lap,
-            )
-
-            # Build UI components
-            status_panel = self._create_status_panel(
-                current_flag, sc_status, current_lap
-            )
-            messages_timeline = self._create_messages_timeline(
-                filtered_messages, focused_driver, drivers
-            )
-
-            # Return complete Card
-            return dbc.Card([
-                dbc.CardHeader([
-                    html.H5("🚦 Race Control", className="mb-0", style={"fontSize": "1.2rem"})
-                ], className="py-1"),
-                dbc.CardBody([
-                    status_panel,
-                    html.Hr(className="my-2"),
-                    messages_timeline
-                ], className="p-2", style={"backgroundColor": "#1e1e1e"})
-            ], className="mb-3 h-100", style={"overflow": "hidden"})
-
-        except Exception as e:
-            logger.error(f"Error rendering Race Control Dashboard: {e}", exc_info=True)
-            return self._render_error(str(e))
-
-    def get_signature(
-        self,
-        session_key: Optional[int],
-        simulation_time: Optional[float],
-        session_start_time: Optional[pd.Timestamp],
-        focused_driver: Optional[str] = None,
-        current_lap: Optional[int] = None,
-    ) -> Optional[Tuple[int, int, Optional[pd.Timestamp], Optional[str], Optional[int]]]:
-        """Build a lightweight signature for delta detection.
-
-        Signature uses the current session, filtered message count, latest message
-        timestamp within the filtered window, focused driver context, and current lap.
-        Including the lap prevents stale headers when only the lap changes.
-        """
-        if session_key is None:
-            return None
-
-        try:
-            messages, _ = self._get_messages_and_drivers(session_key)
-            if messages is None or messages.empty:
-                return None
-
-            filtered_messages = self._filter_messages_by_time(
-                messages,
-                simulation_time,
-                session_start_time
-            )
-
-            latest_time = None
-            if not filtered_messages.empty and 'Time' in filtered_messages.columns:
-                try:
-                    latest_time = filtered_messages['Time'].max()
-                except Exception as exc:
-                    logger.debug(
-                        "Could not compute latest Time for signature: %s", exc
-                    )
-
-            return (
-                session_key,
-                int(len(filtered_messages)),
-                latest_time,
-                focused_driver,
-                current_lap,
-            )
-        except Exception as exc:
-            logger.warning("Failed to compute race control signature: %s", exc)
-            return None
 
     def _get_messages_and_drivers(
         self,
@@ -204,7 +71,20 @@ class RaceControlDashboard:
 
         try:
             current_time = session_start_time + timedelta(seconds=simulation_time)
-            filtered_messages = messages[messages['Time'] <= current_time].copy()
+            current_time = pd.Timestamp(current_time)
+
+            # Normalize timeline to UTC to match OpenF1 timestamps and avoid tz comparison errors
+            if current_time.tzinfo is None:
+                current_time = current_time.tz_localize("UTC")
+            else:
+                current_time = current_time.tz_convert("UTC")
+
+            time_series = pd.to_datetime(messages.get('Time'), utc=True, errors='coerce')
+            if time_series.isna().all():
+                logger.debug("Race control messages missing valid timestamps; skipping filter")
+                return messages
+
+            filtered_messages = messages[time_series <= current_time].copy()
 
             if filtered_messages.empty:
                 filtered_messages = messages
@@ -393,115 +273,21 @@ class RaceControlDashboard:
             message_text = row.get('Message', 'Unknown message')
             category = row.get('Category', '')
 
-            # Check if message mentions focused driver
+            # Check if message references the focused driver in canonical format
             is_focused_driver = False
-            if focused_driver and message_text:
-                import re
+            if (
+                focused_driver
+                and message_text
+                and driver_number
+                and driver_code
+            ):
                 message_upper = message_text.upper()
-                
-                # === SMART DRIVER DETECTION ===
-                # Avoid false positives like "SECTOR 14", "TURN 14", "LAP 14"
-                # Also avoid matching "4" in "44" - use strict word boundaries
-                # Only match driver numbers in driver-specific contexts
-                
-                search_patterns = []
-                
-                if driver_number:
-                    num = re.escape(driver_number)
-                    # Positive patterns - contexts where number IS a driver reference
-                    # Use (?<!\d) and (?!\d) to prevent matching "4" inside "44"
-                    search_patterns.extend([
-                        rf"\((?<!\d){num}(?!\d)\)",     # (4) but NOT (44)
-                        rf"CAR\s*(?<!\d){num}(?!\d)",   # CAR 4 but NOT CAR 44
-                        rf"NO\.?\s*(?<!\d){num}(?!\d)", # NO 4 but NOT NO 44
-                        rf"#(?<!\d){num}(?!\d)",        # #4 but NOT #44
-                        rf"DRIVER\s*(?<!\d){num}(?!\d)", # DRIVER 4 but NOT DRIVER 44
-                    ])
-                    
-                    # Match number only if NOT preceded by false-positive words
-                    # Use negative lookbehind for: SECTOR, TURN, LAP, DRS ZONE, CORNER
-                    false_positive_prefixes = (
-                        r"(?<!SECTOR\s)(?<!SECTOR)"
-                        r"(?<!TURN\s)(?<!TURN)"
-                        r"(?<!LAP\s)(?<!LAP)"
-                        r"(?<!ZONE\s)(?<!ZONE)"
-                        r"(?<!DRS\s)(?<!DRS)"
-                        r"(?<!CORNER\s)(?<!CORNER)"
-                        r"(?<!T)"  # T14 = Turn 14
-                        r"(?<!S)"  # S14 = Sector abbreviation
-                    )
-                    # This pattern matches standalone number NOT after false positives
-                    # But regex lookbehind must be fixed width, so we use a different approach
-                
-                if driver_code:
-                    code_upper = driver_code.upper()
-                    # Code-based patterns with strict boundaries
-                    # Only match if followed by: ), space, -, comma, or end of string
-                    # This prevents "COL" from matching "COLLISION"
-                    search_patterns.extend([
-                        rf"\({re.escape(code_upper)}\)",     # (ALO)
-                        rf"\b{re.escape(code_upper)}[\)\s\-,]",  # ALO) or ALO or ALO-
-                        rf"\b{re.escape(code_upper)}$"       # ALO at end of message
-                    ])
-                
-                if driver_last_name:
-                    last_upper = driver_last_name.upper()
-                    search_patterns.append(rf"\b{re.escape(last_upper)}\b")
-                
-                if driver_full_name:
-                    search_patterns.append(rf"\b{re.escape(driver_full_name.upper())}\b")
-                
-                # Check if any positive pattern matches
-                for pattern in search_patterns:
-                    if re.search(pattern, message_upper):
-                        is_focused_driver = True
-                        break
-                
-                # Secondary check: if number found but might be false positive
-                # Check for driver number with additional validation
-                if not is_focused_driver and driver_number:
-                    num = re.escape(driver_number)
-                    # Check if number appears in message as EXACT number
-                    # Use (?<!\d) and (?!\d) to prevent matching "4" inside "44"
-                    exact_num_pattern = rf"(?<!\d){num}(?!\d)"
-                    if re.search(exact_num_pattern, message_upper):
-                        # Exclude if preceded by false-positive context words
-                        false_positives = [
-                            rf"SECTOR\s*(?<!\d){num}(?!\d)",
-                            rf"TURN\s*(?<!\d){num}(?!\d)",
-                            rf"LAP\s*(?<!\d){num}(?!\d)",
-                            rf"T(?<!\d){num}(?!\d)",           # T14 = Turn 14
-                            rf"S(?<!\d){num}(?!\d)",           # S14 = Sector 14
-                            rf"DRS\s*ZONE\s*(?<!\d){num}(?!\d)",
-                            rf"CORNER\s*(?<!\d){num}(?!\d)",
-                            rf"ZONE\s*(?<!\d){num}(?!\d)",
-                            rf"ROUND\s*(?<!\d){num}(?!\d)",
-                            rf"STAGE\s*(?<!\d){num}(?!\d)",
-                            rf"SESSION\s*(?<!\d){num}(?!\d)",
-                        ]
-                        
-                        is_false_positive = any(
-                            re.search(fp, message_upper) for fp in false_positives
-                        )
-                        
-                        if not is_false_positive:
-                            # Additional context: check if message seems driver-related
-                            driver_context_words = [
-                                'PIT', 'PENALTY', 'TIME', 'WARNING', 'INVESTIGATION',
-                                'INCIDENT', 'DELETED', 'TRACK LIMITS', 'OVERTAKE',
-                                'COLLISION', 'CONTACT', 'UNSAFE', 'RELEASE', 'JUMP',
-                                'START', 'GRID', 'POSITION', 'STOP', 'TYRE', 'TIRE',
-                                'STEWARD', 'BLACK', 'WHITE', 'FLAG', 'RETIRED',
-                                'STOPPED', 'SLOW', 'MECHANICAL', 'DAMAGE'
-                            ]
-                            
-                            has_driver_context = any(
-                                word in message_upper for word in driver_context_words
-                            )
-                            
-                            # Only highlight if message has driver-related context
-                            if has_driver_context:
-                                is_focused_driver = True
+                canonical_pattern = (
+                    rf"\bCAR\s+{re.escape(driver_number)}\s*"
+                    rf"\(\s*{re.escape(driver_code.upper())}\s*\)"
+                )
+                if re.search(canonical_pattern, message_upper):
+                    is_focused_driver = True
 
             # Color coding
             text_color = {
@@ -569,6 +355,72 @@ class RaceControlDashboard:
                 style={"backgroundColor": "#1e1e1e"}
             )
         ], className="border border-secondary")
+
+    def _create_summary_panel(self, status_summary: dict[str, Any]) -> dbc.Card:
+        """Create compact summary card for recent race control activity."""
+
+        flag_value = str(status_summary.get('flag', 'GREEN')).upper()
+        flag_color = {
+            "GREEN": "success",
+            "YELLOW": "warning",
+            "RED": "danger",
+            "SC": "warning",
+            "VSC": "info",
+            "CHEQUERED": "secondary",
+        }.get(flag_value, "secondary")
+
+        status_badges = [
+            dbc.Badge(flag_value, color=flag_color, className="me-1")
+        ]
+        if status_summary.get('safety_car'):
+            status_badges.append(dbc.Badge("SC", color="warning", className="me-1"))
+        if status_summary.get('virtual_safety_car'):
+            status_badges.append(dbc.Badge("VSC", color="info", className="me-1"))
+
+        recent_events = [
+            str(item) for item in status_summary.get('recent_events') or []
+        ]
+        penalties = [
+            str(item) for item in status_summary.get('penalties') or []
+        ]
+        incidents = [
+            str(item) for item in status_summary.get('incidents') or []
+        ]
+
+        def render_section(
+            title: str,
+            items: list[str],
+            empty_text: str
+        ) -> html.Div:
+            header = html.Div(title, className="text-white small fw-bold mb-1")
+            if not items:
+                content = html.Div(empty_text, className="text-muted small")
+            else:
+                content = html.Ul(
+                    [
+                        html.Li(str(item), className="small mb-1")
+                        for item in items
+                    ],
+                    className="ps-3 mb-0"
+                )
+            return html.Div([header, content], className="mb-3")
+
+        sections = [
+            html.Div(status_badges, className="mb-2"),
+            render_section("Recent", recent_events, "No recent events."),
+            render_section("Penalties", penalties, "No penalties."),
+            render_section("Incidents", incidents, "No incidents."),
+        ]
+
+        return dbc.Card(
+            dbc.CardBody(
+                sections,
+                className="p-2",
+                style={"backgroundColor": "#1e1e1e"}
+            ),
+            className="border border-secondary",
+            style={"minHeight": "350px"}
+        )
 
     def _classify_message(self, row: pd.Series) -> Tuple[str, str]:
         """
@@ -646,6 +498,10 @@ class RaceControlDashboard:
                             lap_start = row.get('LapStartTime')
                             lap_end = row.get('LapEndTime')
                             lap_num = row.get('LapNumber')
+                            try:
+                                lap_num_int = int(lap_num)
+                            except (TypeError, ValueError):
+                                continue
                             
                             if pd.notna(lap_start):
                                 # Convert timedelta to absolute time
@@ -662,22 +518,21 @@ class RaceControlDashboard:
                                         lap_end_abs = lap_end
                                     
                                     if lap_start_abs <= current_time <= lap_end_abs:
-                                        # Convert OpenF1 lap (includes formation) to racing lap
-                                        racing_lap = max(1, int(lap_num) - 2) if lap_num > 2 else 1
+                                        current_lap = max(1, lap_num_int)
                                         logger.debug(
-                                            f"Calculated lap from timing: OpenF1 lap {lap_num} = "
-                                            f"Racing lap {racing_lap}"
+                                            "Calculated lap from timing: OpenF1 lap %s",
+                                            lap_num_int
                                         )
-                                        return racing_lap
+                                        return current_lap
                                 else:
                                     # Lap not finished yet, check if we've started it
                                     if current_time >= lap_start_abs:
-                                        racing_lap = max(1, int(lap_num) - 2) if lap_num > 2 else 1
+                                        current_lap = max(1, lap_num_int)
                                         logger.debug(
-                                            f"In progress lap: OpenF1 lap {lap_num} = "
-                                            f"Racing lap {racing_lap}"
+                                            "In progress lap: OpenF1 lap %s",
+                                            lap_num_int
                                         )
-                                        return racing_lap
+                                        return current_lap
                         
                         # If no exact match, determine pre-race or post-race
                         first_lap_start = leader_laps.iloc[0].get('LapStartTime')
@@ -691,8 +546,11 @@ class RaceControlDashboard:
                                 return 0  # Pre-race
                         
                         # Post-race or in last lap
-                        last_lap = int(leader_laps.iloc[-1]['LapNumber'])
-                        return max(1, last_lap - 2) if last_lap > 2 else 1
+                        try:
+                            last_lap = int(leader_laps.iloc[-1]['LapNumber'])
+                        except (TypeError, ValueError):
+                            return 1
+                        return max(1, last_lap)
                         
             except Exception as e:
                 logger.warning(f"Could not calculate lap from timing data: {e}")
@@ -1017,3 +875,195 @@ class RaceControlDashboard:
             'penalties': penalties[-3:] if penalties else [],
             'incidents': incidents[-3:] if incidents else []
         }
+
+    def get_signature(
+        self,
+        session_key: Optional[int],
+        simulation_time: Optional[float],
+        session_start_time: Optional[pd.Timestamp],
+        focused_driver: Optional[str] = None,
+        current_lap: Optional[int] = None,
+    ) -> Optional[Tuple[int, int, Optional[str], Optional[str], Optional[str], Optional[int]]]:
+        """Build immutable signature describing the rendered state."""
+
+        if session_key is None:
+            return None
+
+        messages, _ = self._get_messages_and_drivers(session_key)
+        if messages is None or messages.empty:
+            return (
+                session_key,
+                0,
+                None,
+                None,
+                (focused_driver or "").upper() or None,
+                current_lap,
+            )
+
+        filtered_messages = self._filter_messages_by_time(
+            messages,
+            simulation_time,
+            session_start_time
+        )
+
+        if filtered_messages.empty:
+            filtered_messages = messages.tail(1)
+
+        time_col = 'Time' if 'Time' in filtered_messages.columns else None
+        ordered_messages = filtered_messages
+        if time_col:
+            try:
+                ordered_messages = filtered_messages.sort_values(time_col)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("Could not sort messages for signature: %s", exc)
+
+        latest_row = ordered_messages.iloc[-1]
+        latest_time_str: Optional[str] = None
+        if time_col and pd.notna(latest_row.get(time_col)):
+            try:
+                latest_time = pd.to_datetime(latest_row[time_col], utc=True)
+                latest_time_str = latest_time.isoformat()
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("Could not normalize latest message time: %s", exc)
+                latest_time_str = str(latest_row.get(time_col))
+
+        latest_message = latest_row.get('Message')
+        latest_message_str = str(latest_message) if pd.notna(latest_message) else None
+
+        focused_key = (focused_driver or "").upper() or None
+
+        return (
+            session_key,
+            int(len(filtered_messages)),
+            latest_time_str,
+            latest_message_str,
+            focused_key,
+            current_lap,
+        )
+
+    def render(
+        self,
+        session_key: Optional[int],
+        simulation_time: Optional[float],
+        session_start_time: Optional[pd.Timestamp],
+        focused_driver: Optional[str] = None,
+        current_lap: Optional[int] = None
+    ):
+        """Render the Race Control dashboard card."""
+
+        if session_key is None:
+            return self._render_no_session()
+
+        messages, drivers = self._get_messages_and_drivers(session_key)
+        if messages is None or messages.empty:
+            return self._render_no_data()
+
+        filtered_messages = self._filter_messages_by_time(
+            messages,
+            simulation_time,
+            session_start_time
+        )
+        if filtered_messages.empty:
+            filtered_messages = messages.tail(50)
+
+        lap_value = current_lap
+        if lap_value is None:
+            lap_value = self._calculate_current_lap_from_data(
+                session_key,
+                simulation_time,
+                session_start_time,
+                filtered_messages
+            )
+            if lap_value <= 0:
+                lap_value = 0
+
+        display_lap = lap_value or 0
+
+        flag_state, sc_detail = self._extract_current_status(
+            filtered_messages,
+            current_lap=display_lap if display_lap > 0 else None
+        )
+
+        status_card = self._create_status_panel(
+            flag_state,
+            sc_detail,
+            display_lap
+        )
+        timeline_component = self._create_messages_timeline(
+            filtered_messages,
+            focused_driver=focused_driver,
+            drivers=drivers
+        )
+
+        def build_summary_placeholder(message: str) -> dbc.Card:
+            return dbc.Card(
+                dbc.CardBody(
+                    html.Div(
+                        message,
+                        className="text-muted small text-center py-4"
+                    ),
+                    className="p-2",
+                    style={"backgroundColor": "#1e1e1e"}
+                ),
+                className="border border-secondary",
+                style={"minHeight": "350px"}
+            )
+
+        summary_card: Any
+        if (
+            simulation_time is not None
+            and session_start_time is not None
+        ):
+            summary_data = self.get_status_summary(
+                session_key=session_key,
+                simulation_time=simulation_time,
+                session_start_time=session_start_time,
+                current_lap=display_lap
+            )
+            if isinstance(summary_data, dict) and not summary_data.get('error'):
+                summary_card = self._create_summary_panel(summary_data)
+            else:
+                summary_card = build_summary_placeholder("Summary unavailable.")
+        else:
+            summary_card = build_summary_placeholder("Waiting for timing data.")
+
+        hidden_summary = html.Div(
+            summary_card,
+            style={"display": "none"},
+            id="race-control-summary-hidden"
+        )
+
+        content_layout = html.Div(
+            [
+                status_card,
+                dbc.Row(
+                    [
+                        dbc.Col(timeline_component, md=12)
+                    ],
+                    className="g-2"
+                ),
+                hidden_summary,
+            ],
+            className="d-flex flex-column gap-2"
+        )
+
+        return dbc.Card(
+            [
+                dbc.CardHeader(
+                    html.H5(
+                        "🚦 Race Control",
+                        className="mb-0",
+                        style={"fontSize": "1.2rem"}
+                    ),
+                    className="py-1",
+                    style={"backgroundColor": "#1e1e1e"}
+                ),
+                dbc.CardBody(
+                    content_layout,
+                    className="p-2",
+                    style={"backgroundColor": "#121212"}
+                )
+            ],
+            className="mb-3 border border-secondary",
+            style={"minHeight": "620px", "backgroundColor": "#121212"}
+        )

@@ -9,7 +9,7 @@ import math
 import re
 from datetime import datetime
 from numbers import Real
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import dash_bootstrap_components as dbc
 import pandas as pd
@@ -61,6 +61,54 @@ class RaceOverviewDashboard:
         self._cached_intervals = None
         self._cached_stints = None
         self._cached_drivers = None
+
+    def warm_cache(self, session_key: int) -> Tuple[bool, str]:
+        """Ensure leaderboard caches are populated for the given session."""
+        if (
+            self._cached_session_key == session_key
+            and self._cached_positions is not None
+        ):
+            return True, "cached"
+
+        try:
+            positions = self.provider.get_positions(session_key=session_key)
+            intervals = self.provider.get_intervals(session_key=session_key)
+            stints = self.provider.get_stints(session_key=session_key)
+            drivers = self.provider.get_drivers(session_key=session_key)
+        except requests.HTTPError as exc:  # pragma: no cover - network guard
+            if exc.response is not None and exc.response.status_code == 429:
+                logger.warning(
+                    "Rate limit while warming cache for session %s", session_key
+                )
+                return False, "rate_limit"
+            logger.error("HTTP error warming cache for session %s: %s", session_key, exc)
+            return False, "http_error"
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error("Error warming cache for session %s: %s", session_key, exc)
+            return False, "error"
+
+        if positions.empty:
+            logger.warning("Empty position dataset while warming cache for session %s", session_key)
+            return False, "empty"
+
+        self._cached_session_key = session_key
+        self._cached_positions = positions
+        self._cached_intervals = intervals
+        self._cached_stints = stints
+        self._cached_drivers = drivers
+
+        interval_count = len(intervals) if intervals is not None else 0
+        stint_count = len(stints) if stints is not None else 0
+        driver_count = len(drivers) if drivers is not None else 0
+        logger.info(
+            "Primed cache for session %s: %s positions, %s intervals, %s stints, %s drivers",
+            session_key,
+            len(positions),
+            interval_count,
+            stint_count,
+            driver_count,
+        )
+        return True, "loaded"
 
     def render(
         self,
@@ -119,113 +167,48 @@ class RaceOverviewDashboard:
                 self._cached_positions is None
             ):
                 logger.info(
-                    f"Loading fresh data for session {session_key} "
-                    f"(cache miss)"
+                    "Loading fresh data for session %s (cache miss)", session_key
                 )
-                try:
-                    positions = self.provider.get_positions(
-                        session_key=session_key
-                    )
-                    intervals = self.provider.get_intervals(
-                        session_key=session_key
-                    )
-                    stints = self.provider.get_stints(session_key=session_key)
-                    drivers = self.provider.get_drivers(session_key=session_key)
-                    
-                    # Only cache if we got valid data (not empty due to 429)
-                    if not positions.empty:
-                        self._cached_session_key = session_key
-                        self._cached_positions = positions
-                        self._cached_intervals = intervals
-                        self._cached_stints = stints
-                        self._cached_drivers = drivers
-                        logger.info(
-                            f"Cached {len(positions)} position records, "
-                            f"{len(intervals)} intervals, {len(stints)} stints, "
-                            f"{len(drivers)} drivers"
-                        )
-                    else:
-                        logger.warning(
-                            "Got empty data from API (likely 429), "
-                            "using previous cache if available"
-                        )
-                        # Use previous cache if available
-                        if self._cached_positions is not None:
-                            positions = self._cached_positions
-                            intervals = self._cached_intervals
-                            stints = self._cached_stints
-                            drivers = self._cached_drivers
-                        else:
-                            # No cache available, show error
-                            return html.Div(
-                                [
-                                    html.I(
-                                        className="fas fa-hourglass-half fa-3x mb-3",
-                                        style={"color": "#ffc107"}
-                                    ),
-                                    html.H5(
-                                        "API Rate Limit Reached",
-                                        className="text-warning"
-                                    ),
-                                    html.P(
-                                        "The OpenF1 API is temporarily rate-limiting requests. "
-                                        "The system is automatically retrying with exponential backoff...",
-                                        className="small text-muted mb-2"
-                                    ),
-                                    html.P(
-                                        "Please wait 5-10 seconds and the session will load automatically.",
-                                        className="small text-muted"
-                                    ),
-                                    html.Div(
-                                        [
-                                            html.Div(
-                                                className="spinner-border text-warning mt-3",
-                                                role="status"
-                                            ),
-                                            html.Span(
-                                                "Retrying...",
-                                                className="sr-only"
-                                            )
-                                        ]
-                                    )
-                                ],
-                                className="text-center p-5",
-                            )
-                except requests.HTTPError as e:
-                    if e.response and e.response.status_code == 429:
-                        logger.error("Rate limit exceeded after retries")
+                success, reason = self.warm_cache(session_key)
+                if not success:
+                    if reason == "rate_limit":
                         return html.Div(
                             [
                                 html.I(
-                                    className="fas fa-clock fa-3x mb-3",
-                                    style={"color": "#dc3545"}
+                                    className="fas fa-hourglass-half fa-3x mb-3",
+                                    style={"color": "#ffc107"}
                                 ),
                                 html.H5(
-                                    "API Rate Limit Exceeded",
-                                    className="text-danger"
+                                    "API Rate Limit Reached",
+                                    className="text-warning"
                                 ),
                                 html.P(
-                                    "Too many requests to OpenF1 API. "
-                                    "Please wait 1-2 minutes before changing sessions.",
+                                    "The OpenF1 API is temporarily rate-limiting requests. "
+                                    "The system is automatically retrying with exponential backoff...",
                                     className="small text-muted mb-2"
                                 ),
                                 html.P(
-                                    "Tip: Avoid switching sessions rapidly to prevent rate limiting.",
-                                    className="small text-info"
+                                    "Please wait 5-10 seconds and the session will load automatically.",
+                                    className="small text-muted"
                                 ),
+                                html.Div(
+                                    [
+                                        html.Div(
+                                            className="spinner-border text-warning mt-3",
+                                            role="status"
+                                        ),
+                                        html.Span(
+                                            "Retrying...",
+                                            className="sr-only"
+                                        )
+                                    ]
+                                )
                             ],
                             className="text-center p-5",
                         )
-                    else:
-                        logger.error(f"HTTP error loading data: {e}")
-                        # Try to use cache if available
-                        if self._cached_positions is not None:
-                            logger.info("Using cached data due to HTTP error")
-                            positions = self._cached_positions
-                            intervals = self._cached_intervals
-                            stints = self._cached_stints
-                            drivers = self._cached_drivers
-                        else:
+
+                    if self._cached_positions is None:
+                        if reason == "http_error":
                             return html.Div(
                                 [
                                     html.I(
@@ -237,31 +220,44 @@ class RaceOverviewDashboard:
                                         className="text-danger"
                                     ),
                                     html.P(
-                                        f"HTTP Error: {str(e)}",
+                                        "Unable to load timing data for this session right now.",
                                         className="small text-muted"
                                     ),
                                 ],
                                 className="text-center p-5",
                             )
-                except Exception as e:
-                    logger.error(f"Error loading data: {e}")
-                    # Try to use cache if available
-                    if self._cached_positions is not None:
-                        logger.info("Using cached data due to error")
-                        positions = self._cached_positions
-                        intervals = self._cached_intervals
-                        stints = self._cached_stints
-                        drivers = self._cached_drivers
-                    else:
-                        raise
+
+                        return html.Div(
+                            [
+                                html.I(
+                                    className="fas fa-exclamation-triangle fa-3x mb-3",
+                                    style={"color": "#ffc107"}
+                                ),
+                                html.H5(
+                                    "No timing data available",
+                                    className="text-warning"
+                                ),
+                                html.P(
+                                    "The OpenF1 service returned no leaderboard information.",
+                                    className="small text-muted"
+                                ),
+                            ],
+                            className="text-center p-5",
+                        )
+
+                    logger.info(
+                        "Using previously cached data after warm_cache failure (%s)",
+                        reason,
+                    )
             else:
                 logger.info(f"Using cached data for session {session_key}")
-                positions = self._cached_positions
-                intervals = self._cached_intervals
-                stints = self._cached_stints
-                drivers = self._cached_drivers
 
-            if positions.empty:
+            positions = self._cached_positions
+            intervals = self._cached_intervals
+            stints = self._cached_stints
+            drivers = self._cached_drivers
+
+            if positions is None or positions.empty:
                 return html.Div(
                     [
                         html.I(
@@ -1112,7 +1108,8 @@ class RaceOverviewDashboard:
         session_start_time: pd.Timestamp,
         current_lap: int,
         focused_driver: Optional[str] = None,
-        pit_window_range: int = 3
+        pit_window_range: int = 3,
+        pit_proba_lookup: Optional[callable] = None
     ) -> dict:
         """
         Get compact leaderboard summary for AI context.
@@ -1124,6 +1121,7 @@ class RaceOverviewDashboard:
             current_lap: Current lap number
             focused_driver: Driver code/number to focus on (e.g., "RUS" or "63")
             pit_window_range: Number of positions ahead/behind to include
+            pit_proba_lookup: Optional callable returning pit probability for driver and lap
             
         Returns:
             Dict with leaderboard summary:
@@ -1135,7 +1133,9 @@ class RaceOverviewDashboard:
         """
         # Use cached data if available
         if self._cached_session_key != session_key or self._cached_positions is None:
-            return {'error': 'No cached data available'}
+            success, reason = self.warm_cache(session_key)
+            if not success or self._cached_positions is None:
+                return {'error': f'No cached data available ({reason})'}
         
         positions = self._cached_positions
         intervals = self._cached_intervals
@@ -1143,8 +1143,14 @@ class RaceOverviewDashboard:
         drivers = self._cached_drivers
         
         # Filter by simulation time
-        current_timestamp = session_start_time + pd.Timedelta(seconds=simulation_time)
-        filtered_positions = positions[positions['Timestamp'] <= current_timestamp]
+        if session_start_time is not None and simulation_time is not None:
+            current_timestamp = session_start_time + pd.Timedelta(seconds=simulation_time)
+            filtered_positions = positions[positions['Timestamp'] <= current_timestamp]
+        else:
+            filtered_positions = positions
+
+        if filtered_positions.empty and not positions.empty:
+            filtered_positions = positions
         
         if filtered_positions.empty:
             return {'error': 'No position data at this time'}
@@ -1159,8 +1165,19 @@ class RaceOverviewDashboard:
         )
         
         # Merge with intervals
+        current_timestamp = None
+        if session_start_time is not None and simulation_time is not None:
+            current_timestamp = session_start_time + pd.Timedelta(seconds=simulation_time)
+
         if intervals is not None and not intervals.empty:
-            filtered_intervals = intervals[intervals['Timestamp'] <= current_timestamp]
+            if current_timestamp is not None:
+                filtered_intervals = intervals[intervals['Timestamp'] <= current_timestamp]
+            else:
+                filtered_intervals = intervals
+
+            if filtered_intervals.empty and not intervals.empty:
+                filtered_intervals = intervals
+
             if not filtered_intervals.empty:
                 latest_intervals = (
                     filtered_intervals
@@ -1181,7 +1198,7 @@ class RaceOverviewDashboard:
             leaderboard = latest_positions.copy()
             leaderboard['GapToLeader'] = 0.0
             leaderboard['Interval'] = 0.0
-        
+
         # Merge with drivers
         if drivers is not None and not drivers.empty:
             leaderboard = leaderboard.merge(
@@ -1189,12 +1206,32 @@ class RaceOverviewDashboard:
                 on='DriverNumber',
                 how='left'
             )
+
+        # Normalize driver number, position, and gap columns
+        if 'DriverNumber' in leaderboard.columns:
+            leaderboard['DriverNumber'] = leaderboard['DriverNumber'].astype(str)
+        if 'Position' in leaderboard.columns:
+            leaderboard['Position'] = pd.to_numeric(
+                leaderboard['Position'],
+                errors='coerce'
+            )
+            leaderboard = leaderboard.dropna(subset=['Position'])
+            leaderboard['Position'] = leaderboard['Position'].astype(int)
+            leaderboard = leaderboard.sort_values('Position').reset_index(drop=True)
+        for gap_col in ('GapToLeader', 'Interval'):
+            if gap_col in leaderboard.columns:
+                leaderboard[gap_col] = pd.to_numeric(
+                    leaderboard[gap_col], errors='coerce'
+                )
         
         # Get tire data from stints
         tire_data = {}
         if stints is not None and not stints.empty:
+            stints_copy = stints.copy()
+            if 'DriverNumber' in stints_copy.columns:
+                stints_copy['DriverNumber'] = stints_copy['DriverNumber'].astype(str)
             for driver_num in leaderboard['DriverNumber'].unique():
-                driver_stints = stints[stints['DriverNumber'] == driver_num].sort_values('StintNumber')
+                driver_stints = stints_copy[stints_copy['DriverNumber'] == driver_num].sort_values('StintNumber')
                 if not driver_stints.empty:
                     current_stint = None
                     for _, stint in driver_stints.iterrows():
@@ -1224,14 +1261,24 @@ class RaceOverviewDashboard:
             'pit_window': []
         }
         
+        def format_gap_to_leader(gap_value: Optional[float], position: int) -> str:
+            if position == 1:
+                return 'LEADER'
+            if gap_value is None or (isinstance(gap_value, float) and math.isnan(gap_value)):
+                return 'N/A'
+            if gap_value <= 0:
+                return 'LEADER'
+            return f"{gap_value:.1f}s"
+
         # Top 10
         for idx, row in leaderboard.head(10).iterrows():
             driver_num = row['DriverNumber']
             tire_info = tire_data.get(driver_num, {'compound': 'UNKNOWN', 'age': 0, 'pit_stops': 0})
+            position = int(row['Position'])
             summary['top_10'].append({
-                'pos': int(row['Position']),
+                'pos': position,
                 'driver': row.get('Abbreviation', str(driver_num)),
-                'gap': f"{row['GapToLeader']:.1f}s" if row['GapToLeader'] > 0 else 'LEADER',
+                'gap': format_gap_to_leader(row.get('GapToLeader'), position),
                 'tire': tire_info['compound'],
                 'age': tire_info['age'],
                 'stops': tire_info['pit_stops']
@@ -1257,16 +1304,32 @@ class RaceOverviewDashboard:
                         driver_num = match.iloc[0]['DriverNumber']
             
             if driver_num:
-                focus_row = leaderboard[leaderboard['DriverNumber'] == driver_num]
+                driver_num_str = str(driver_num)
+                focus_row = leaderboard[leaderboard['DriverNumber'] == driver_num_str]
+                if focus_row.empty:
+                    focus_row = leaderboard[
+                        leaderboard['DriverNumber'].astype(str) == driver_num_str
+                    ]
                 if not focus_row.empty:
                     focus_row = focus_row.iloc[0]
                     focus_pos = int(focus_row['Position'])
-                    tire_info = tire_data.get(driver_num, {'compound': 'UNKNOWN', 'age': 0, 'pit_stops': 0})
+                    tire_info = tire_data.get(
+                        driver_num_str,
+                        {'compound': 'UNKNOWN', 'age': 0, 'pit_stops': 0}
+                    )
                     
                     # Get gaps to ahead/behind
-                    ahead_row = leaderboard[leaderboard['Position'] == focus_pos - 1]
-                    behind_row = leaderboard[leaderboard['Position'] == focus_pos + 1]
-                    
+                    gap_ahead_val: Optional[float] = None
+                    if focus_pos > 1:
+                        gap_ahead_val = focus_row.get('Interval')
+
+                    gap_behind_val: Optional[float] = None
+                    max_position = int(leaderboard['Position'].max()) if not leaderboard.empty else focus_pos
+                    if focus_pos < max_position:
+                        behind_row = leaderboard[leaderboard['Position'] == focus_pos + 1]
+                        if not behind_row.empty:
+                            gap_behind_val = behind_row.iloc[0].get('Interval')
+
                     focus_driver_code = focus_row.get('Abbreviation', str(driver_num))
 
                     lap_number = None
@@ -1284,12 +1347,26 @@ class RaceOverviewDashboard:
                         except Exception as exc:  # pragma: no cover - defensive
                             logger.debug("pit_proba_lookup failed: %s", exc)
 
+                    def format_gap_value(value: Optional[float]) -> str:
+                        if value is None or (isinstance(value, float) and math.isnan(value)):
+                            return 'N/A'
+                        if value <= 0:
+                            return 'CLOSED'
+                        return f"{value:.1f}s"
+
+                    gap_to_leader_val = focus_row.get('GapToLeader')
                     summary['focus_driver'] = {
                         'pos': focus_pos,
                         'driver': focus_driver_code,
-                        'gap_to_leader': f"{focus_row['GapToLeader']:.1f}s" if focus_row['GapToLeader'] > 0 else 'LEADER',
-                        'gap_ahead': f"{focus_row['Interval']:.1f}s" if not ahead_row.empty else 'N/A',
-                        'gap_behind': f"{behind_row.iloc[0]['Interval']:.1f}s" if not behind_row.empty else 'N/A',
+                        'gap_to_leader': (
+                            f"{gap_to_leader_val:.1f}s"
+                            if isinstance(gap_to_leader_val, (int, float))
+                            and not math.isnan(gap_to_leader_val)
+                            and gap_to_leader_val > 0
+                            else 'LEADER'
+                        ),
+                        'gap_ahead': format_gap_value(gap_ahead_val),
+                        'gap_behind': format_gap_value(gap_behind_val),
                         'tire': tire_info['compound'],
                         'age': tire_info['age'],
                         'stops': tire_info['pit_stops'],
@@ -1307,12 +1384,21 @@ class RaceOverviewDashboard:
                         row_data = leaderboard[leaderboard['Position'] == pos]
                         if not row_data.empty:
                             row_data = row_data.iloc[0]
-                            d_num = row_data['DriverNumber']
-                            tire_info = tire_data.get(d_num, {'compound': 'UNKNOWN', 'age': 0, 'pit_stops': 0})
+                            d_num = str(row_data['DriverNumber'])
+                            tire_info = tire_data.get(
+                                d_num,
+                                {'compound': 'UNKNOWN', 'age': 0, 'pit_stops': 0}
+                            )
                             summary['pit_window'].append({
                                 'pos': int(pos),
                                 'driver': row_data.get('Abbreviation', str(d_num)),
-                                'gap': f"{row_data['GapToLeader']:.1f}s" if row_data['GapToLeader'] > 0 else 'LEADER',
+                                'gap': (
+                                    f"{row_data['GapToLeader']:.1f}s"
+                                    if isinstance(row_data.get('GapToLeader'), (int, float))
+                                    and not math.isnan(row_data.get('GapToLeader'))
+                                    and row_data.get('GapToLeader') > 0
+                                    else 'LEADER'
+                                ),
                                 'tire': tire_info['compound'],
                                 'age': tire_info['age'],
                                 'stops': tire_info['pit_stops']

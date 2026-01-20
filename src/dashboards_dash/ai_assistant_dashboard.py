@@ -117,10 +117,11 @@ class AIAssistantDashboard:
                         'padding': '8px',
                         'background-color': '#1a1a1a',
                         'border-radius': '5px',
-                        'margin-bottom': '8px',
-                        'height': '320px',
+                        'margin-bottom': '12px',
                         'display': 'flex',
-                        'flex-direction': 'column'
+                        'flex-direction': 'column',
+                        'flex': '1 1 auto',
+                        'min-height': '0'
                     }
                 ),
                 
@@ -139,8 +140,8 @@ class AIAssistantDashboard:
                         color="primary",
                         n_clicks=0
                     )
-                ], className="mb-2", size="sm"),
-                
+                ], size="sm"),
+
                 # Quick action buttons
                 html.Div([
                     dbc.ButtonGroup([
@@ -177,8 +178,13 @@ class AIAssistantDashboard:
                         outline=True,
                         n_clicks=0
                     )
-                ], className="d-flex justify-content-between")
-            ], style={"padding": "0.5rem"})
+                ], className="d-flex justify-content-between", style={'margin-top': '6px'})
+            ], style={
+                "padding": "0.5rem",
+                "display": "flex",
+                "flexDirection": "column",
+                "height": "100%"
+            })
         ], className="mb-3 h-100", style={"overflow": "hidden"})
     
     @staticmethod

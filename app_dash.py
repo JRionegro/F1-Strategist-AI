@@ -4250,10 +4250,19 @@ def _build_session_store_payload(
 
                 start_seconds, first_lap_end_seconds, session_end_seconds = _derive_boundary_seconds()
 
-                start_time = session_date + timedelta(seconds=start_seconds)
-                end_time = session_date + timedelta(seconds=session_end_seconds)
+                offset_seconds = 0.0
+                if formation_offset_seconds is not None:
+                    try:
+                        offset_seconds = float(formation_offset_seconds)
+                    except (TypeError, ValueError):
+                        offset_seconds = 0.0
 
-                track_map_status['formation_offset_seconds'] = formation_offset_seconds
+                offset_td = timedelta(seconds=offset_seconds)
+
+                start_time = session_date + timedelta(seconds=start_seconds) + offset_td
+                end_time = session_date + timedelta(seconds=session_end_seconds) + offset_td
+
+                track_map_status['formation_offset_seconds'] = offset_seconds
                 track_map_status['fastf1_lap_one_seconds'] = fastf1_lap_one_seconds
 
                 simulation_controller = SimulationController(
@@ -8173,19 +8182,30 @@ def handle_chat_send(
             raise PreventUpdate
         query = user_input.strip()
     elif triggered_id == 'quick-pit-btn':
-        driver = focused_driver if focused_driver != 'none' else 'our driver'
+        if not pit_clicks or pit_clicks <= 0:
+            chat_logger.debug("[CHAT] Ignoring pit trigger with zero clicks")
+            raise PreventUpdate
+        if not session_data or not session_data.get('loaded'):
+            chat_logger.info("[CHAT] Ignoring quick pit: no session loaded")
+            raise PreventUpdate
+        driver = focused_driver if focused_driver not in (None, 'none', '') else 'our driver'
         query = f"Should {driver} pit now? What's the optimal tire strategy?"
     elif triggered_id == 'quick-weather-btn':
+        if not weather_clicks or weather_clicks <= 0:
+            chat_logger.debug("[CHAT] Ignoring weather trigger with zero clicks")
+            raise PreventUpdate
         query = "What's the current weather situation? Any rain expected?"
     elif triggered_id == 'quick-gap-btn':
-        driver = focused_driver if focused_driver != 'none' else 'our driver'
+        if not gap_clicks or gap_clicks <= 0:
+            chat_logger.debug("[CHAT] Ignoring gap trigger with zero clicks")
+            raise PreventUpdate
+        driver = focused_driver if focused_driver not in (None, 'none', '') else 'our driver'
         query = f"What are the gaps around {driver}? Any overtake opportunities?"
     else:
         chat_logger.debug(f"[CHAT] Unknown trigger: {triggered_id}")
         raise PreventUpdate
-    
+
     chat_logger.info(f"[CHAT] Processing query: {query[:50]}...")
-    
     # Add user message
     timestamp = datetime.now().isoformat()
     messages.append({
@@ -8632,6 +8652,12 @@ def get_race_state_snapshot(
         
         # Get leaderboard summary
         try:
+            cache_ready, cache_reason = race_overview_dashboard.warm_cache(session_key)
+            if not cache_ready:
+                logger.debug(
+                    "Race overview cache not warmed (%s) before AI snapshot",
+                    cache_reason,
+                )
             if race_overview_dashboard._cached_positions is not None:
                 leaderboard = race_overview_dashboard.get_leaderboard_summary(
                     session_key=session_key,
