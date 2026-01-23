@@ -4,21 +4,21 @@ template: true
 variables: [circuit_name, circuit_type, lap_length, total_laps, pit_loss, drs_zones]
 ---
 
-# Lusail International Circuit - Complete Strategy Guide
+# Circuit de Monaco - Complete Strategy Guide
 
 ## Circuit Characteristics
 
 | Property | Value |
 |----------|-------|
-| **Circuit Type** | High-speed flowing circuit |
-| **Lap Length** | 5.419 km |
-| **Race Laps** | 57 |
-| **Pit Lane Time Loss** | 20.5 seconds |
-| **DRS Zones** | 2 |
+| **Circuit Type** | Tight street circuit |
+| **Lap Length** | 3.337 km |
+| **Race Laps** | 78 |
+| **Pit Lane Time Loss** | 18.0 seconds |
+| **DRS Zones** | 1 |
 
 ## Track Layout
 
-Technical circuit requiring good car balance and tire management.
+Ultra-tight street circuit through Monte Carlo. Famous for Casino Square, tunnel, and Swimming Pool chicane.
 
 ---
 
@@ -26,8 +26,8 @@ Technical circuit requiring good car balance and tire management.
 
 ### Starting Grid Position Value
 
-- **Overtaking Difficulty**: 5/10
-- **Track Position Importance**: 6/10
+- **Overtaking Difficulty**: 10/10
+- **Track Position Importance**: 10/10
 - **First Lap Position Gain Potential**: 1-3 positions typical
 - **Clean Air Premium**: ~0.3-0.5s per lap
 
@@ -38,7 +38,7 @@ Technical circuit requiring good car balance and tire management.
 | **Start** | 1-5 | Position defense/attack, tire preservation |
 | **Early Race** | 6-20 | Undercut window opens, fuel burn effect |
 | **Mid-Race** | 21-40 | Primary pit window, SC probability peak |
-| **Late Race** | 41-57 | Final stint management, DRS trains |
+| **Late Race** | 41-78 | Final stint management, DRS trains |
 
 ---
 
@@ -57,7 +57,7 @@ Technical circuit requiring good car balance and tire management.
 - **Entry Speed Limit**: 80 km/h
 - **Pit Lane Length**: 400 m
 - **Typical Stationary Time**: 2.5 seconds
-- **Total Time Loss per Stop**: 20.5 seconds
+- **Total Time Loss per Stop**: 18.0 seconds
 - **Delta vs Track (per stop)**: ~18-22s
 
 ### 2.3 Undercut Analysis
@@ -65,7 +65,7 @@ Technical circuit requiring good car balance and tire management.
 The **undercut** involves pitting earlier than your rival to gain track position
 through fresh tire pace advantage.
 
-- **Undercut Power at Lusail International Circuit**: 6/10
+- **Undercut Power at Circuit de Monaco**: 6/10
 - **Optimal Window**: 1-2 laps before rival
 - **Fresh Tire Advantage**: ~1.5s per lap
 - **Effective For**: Rival with degraded tires
@@ -113,9 +113,9 @@ Secondary straight end
 
 ### 3.3 Non-DRS Opportunities
 
-- Heavy braking zones before corners
-- Hairpins and chicanes
-- Wide corner entries allowing multiple lines
+- Turn 1 Sainte Devote: Only realistic opportunity
+- Nouvelle Chicane: Tight but possible
+- Swimming Pool: Very difficult
 
 ### 3.4 Defensive Lines
 
@@ -133,14 +133,14 @@ Secondary straight end
 
 ### 4.1 Historical Data
 
-- **SC Probability**: 30%
+- **SC Probability**: 70%
 - **Average SCs per Race**: 1.2
 - **VSC Probability**: 25%
 - **Red Flag Probability**: 5%
 
 ### 4.2 Common SC Zones
 
-Turn 1 area, chicanes, wall sections
+Swimming pool chicane, Tunnel exit, Rascasse
 
 ### 4.3 SC/VSC Strategy Protocols
 
@@ -162,7 +162,7 @@ Turn 1 area, chicanes, wall sections
    - VSC: ~10-12s stop (vs 20-25s normal), pit if gap allows
    - Full SC: Field bunches, position matters more than gap
 
-SC provides opportunity for cheap pit stops. Monitor tire age vs rivals to optimize stop timing.
+SC likely to bunch field. Track position paramount - pit under SC only if necessary. Undercut power minimal.
 
 ### 4.4 Red Flag Strategy
 
@@ -179,9 +179,9 @@ SC provides opportunity for cheap pit stops. Monitor tire age vs rivals to optim
 
 ### 5.1 Alternative Strategic Options
 
-1. **Extended first stint**: Gain track position after pit
-2. **Opposite strategy**: Counter rivals' expected approach
-3. **SC gamble**: Stay out if SC probability high
+1. **Super-early stop**: Pit lap 10-15 for track position
+2. **No-stop gamble**: If SC likely, stay out entire race
+3. **Opposite compound**: Start HARD when rivals on SOFT
 
 ### 5.2 Historical Creative Strategies
 
@@ -203,9 +203,9 @@ SC provides opportunity for cheap pit stops. Monitor tire age vs rivals to optim
 
 ### 5.4 Reverse Strategy Analysis
 
-What strategies would opponents fear most at Lusail International Circuit?
+What strategies would opponents fear most at Circuit de Monaco?
 
-- Leader fears: Successful undercut or late SC
+- Leader fears: Late SC bunching the field
 - Midfield fears: DRS trains preventing progress, wrong strategy call
 - Backmarker opportunity: Early stop for clean air, SC/VSC gambles, opposite strategy
 
@@ -241,9 +241,9 @@ What strategies would opponents fear most at Lusail International Circuit?
 
 ### Common Winning Patterns
 
-- Standard 1-stop strategy most common
-- 2-stop viable for aggressive drivers
-- SC timing often decides race outcome
+- Track position is everything
+- 1-stop MEDIUM→HARD standard
+- SC almost certain, timing is key
 
 ### Circuit-Specific Trends
 
@@ -281,23 +281,23 @@ Based on recent seasons:
 ## 10. Quick Reference Card
 
 ```
-🏁 CIRCUIT: Lusail International Circuit
-📍 TYPE: High-speed flowing circuit
-🔄 LAPS: 57 @ 5.419 km
-⏱️ PIT LOSS: 20.5s
+🏁 CIRCUIT: Circuit de Monaco
+📍 TYPE: Tight street circuit
+🔄 LAPS: 78 @ 3.337 km
+⏱️ PIT LOSS: 18.0s
 
 OPTIMAL STRATEGIES:
-├── 1-STOP: Lap 23-25 (MEDIUM → HARD)
+├── 1-STOP: Lap 18-25 (MEDIUM → HARD)
 ├── 2-STOP: Laps 12-15, 30-35 (SOFT → MEDIUM → SOFT)
 └── SC REACT: Pit if gap >3s to car behind
 
 KEY METRICS:
-├── Overtake Difficulty: 5/10
+├── Overtake Difficulty: 10/10
 ├── Undercut Power: 6/10
-└── SC Probability: 30%
+└── SC Probability: 70%
 ```
 
 ---
 
 *Generated from template. Data: OpenF1 API, FIA Regulations, Historical Analysis*
-*Last updated: 2026-01-06 13:06*
+*Last updated: 2026-01-23 18:52*

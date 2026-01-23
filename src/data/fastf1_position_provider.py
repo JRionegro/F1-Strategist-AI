@@ -57,10 +57,51 @@ class FastF1PositionProvider:
         logger.info("FastF1PositionProvider ready (cache dir: %s)", self.cache_dir)
 
     def _get_positions_cache_path(self, year: int, country: str, session_type: str) -> Path:
+        """
+        Get the positions cache path, trying multiple naming patterns.
+        
+        Returns the first existing cache file, or generates the expected path
+        if no cache exists.
+        """
         safe_country = country.replace(" ", "_").replace("/", "_")
         session_dir = self.cache_dir / str(year)
         session_dir.mkdir(parents=True, exist_ok=True)
-        return session_dir / f"{safe_country}_{session_type}_positions.pkl"
+        
+        # Primary pattern: {country}_{session_type}_positions.pkl
+        primary_path = session_dir / f"{safe_country}_{session_type}_positions.pkl"
+        
+        # Try primary pattern first
+        if primary_path.exists():
+            logger.debug(
+                "Found cache with primary pattern: %s",
+                primary_path.name
+            )
+            return primary_path
+        
+        # Fallback patterns to try for backwards compatibility
+        fallback_patterns = [
+            f"{safe_country}_Grand_Prix_{session_type}_positions.pkl",  # With "Grand Prix"
+            f"{safe_country}_Race_positions.pkl",  # "Race" instead of "R"
+        ]
+        
+        for pattern in fallback_patterns:
+            fallback_path = session_dir / pattern
+            if fallback_path.exists():
+                logger.debug(
+                    "Found cache with fallback pattern: %s (looking for %s)",
+                    fallback_path.name,
+                    primary_path.name
+                )
+                return fallback_path
+        
+        # No existing cache found - return primary path for new cache creation
+        logger.debug(
+            "No existing cache found. Expected: %s (country=%s, session_type=%s)",
+            primary_path.name,
+            country,
+            session_type
+        )
+        return primary_path
 
     @staticmethod
     def translate_openf1_session(openf1_session: Dict[str, str]) -> Dict[str, str | int]:
