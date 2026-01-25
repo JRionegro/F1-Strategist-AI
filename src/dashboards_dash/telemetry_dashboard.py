@@ -272,7 +272,11 @@ class TelemetryDashboard:
                                     "responsive": True,
                                     "displayModeBar": False
                                 },
-                                style={"height": "560px"}
+                                style={
+                                    "flex": "1 1 auto",
+                                    "width": "100%",
+                                    "height": "100%"
+                                }
                             ),
                         ],
                         className="p-0 position-relative",
@@ -280,11 +284,19 @@ class TelemetryDashboard:
                             "backgroundColor": "#1e1e1e",
                             "position": "relative",
                             "overflow": "hidden",
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "flex": "1 1 auto",
+                            "minHeight": 0,
                         }
                     ),
                 ],
-                className="mb-2 border border-secondary",
-                style={"height": "620px", "backgroundColor": "#1e1e1e"}
+                className="mb-2 border border-secondary h-100 d-flex flex-column",
+                style={
+                    "backgroundColor": "#1e1e1e",
+                    "display": "flex",
+                    "flexDirection": "column",
+                }
             )
 
         except Exception as e:
@@ -713,7 +725,7 @@ class TelemetryDashboard:
             template="plotly_dark",
             paper_bgcolor="#1e1e1e",
             plot_bgcolor="#161b22",
-            height=490,
+            autosize=True,
             margin=dict(l=50, r=20, t=10, b=50),
             legend=dict(
                 orientation="h",
@@ -930,11 +942,23 @@ class TelemetryDashboard:
                             className="text-center p-5"
                         )
                     ],
-                    style={"backgroundColor": "#1e1e1e"}
+                    className="p-0 d-flex flex-column align-items-center justify-content-center",
+                    style={
+                        "backgroundColor": "#1e1e1e",
+                        "flex": "1 1 auto",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "justifyContent": "center",
+                        "alignItems": "center",
+                    }
                 ),
             ],
-            className="mb-3",
-            style={"height": "620px", "backgroundColor": "#1e1e1e"}
+            className="mb-3 h-100 d-flex flex-column",
+            style={
+                "backgroundColor": "#1e1e1e",
+                "display": "flex",
+                "flexDirection": "column",
+            }
         )
 
     def _render_no_driver_selected(self) -> dbc.Card:
@@ -965,11 +989,23 @@ class TelemetryDashboard:
                             className="text-center p-5"
                         )
                     ],
-                    style={"backgroundColor": "#1e1e1e"}
+                    className="p-0 d-flex flex-column align-items-center justify-content-center",
+                    style={
+                        "backgroundColor": "#1e1e1e",
+                        "flex": "1 1 auto",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "justifyContent": "center",
+                        "alignItems": "center",
+                    }
                 ),
             ],
-            className="mb-3",
-            style={"height": "620px", "backgroundColor": "#1e1e1e"}
+            className="mb-3 h-100 d-flex flex-column",
+            style={
+                "backgroundColor": "#1e1e1e",
+                "display": "flex",
+                "flexDirection": "column",
+            }
         )
 
     def _render_no_data(self) -> dbc.Card:
@@ -1000,11 +1036,23 @@ class TelemetryDashboard:
                             className="text-center p-5"
                         )
                     ],
-                    style={"backgroundColor": "#1e1e1e"}
+                    className="p-0 d-flex flex-column align-items-center justify-content-center",
+                    style={
+                        "backgroundColor": "#1e1e1e",
+                        "flex": "1 1 auto",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "justifyContent": "center",
+                        "alignItems": "center",
+                    }
                 ),
             ],
-            className="mb-3",
-            style={"height": "620px", "backgroundColor": "#1e1e1e"}
+            className="mb-3 h-100 d-flex flex-column",
+            style={
+                "backgroundColor": "#1e1e1e",
+                "display": "flex",
+                "flexDirection": "column",
+            }
         )
 
     def _render_no_lap_data(self, driver: str, current_lap: Optional[int] = None) -> dbc.Card:
@@ -1045,11 +1093,23 @@ class TelemetryDashboard:
                             className="text-center p-5"
                         )
                     ],
-                    style={"backgroundColor": "#1e1e1e"}
+                    className="p-0 d-flex flex-column align-items-center justify-content-center",
+                    style={
+                        "backgroundColor": "#1e1e1e",
+                        "flex": "1 1 auto",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "justifyContent": "center",
+                        "alignItems": "center",
+                    }
                 ),
             ],
-            className="mb-3",
-            style={"height": "620px", "backgroundColor": "#1e1e1e"}
+            className="mb-3 h-100 d-flex flex-column",
+            style={
+                "backgroundColor": "#1e1e1e",
+                "display": "flex",
+                "flexDirection": "column",
+            }
         )
 
     def _render_no_telemetry(self, driver: str) -> dbc.Card:
@@ -1080,11 +1140,23 @@ class TelemetryDashboard:
                             className="text-center p-5"
                         )
                     ],
-                    style={"backgroundColor": "#1e1e1e"}
+                    className="p-0 d-flex flex-column align-items-center justify-content-center",
+                    style={
+                        "backgroundColor": "#1e1e1e",
+                        "flex": "1 1 auto",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "justifyContent": "center",
+                        "alignItems": "center",
+                    }
                 ),
             ],
-            className="mb-3",
-            style={"height": "620px", "backgroundColor": "#1e1e1e"}
+            className="mb-3 h-100 d-flex flex-column",
+            style={
+                "backgroundColor": "#1e1e1e",
+                "display": "flex",
+                "flexDirection": "column",
+            }
         )
 
     def _render_error(self, error_msg: str) -> dbc.Card:
@@ -1112,9 +1184,21 @@ class TelemetryDashboard:
                             className="text-center p-5"
                         )
                     ],
-                    style={"backgroundColor": "#1e1e1e"}
+                    className="p-0 d-flex flex-column align-items-center justify-content-center",
+                    style={
+                        "backgroundColor": "#1e1e1e",
+                        "flex": "1 1 auto",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "justifyContent": "center",
+                        "alignItems": "center",
+                    }
                 ),
             ],
-            className="mb-3",
-            style={"height": "620px", "backgroundColor": "#1e1e1e"}
+            className="mb-3 h-100 d-flex flex-column",
+            style={
+                "backgroundColor": "#1e1e1e",
+                "display": "flex",
+                "flexDirection": "column",
+            }
         )

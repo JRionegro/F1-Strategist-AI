@@ -440,9 +440,9 @@ class RaceControlDashboard:
 
         sections = [
             html.Div(status_badges, className="mb-2"),
-            render_section("Recent", recent_events, "No recent events."),
             render_section("Penalties", penalties, "No penalties."),
             render_section("Incidents", incidents, "No incidents."),
+            render_section("Recent", recent_events, "No recent events."),
         ]
 
         return dbc.Card(

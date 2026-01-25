@@ -6622,8 +6622,17 @@ def update_dashboards(
                                     f"Error loading telemetry: {str(e)}",
                                     className="text-danger"
                                 )
-                            ], className="p-2")
-                        ], className="mb-3", style={"height": "620px"}),
+                            ], className="p-2", style={
+                                "flex": "1 1 auto",
+                                "display": "flex",
+                                "alignItems": "center",
+                                "backgroundColor": "#1e1e1e",
+                            })
+                        ], className="mb-3 h-100 d-flex flex-column", style={
+                            "backgroundColor": "#1e1e1e",
+                            "display": "flex",
+                            "flexDirection": "column",
+                        }),
                         id="telemetry-wrapper"
                     )
                 )

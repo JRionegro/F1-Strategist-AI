@@ -1092,7 +1092,6 @@ class RaceOverviewDashboard:
                 "alignItems": "center",
                 "padding": "4px 10px",
                 "fontSize": "0.75rem",
-                "borderLeft": "3px solid transparent",
                 "borderBottom": "1px solid #333",
                 "backgroundColor": base_bg,
             }
@@ -1109,8 +1108,12 @@ class RaceOverviewDashboard:
 
             if focused_driver_code and row_info["driver"] == focused_driver_code:
                 row_style.update({
-                    "borderLeft": "4px solid #e10600",
-                    "boxShadow": "0 0 8px rgba(225, 6, 0, 0.3)",
+                    "background": (
+                        "linear-gradient(90deg, rgba(225, 6, 0, 0.32) 0%, "
+                        "rgba(225, 6, 0, 0.12) 45%, rgba(30, 30, 30, 0) 100%)"
+                    ),
+                    "backgroundColor": base_bg,
+                    "boxShadow": "0 0 10px rgba(225, 6, 0, 0.35)",
                 })
 
             driver_style = {
@@ -1121,7 +1124,6 @@ class RaceOverviewDashboard:
                 "overflow": "hidden",
                 "textOverflow": "ellipsis",
             }
-
             return html.Div(
                 [
                     html.Div(row_info["pos"], className="text-center"),
