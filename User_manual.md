@@ -89,7 +89,6 @@ Dashboards are rendered in the order configured in the dashboard selector. Each 
 ### AI Assistant
 
 ![AI Assistant Chat](images/manual/ai-assistant-chat.png)
-_After capturing, highlight a pit-window alert and a user query reply._
 
 - Displays proactive alerts (amber) triggered by race event detection, assistant answers (gray), and user prompts (blue).
 - Quick action buttons (Pit, Weather, Gaps, Predict) enqueue curated prompts without typing.
@@ -99,7 +98,6 @@ _After capturing, highlight a pit-window alert and a user query reply._
 ### Race Overview
 
 ![Race Overview Leaderboard](images/manual/race-overview-leaderboard.png)
-_Show the full leaderboard, gaps, stints, and pit stop columns._
 
 - Real-time leaderboard with gap to leader, gap to car ahead, tire compound, stint length, and pit stop count.
 - Uses OpenF1 intervals and stints endpoints, filtered to the current simulation timestamp.
@@ -110,7 +108,6 @@ _Show the full leaderboard, gaps, stints, and pit stop columns._
 
 ![Race Control Timeline - Flags](images/manual/race-control-timeline.png)
 ![Race Control Timeline - Penalties](images/manual/race-control-timeline2.png)
-_Include an example with a Safety Car message and a driver-specific penalty._
 
 - Status header shows the current flag, lap number, and Safety Car or Virtual Safety Car annotation.
 - Timeline lists recent race control messages, coloring alerts by severity. Messages involving the focused driver are highlighted.
@@ -119,7 +116,6 @@ _Include an example with a Safety Car message and a driver-specific penalty._
 ### Track Map
 
 ![Track Map Dashboard](images/manual/track-map-dashboard.png)
-_Capture a screenshot during simulation playback with driver markers and at least one retired car._
 
 - Requires Simulation mode and a valid FastF1 cache. Once ready, the dashboard animates driver positions per lap.
 - Driver markers use team colors and show driver abbreviations; the focused driver gains a red outline.
@@ -129,7 +125,6 @@ _Capture a screenshot during simulation playback with driver markers and at leas
 ### Weather
 
 ![Weather Dashboard](images/manual/weather-dashboard.png)
-_Show current metrics plus the temperature trend chart._
 
 - Current conditions panel summarizes air and track temperature, humidity, wind speed/direction, and rainfall flag.
 - Temperature graph plots air and track temperatures over time with a “Now” marker aligned with simulation time.
@@ -138,7 +133,6 @@ _Show current metrics plus the temperature trend chart._
 ### Telemetry
 
 ![Telemetry Comparison](images/manual/telemetry-comparison.png)
-_Capture overlapping traces for two drivers to demonstrate comparison mode._
 
 - Generates speed, throttle, brake, gear, and DRS traces for the focus driver’s latest completed lap.
 - Comparison dropdown lets you overlay a second driver’s lap when available.
