@@ -1,6 +1,6 @@
 # F1 Strategist AI - Documentation Index
 
-**Last Updated**: January 18, 2026  
+**Last Updated**: January 25, 2026  
 **Project Status**: Production Ready ✅
 
 ---
@@ -11,6 +11,7 @@
 |----------|-------------|
 | [README.md](README.md) | Complete project overview, architecture, and technology stack |
 | [QUICK_START.md](QUICK_START.md) | Installation and setup guide |
+| [User_manual.md](../User_manual.md) | End-user manual with sidebar, dashboards, and screenshots |
 
 ---
 

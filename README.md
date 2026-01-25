@@ -681,8 +681,9 @@ pytest --cov=src --cov-report=html
 | [README.md](README.md) | Project overview (this file) |
 | [QUICK_START.md](QUICK_START.md) | Installation and setup |
 | [INDEX.md](INDEX.md) | Complete documentation index |
+| [User_manual.md](User_manual.md) | Detailed user workflow with screenshots |
 
-Development documentation located in `docs/project_development/`.
+Development documentation located in [docs/project_development/](docs/project_development/).
 
 ---
 
