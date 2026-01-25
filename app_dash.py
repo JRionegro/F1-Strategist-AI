@@ -4970,7 +4970,6 @@ def preview_fia_upload(contents, filename):
 
 # ============================================================================
 # DOCUMENT UPLOAD CALLBACKS
-# ============================================================================
 
 # Hidden style for overlay (used to hide it)
 OVERLAY_HIDDEN = {"display": "none"}
@@ -5968,20 +5967,44 @@ def update_dashboards(
             if not session_loaded:
                 dash_logger.debug("Race overview: session not yet loaded")
                 dashboards.append(
-                    dbc.Card([
-                        dbc.CardHeader(html.H5("🏁 Race Overview", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
-                        dbc.CardBody([
-                            dcc.Loading(
-                                html.Div([
-                                    html.P("Loading session data...", className="text-center p-5 text-muted"),
-                                    html.P("Please wait while we load the race information.", 
-                                           className="text-center text-muted small")
-                                ]),
-                                type="circle",
-                                color="#e10600"
+                    dbc.Card(
+                        [
+                            dbc.CardHeader(
+                                html.H5("🏁 Race Overview", className="mb-0", style={"fontSize": "1.2rem"}),
+                                className="py-1",
+                                style={"backgroundColor": "#1e1e1e"}
+                            ),
+                            dbc.CardBody(
+                                [
+                                    dcc.Loading(
+                                        html.Div([
+                                            html.P("Loading session data...", className="text-center p-5 text-muted"),
+                                            html.P("Please wait while we load the race information.", 
+                                                   className="text-center text-muted small")
+                                        ]),
+                                        type="circle",
+                                        color="#e10600"
+                                    )
+                                ],
+                                className="p-2",
+                                style={
+                                    "backgroundColor": "#121212",
+                                    "display": "flex",
+                                    "flexDirection": "column",
+                                    "flex": "1 1 auto",
+                                    "minHeight": "0"
+                                }
                             )
-                        ], className="p-2")
-                    ], className="mb-3", style={"height": "620px"})
+                        ],
+                        className="border border-secondary mb-3 h-100",
+                        style={
+                            "backgroundColor": "#121212",
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "height": "100%",
+                            "minHeight": "0"
+                        }
+                    )
                 )
                 continue
                 
@@ -5989,13 +6012,38 @@ def update_dashboards(
                 if current_session_obj is None:
                     logger.warning("Race overview requested but no session loaded")
                     dashboards.append(
-                        dbc.Card([
-                            dbc.CardHeader(html.H5("🏁 Race Overview", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
-                            dbc.CardBody([
-                                html.P("No session loaded. Please select a race session from the sidebar.", 
-                                       className="text-muted text-center p-5")
-                            ], className="p-2")
-                        ], className="mb-3", style={"height": "620px"})
+                        dbc.Card(
+                            [
+                                dbc.CardHeader(
+                                    html.H5("🏁 Race Overview", className="mb-0", style={"fontSize": "1.2rem"}),
+                                    className="py-1",
+                                    style={"backgroundColor": "#1e1e1e"}
+                                ),
+                                dbc.CardBody(
+                                    [
+                                        html.P(
+                                            "No session loaded. Please select a race session from the sidebar.", 
+                                            className="text-muted text-center p-5")
+                                    ],
+                                    className="p-2",
+                                    style={
+                                        "backgroundColor": "#121212",
+                                        "display": "flex",
+                                        "flexDirection": "column",
+                                        "flex": "1 1 auto",
+                                        "minHeight": "0"
+                                    }
+                                )
+                            ],
+                            className="border border-secondary mb-3 h-100",
+                            style={
+                                "backgroundColor": "#121212",
+                                "display": "flex",
+                                "flexDirection": "column",
+                                "height": "100%",
+                                "minHeight": "0"
+                            }
+                        )
                     )
                 else:
                     overview_logger.info("Rendering race overview dashboard...")
@@ -6072,40 +6120,85 @@ def update_dashboards(
                     )
                     
                     dashboards.append(
-                        dbc.Card([
-                            dbc.CardHeader(
-                                dbc.Row([
-                                    dbc.Col(
-                                        html.H5("🏁 Race Overview", className="mb-0", style={"fontSize": "1.2rem"}),
-                                        width="auto"
-                                    ),
-                                    dbc.Col(
-                                        html.Span(
-                                            lap_info_text,
-                                            id="race-overview-lap-badge",  # ID for fast updates
-                                            className="badge bg-danger ms-2",
-                                            style={"fontSize": "0.85rem", "fontWeight": "normal"}
+                        dbc.Card(
+                            [
+                                dbc.CardHeader(
+                                    dbc.Row([
+                                        dbc.Col(
+                                            html.H5("🏁 Race Overview", className="mb-0", style={"fontSize": "1.2rem"}),
+                                            width="auto"
                                         ),
-                                        width="auto",
-                                        className="ms-auto"
-                                    ),
-                                ], className="align-items-center g-0"),
-                                className="py-1"
-                            ),
-                            dbc.CardBody(children=[overview_content], className="p-2", id="race-overview-body")
-                        ], className="mb-3", style={"height": "620px", "overflow": "auto"})
+                                        dbc.Col(
+                                            html.Span(
+                                                lap_info_text,
+                                                id="race-overview-lap-badge",
+                                                className="badge bg-danger ms-2",
+                                                style={"fontSize": "0.85rem", "fontWeight": "normal"}
+                                            ),
+                                            width="auto",
+                                            className="ms-auto"
+                                        ),
+                                    ], className="align-items-center g-0"),
+                                    className="py-1",
+                                    style={"backgroundColor": "#1e1e1e"}
+                                ),
+                                dbc.CardBody(
+                                    [overview_content],
+                                    className="p-2",
+                                    id="race-overview-body",
+                                    style={
+                                        "backgroundColor": "#121212",
+                                        "display": "flex",
+                                        "flexDirection": "column",
+                                        "flex": "1 1 auto",
+                                        "minHeight": "0",
+                                        "overflow": "hidden"
+                                    }
+                                )
+                            ],
+                            className="border border-secondary mb-3 h-100",
+                            style={
+                                "backgroundColor": "#121212",
+                                "display": "flex",
+                                "flexDirection": "column",
+                                "height": "100%",
+                                "minHeight": "0"
+                            }
+                        )
                     )
                     overview_logger.info("Race overview dashboard rendered successfully")
                     
             except Exception as e:
                 logger.error(f"Error creating race overview dashboard: {e}", exc_info=True)
                 dashboards.append(
-                    dbc.Card([
-                        dbc.CardHeader(html.H5("🏁 Race Overview", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
-                        dbc.CardBody([
-                            html.P(f"Error loading race overview: {str(e)}", className="text-danger")
-                        ], className="p-2")
-                    ], className="mb-3", style={"height": "620px"})
+                    dbc.Card(
+                        [
+                            dbc.CardHeader(
+                                html.H5("🏁 Race Overview", className="mb-0", style={"fontSize": "1.2rem"}),
+                                className="py-1",
+                                style={"backgroundColor": "#1e1e1e"}
+                            ),
+                            dbc.CardBody(
+                                [html.P(f"Error loading race overview: {str(e)}", className="text-danger")],
+                                className="p-2",
+                                style={
+                                    "backgroundColor": "#121212",
+                                    "display": "flex",
+                                    "flexDirection": "column",
+                                    "flex": "1 1 auto",
+                                    "minHeight": "0"
+                                }
+                            )
+                        ],
+                        className="border border-secondary mb-3 h-100",
+                        style={
+                            "backgroundColor": "#121212",
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "height": "100%",
+                            "minHeight": "0"
+                        }
+                    )
                 )
         
         elif dashboard_id == "race_control":
@@ -6126,9 +6219,22 @@ def update_dashboards(
                                     type="circle",
                                     color="#e10600"
                                 )
-                            ], className="p-2")
-                        ], className="mb-3", style={"height": "620px"}),
-                        id="race-control-wrapper"
+                            ], className="p-2", style={
+                                "backgroundColor": "#121212",
+                                "display": "flex",
+                                "flexDirection": "column",
+                                "flex": "1 1 auto",
+                                "minHeight": "0"
+                            })
+                        ], className="border border-secondary mb-3 h-100", style={
+                            "backgroundColor": "#121212",
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "height": "100%",
+                            "minHeight": "0"
+                        }),
+                        id="race-control-wrapper",
+                        style={"height": "100%"}
                     )
                 )
                 continue
@@ -6143,9 +6249,22 @@ def update_dashboards(
                                 dbc.CardBody([
                                     html.P("No session loaded. Please select a race session from the sidebar.",
                                            className="text-muted text-center p-5")
-                                ], className="p-2")
-                            ], className="mb-3", style={"height": "620px"}),
-                            id="race-control-wrapper"
+                                ], className="p-2", style={
+                                    "backgroundColor": "#121212",
+                                    "display": "flex",
+                                    "flexDirection": "column",
+                                    "flex": "1 1 auto",
+                                    "minHeight": "0"
+                                })
+                            ], className="border border-secondary mb-3 h-100", style={
+                                "backgroundColor": "#121212",
+                                "display": "flex",
+                                "flexDirection": "column",
+                                "height": "100%",
+                                "minHeight": "0"
+                            }),
+                            id="race-control-wrapper",
+                            style={"height": "100%"}
                         )
                     )
                 else:
@@ -6154,7 +6273,11 @@ def update_dashboards(
                         focused_driver=focused_driver,
                         use_store_time=False,
                     )
-                    dashboards.append(html.Div(race_control_component, id="race-control-wrapper"))
+                    dashboards.append(html.Div(
+                        race_control_component,
+                        id="race-control-wrapper",
+                        style={"height": "100%"}
+                    ))
                     control_logger.info("Race control dashboard mounted")
 
             except Exception as e:
@@ -6165,9 +6288,22 @@ def update_dashboards(
                             dbc.CardHeader(html.H5(" Race Control", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
                             dbc.CardBody([
                                 html.P(f"Error loading race control: {str(e)}", className="text-danger")
-                            ], className="p-2")
-                        ], className="mb-3", style={"height": "620px"}),
-                        id="race-control-wrapper"
+                            ], className="p-2", style={
+                                "backgroundColor": "#121212",
+                                "display": "flex",
+                                "flexDirection": "column",
+                                "flex": "1 1 auto",
+                                "minHeight": "0"
+                            })
+                        ], className="border border-secondary mb-3 h-100", style={
+                            "backgroundColor": "#121212",
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "height": "100%",
+                            "minHeight": "0"
+                        }),
+                        id="race-control-wrapper",
+                        style={"height": "100%"}
                     )
                 )
 
@@ -7763,30 +7899,227 @@ def _render_telemetry(
 
 
 @callback(
-    Output('race-control-wrapper', 'children', allow_duplicate=True),
+    Output('race-control-status-card', 'children', allow_duplicate=True),
+    Output('race-control-messages-view', 'children', allow_duplicate=True),
+    Output('race-control-penalties-view', 'children', allow_duplicate=True),
     Input('simulation-time-store', 'data'),
     State('dashboard-selector', 'value'),
     State('driver-selector', 'value'),
     State('session-store', 'data'),
     prevent_initial_call=True
 )
-def refresh_race_control_wrapper(
+def refresh_race_control_content(
     simulation_time_data: dict[str, Any] | None,
     selected_dashboards: list[str] | None,
     focused_driver: str | None,
     session_data: dict[str, Any] | None,
 ):
-    """Refresh Race Control without rebuilding the main grid or AI."""
+    """Refresh Race Control content (messages and penalties) without destroying the Store or Card structure.
+    
+    This updates only the scrollable content divs, preserving:
+    - dcc.Store (toggle state)
+    - Card structure
+    - CardHeader with toggle buttons
+    - View containers
+    """
     if not selected_dashboards or 'race_control' not in selected_dashboards:
         raise PreventUpdate
     if not session_data or not session_data.get('loaded'):
         raise PreventUpdate
 
-    return _render_race_control(
-        focused_driver=focused_driver,
-        use_store_time=True,
-        simulation_time_data=simulation_time_data,
-    )
+    global current_session_obj, simulation_controller, race_control_dashboard
+
+    if current_session_obj is None:
+        raise PreventUpdate
+
+    session_key = getattr(current_session_obj, 'session_key', None)
+    
+    # Get simulation time
+    simulation_time = 0.0
+    if simulation_time_data and 'time' in simulation_time_data:
+        simulation_time = simulation_time_data.get('time', 0.0)
+    elif simulation_controller is not None:
+        simulation_time = simulation_controller.get_elapsed_seconds()
+
+    session_start_time = None
+    if simulation_controller is not None:
+        session_start_time = pd.Timestamp(simulation_controller.start_time)
+
+    current_lap = None
+    if simulation_controller is not None:
+        try:
+            openf1_lap = simulation_controller.get_current_lap()
+            current_lap = openf1_lap if openf1_lap and openf1_lap > 0 else 1
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not get lap from controller: %s", exc)
+
+    # Re-render the Cards and extract their content divs
+    try:
+        if session_key is None:
+            raise PreventUpdate
+            
+        # Get fresh messages DataFrame  
+        messages_df, drivers_df = race_control_dashboard._get_messages_and_drivers(session_key)
+        
+        if messages_df is None or messages_df.empty:
+            raise PreventUpdate
+        
+        # Filter messages by simulation time
+        filtered_messages = race_control_dashboard._filter_messages_by_time(
+            messages_df,
+            simulation_time,
+            session_start_time
+        )
+        
+        if filtered_messages.empty:
+            filtered_messages = messages_df.tail(50)
+        
+        # Build complete Cards with proper flex styling
+        timeline_card = race_control_dashboard._create_messages_timeline(
+            messages=filtered_messages,
+            focused_driver=focused_driver if focused_driver != 'none' else None,
+            drivers=drivers_df
+        )
+        
+        # Get penalties summary and status
+        if session_key is not None and simulation_time is not None and session_start_time is not None:
+            # Calculate display lap
+            display_lap = current_lap if current_lap and current_lap > 0 else 1
+            
+            summary_data = race_control_dashboard.get_status_summary(
+                session_key=session_key,
+                simulation_time=simulation_time,
+                session_start_time=session_start_time,
+                current_lap=display_lap
+            )
+            summary_card = race_control_dashboard._create_summary_panel(summary_data)
+            
+            # Build status card
+            flag_state, sc_detail = race_control_dashboard._extract_current_status(
+                filtered_messages,
+                current_lap=display_lap
+            )
+            
+            flag_color = {
+                "GREEN": "success",
+                "YELLOW": "warning",
+                "RED": "danger",
+                "SC": "warning",
+                "VSC": "warning",
+                "CHEQUERED": "secondary",
+            }.get(flag_state, "secondary")
+
+            flag_icon = {
+                "GREEN": "🟢",
+                "YELLOW": "🟡",
+                "RED": "🔴",
+                "SC": "🚗",
+                "VSC": "🟡",
+                "CHEQUERED": "🏁",
+            }.get(flag_state, "🏁")
+
+            flag_text = {
+                "SC": "SAFETY CAR",
+                "VSC": "VIRTUAL SC",
+                "CHEQUERED": "SESSION ENDED",
+            }.get(flag_state, flag_state)
+            
+            status_content = dbc.CardBody([
+                html.Div([
+                    dbc.Badge(
+                        [flag_icon, f" {flag_text}"],
+                        color=flag_color,
+                        className="me-2",
+                        style={"fontSize": "0.9rem"}
+                    ),
+                    html.Span(
+                        f"Lap {display_lap}",
+                        className="text-white",
+                        style={"fontSize": "0.85rem"}
+                    ),
+                    html.Span(
+                        f" | {sc_detail}" if sc_detail else "",
+                        className="text-warning ms-2",
+                        style={"fontSize": "0.75rem"}
+                    )
+                ], style={"display": "flex", "alignItems": "center"})
+            ], className="p-2")
+        else:
+            summary_card = dbc.Card([
+                dbc.CardHeader("⚖️ Investigations & Penalties", className="text-white py-1"),
+                dbc.CardBody(html.Div("Waiting for timing data...", className="text-muted text-center p-3"))
+            ])
+            status_content = dbc.CardBody([
+                html.Div("Waiting for data...", className="text-muted", style={"fontSize": "0.85rem"})
+            ], className="p-2")
+        
+        return status_content, timeline_card, summary_card
+        
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Error refreshing race control content: %s", exc, exc_info=True)
+        raise PreventUpdate
+
+
+# Use clientside callback for instant toggle without server round-trip
+app.clientside_callback(
+    """
+    function(n_clicks_list, current_state) {
+        // Get which button was clicked
+        const triggered = dash_clientside.callback_context.triggered;
+        if (!triggered || triggered.length === 0) {
+            // On initial load, restore state from store
+            if (current_state === 'penalties') {
+                return [
+                    {'display': 'none'},
+                    {'display': 'flex', 'flex': '1 1 auto', 'minHeight': '0', 'flexDirection': 'column', 'overflow': 'hidden'},
+                    'secondary',
+                    'primary',
+                    'penalties'
+                ];
+            }
+            return [window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update];
+        }
+        
+        const triggeredId = triggered[0].prop_id.split('.')[0];
+        let view = current_state || 'messages';  // default
+        
+        try {
+            const idObj = JSON.parse(triggeredId);
+            view = idObj.view;
+        } catch (e) {
+            return [window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update];
+        }
+        
+        if (view === 'messages') {
+            // Show messages, hide penalties
+            return [
+                {'display': 'flex', 'flex': '1 1 auto', 'minHeight': '0', 'flexDirection': 'column', 'overflow': 'hidden'},
+                {'display': 'none'},
+                'primary',
+                'secondary',
+                'messages'
+            ];
+        } else {
+            // Show penalties, hide messages
+            return [
+                {'display': 'none'},
+                {'display': 'flex', 'flex': '1 1 auto', 'minHeight': '0', 'flexDirection': 'column', 'overflow': 'hidden'},
+                'secondary',
+                'primary',
+                'penalties'
+            ];
+        }
+    }
+    """,
+    Output('race-control-messages-view', 'style'),
+    Output('race-control-penalties-view', 'style'),
+    Output({'type': 'race-control-toggle', 'view': 'messages'}, 'color'),
+    Output({'type': 'race-control-toggle', 'view': 'penalties'}, 'color'),
+    Output('race-control-view-state', 'data'),
+    Input({'type': 'race-control-toggle', 'view': ALL}, 'n_clicks'),
+    State('race-control-view-state', 'data'),
+    prevent_initial_call=False
+)
 
 
 @callback(

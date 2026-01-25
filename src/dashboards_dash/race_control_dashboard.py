@@ -11,7 +11,7 @@ import re
 
 import dash_bootstrap_components as dbc
 import pandas as pd
-from dash import html
+from dash import html, dcc
 
 from src.utils.logging_config import get_logger, LogCategory
 
@@ -152,7 +152,7 @@ class RaceControlDashboard:
                     )
                 ], style={"display": "flex", "alignItems": "center"})
             ], className="p-2")
-        ], className="mb-2 border border-secondary", style={"backgroundColor": "#2d2d2d"})
+        ], id="race-control-status-card", className="mb-2 border border-secondary", style={"backgroundColor": "#2d2d2d"})
 
     def _create_messages_timeline(
         self,
@@ -167,10 +167,32 @@ class RaceControlDashboard:
             logger.info(f"🎯 Creating timeline with focused_driver: {focused_driver} (total messages: {len(messages)})")
         
         if messages.empty:
-            return html.Div(
-                "No race control messages yet",
-                className="text-muted text-center p-3",
-                style={"fontSize": "0.85rem"}
+            return dbc.Card(
+                dbc.CardBody(
+                    html.Div(
+                        "No race control messages yet",
+                        className="text-muted text-center p-3",
+                        style={"fontSize": "0.85rem"}
+                    ),
+                    className="p-2",
+                    style={
+                        "backgroundColor": "#1e1e1e",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "justifyContent": "center",
+                        "alignItems": "center",
+                        "flex": "1 1 auto",
+                        "minHeight": "0"
+                    }
+                ),
+                className="border border-secondary mb-0 h-100",
+                style={
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "flex": "1 1 auto",
+                    "height": "100%",
+                    "minHeight": "0"
+                }
             )
 
         # Limit to last 100 messages and sort by most recent first
@@ -337,24 +359,35 @@ class RaceControlDashboard:
             )
 
         return dbc.Card([
-            dbc.CardHeader(
-                "📋 Race Control Messages",
-                className="text-white py-1",
-                style={"fontSize": "0.9rem", "backgroundColor": "#1e1e1e"}
-            ),
             dbc.CardBody(
                 html.Div(
                     message_rows,
+                    id="race-control-messages-content",
                     style={
-                        "maxHeight": "350px",
                         "overflowY": "auto",
-                        "fontSize": "0.75rem"
+                        "fontSize": "0.75rem",
+                        "flex": "1 1 auto",
+                        "minHeight": "0",
+                        "height": "100%"
                     }
                 ),
                 className="p-2",
-                style={"backgroundColor": "#1e1e1e"}
+                style={
+                    "backgroundColor": "#1e1e1e",
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "flex": "1 1 auto",
+                    "minHeight": "0",
+                    "height": "100%"
+                }
             )
-        ], className="border border-secondary")
+        ], className="border border-secondary mb-0 h-100", style={
+            "display": "flex",
+            "flexDirection": "column",
+            "flex": "1 1 auto",
+            "height": "100%",
+            "minHeight": "0"
+        })
 
     def _create_summary_panel(self, status_summary: dict[str, Any]) -> dbc.Card:
         """Create compact summary card for recent race control activity."""
@@ -413,13 +446,37 @@ class RaceControlDashboard:
         ]
 
         return dbc.Card(
-            dbc.CardBody(
-                sections,
-                className="p-2",
-                style={"backgroundColor": "#1e1e1e"}
-            ),
-            className="border border-secondary",
-            style={"minHeight": "350px"}
+            [
+                dbc.CardBody(
+                    html.Div(
+                        sections,
+                        id="race-control-penalties-content",
+                        style={
+                            "overflowY": "auto",
+                            "flex": "1 1 auto",
+                            "minHeight": "0",
+                            "height": "100%"
+                        }
+                    ),
+                    className="p-2",
+                    style={
+                        "backgroundColor": "#1e1e1e",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "flex": "1 1 auto",
+                        "minHeight": "0",
+                        "height": "100%"
+                    }
+                )
+            ],
+            className="border border-secondary mb-0 h-100",
+            style={
+                "display": "flex",
+                "flexDirection": "column",
+                "flex": "1 1 auto",
+                "height": "100%",
+                "minHeight": "0"
+            }
         )
 
     def _classify_message(self, row: pd.Series) -> Tuple[str, str]:
@@ -695,8 +752,20 @@ class RaceControlDashboard:
                         className="small text-muted"
                     )
                 ], className="text-center p-5")
-            ], className="p-2")
-        ], className="mb-3", style={"height": "620px"})
+            ], className="p-2", style={
+                "backgroundColor": "#121212",
+                "display": "flex",
+                "flexDirection": "column",
+                "flex": "1 1 auto",
+                "minHeight": "0"
+            })
+        ], className="border border-secondary mb-3 h-100", style={
+            "backgroundColor": "#121212",
+            "display": "flex",
+            "flexDirection": "column",
+            "height": "100%",
+            "minHeight": "0"
+        })
 
     def _render_no_data(self):
         """Render when no race control data available."""
@@ -716,8 +785,20 @@ class RaceControlDashboard:
                         className="small text-muted"
                     )
                 ], className="text-center p-5")
-            ], className="p-2")
-        ], className="mb-3", style={"height": "620px"})
+            ], className="p-2", style={
+                "backgroundColor": "#121212",
+                "display": "flex",
+                "flexDirection": "column",
+                "flex": "1 1 auto",
+                "minHeight": "0"
+            })
+        ], className="border border-secondary mb-3 h-100", style={
+            "backgroundColor": "#121212",
+            "display": "flex",
+            "flexDirection": "column",
+            "height": "100%",
+            "minHeight": "0"
+        })
 
     def _render_error(self, error_message: str):
         """Render error state."""
@@ -737,8 +818,20 @@ class RaceControlDashboard:
                         className="small text-muted"
                     )
                 ], className="text-center p-5")
-            ], className="p-2")
-        ], className="mb-3", style={"height": "620px"})
+            ], className="p-2", style={
+                "backgroundColor": "#121212",
+                "display": "flex",
+                "flexDirection": "column",
+                "flex": "1 1 auto",
+                "minHeight": "0"
+            })
+        ], className="border border-secondary mb-3 h-100", style={
+            "backgroundColor": "#121212",
+            "display": "flex",
+            "flexDirection": "column",
+            "height": "100%",
+            "minHeight": "0"
+        })
 
     def get_status_summary(
         self,
@@ -1003,10 +1096,23 @@ class RaceControlDashboard:
                         className="text-muted small text-center py-4"
                     ),
                     className="p-2",
-                    style={"backgroundColor": "#1e1e1e"}
+                    style={
+                        "backgroundColor": "#1e1e1e",
+                        "display": "flex",
+                        "justifyContent": "center",
+                        "alignItems": "center",
+                        "flex": "1 1 auto",
+                        "minHeight": "0"
+                    }
                 ),
-                className="border border-secondary",
-                style={"minHeight": "350px"}
+                className="border border-secondary mb-0 h-100",
+                style={
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "flex": "1 1 auto",
+                    "height": "100%",
+                    "minHeight": "0"
+                }
             )
 
         summary_card: Any
@@ -1027,33 +1133,90 @@ class RaceControlDashboard:
         else:
             summary_card = build_summary_placeholder("Waiting for timing data.")
 
-        hidden_summary = html.Div(
-            summary_card,
-            style={"display": "none"},
-            id="race-control-summary-hidden"
-        )
+        # Store components for callback access
+        self._current_timeline = timeline_component
+        self._current_summary = summary_card
 
         content_layout = html.Div(
             [
+                # Store for toggle state persistence
+                dcc.Store(id="race-control-view-state", data="messages"),
                 status_card,
-                dbc.Row(
-                    [
-                        dbc.Col(timeline_component, md=12)
-                    ],
-                    className="g-2"
+                # Messages view
+                html.Div(
+                    timeline_component,
+                    id="race-control-messages-view",
+                    style={
+                        "flex": "1 1 auto",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "minHeight": "0",
+                        "height": "100%",
+                        "overflow": "hidden"
+                    }
                 ),
-                hidden_summary,
+                # Penalties view (initially hidden)
+                html.Div(
+                    summary_card,
+                    id="race-control-penalties-view",
+                    style={
+                        "flex": "1 1 auto",
+                        "display": "none",
+                        "flexDirection": "column",
+                        "minHeight": "0",
+                        "height": "100%",
+                        "overflow": "hidden"
+                    }
+                )
             ],
-            className="d-flex flex-column gap-2"
+            style={
+                "display": "flex",
+                "flexDirection": "column",
+                "flex": "1 1 auto",
+                "minHeight": "0",
+                "overflow": "hidden",
+                "gap": "8px"
+            }
         )
 
         return dbc.Card(
             [
                 dbc.CardHeader(
-                    html.H5(
-                        "🚦 Race Control",
-                        className="mb-0",
-                        style={"fontSize": "1.2rem"}
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                html.H5(
+                                    "🚦 Race Control",
+                                    className="mb-0",
+                                    style={"fontSize": "1.2rem"}
+                                ),
+                                width="auto"
+                            ),
+                            dbc.Col(
+                                dbc.ButtonGroup(
+                                    [
+                                        dbc.Button(
+                                            "📋 Messages",
+                                            id={"type": "race-control-toggle", "view": "messages"},
+                                            size="sm",
+                                            color="primary",
+                                            className="px-3"
+                                        ),
+                                        dbc.Button(
+                                            "⚖️ Penalties",
+                                            id={"type": "race-control-toggle", "view": "penalties"},
+                                            size="sm",
+                                            color="secondary",
+                                            className="px-3"
+                                        )
+                                    ],
+                                    size="sm"
+                                ),
+                                width="auto",
+                                className="ms-auto"
+                            )
+                        ],
+                        className="align-items-center justify-content-between g-0"
                     ),
                     className="py-1",
                     style={"backgroundColor": "#1e1e1e"}
@@ -1061,9 +1224,22 @@ class RaceControlDashboard:
                 dbc.CardBody(
                     content_layout,
                     className="p-2",
-                    style={"backgroundColor": "#121212"}
+                    style={
+                        "backgroundColor": "#121212",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "flex": "1 1 auto",
+                        "minHeight": "0",
+                        "overflow": "hidden"
+                    }
                 )
             ],
-            className="mb-3 border border-secondary",
-            style={"minHeight": "620px", "backgroundColor": "#121212"}
+            className="border border-secondary mb-3 h-100",
+            style={
+                "backgroundColor": "#121212",
+                "display": "flex",
+                "flexDirection": "column",
+                "height": "100%",
+                "minHeight": "0"
+            }
         )

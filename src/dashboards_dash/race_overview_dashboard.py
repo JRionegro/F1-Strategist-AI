@@ -14,7 +14,7 @@ from typing import Any, Dict, Optional, Tuple
 import dash_bootstrap_components as dbc
 import pandas as pd
 import requests
-from dash import dash_table, html
+from dash import html
 
 from src.utils.logging_config import get_logger, LogCategory
 
@@ -138,20 +138,37 @@ class RaceOverviewDashboard:
             Dash component tree for the dashboard
         """
         if session_key is None:
-            return html.Div(
-                [
-                    html.I(
-                        className="fas fa-flag-checkered fa-3x mb-3",
-                        style={"color": "#e10600"}
-                    ),
-                    html.H5("No session loaded", className="text-muted"),
-                    html.P(
-                        "Please select a race session from the sidebar.",
-                        className="small text-muted"
-                    ),
-                ],
-                className="text-center p-5",
-            )
+            return dbc.Card([
+                dbc.CardHeader(
+                    html.H5("🏁 Race Overview", className="mb-0", style={"fontSize": "1.2rem"}),
+                    className="py-1"
+                ),
+                dbc.CardBody([
+                    html.Div([
+                        html.I(
+                            className="fas fa-flag-checkered fa-3x mb-3",
+                            style={"color": "#e10600"}
+                        ),
+                        html.H5("No session loaded", className="text-muted"),
+                        html.P(
+                            "Please select a race session from the sidebar.",
+                            className="small text-muted"
+                        )
+                    ], className="text-center p-5")
+                ], className="p-2", style={
+                    "backgroundColor": "#121212",
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "flex": "1 1 auto",
+                    "minHeight": "0"
+                })
+            ], className="border border-secondary mb-3 h-100", style={
+                "backgroundColor": "#121212",
+                "display": "flex",
+                "flexDirection": "column",
+                "height": "100%",
+                "minHeight": "0"
+            })
 
         try:
             logger.info(
@@ -871,20 +888,37 @@ class RaceOverviewDashboard:
             # Build dashboard
             return dbc.Container(
                 [
-                    # Leaderboard (header removed to save space)
                     dbc.Row(
                         [
                             dbc.Col(
                                 leaderboard_table,
                                 width=12,
+                                style={
+                                    "display": "flex",
+                                    "flexDirection": "column",
+                                    "flex": "1 1 auto",
+                                    "minHeight": "0",
+                                    "height": "100%"
+                                }
                             ),
                         ],
-                        style={"margin": "0"},
+                        className="g-0 flex-grow-1",
+                        style={
+                            "margin": "0",
+                            "flex": "1 1 auto",
+                            "minHeight": "0",
+                            "height": "100%"
+                        },
                     ),
                 ],
                 fluid=True,
-                className="p-0",
-                style={"overflow": "hidden", "height": "100%"},
+                className="p-0 d-flex flex-column flex-grow-1",
+                style={
+                    "flex": "1 1 auto",
+                    "minHeight": "0",
+                    "overflow": "hidden",
+                    "height": "100%"
+                },
             )
 
         except Exception as e:
@@ -892,17 +926,35 @@ class RaceOverviewDashboard:
                 f"Error rendering Race Overview Dashboard: {e}",
                 exc_info=True
             )
-            return html.Div(
-                [
-                    html.I(
-                        className="fas fa-times-circle fa-3x mb-3",
-                        style={"color": "#dc3545"}
-                    ),
-                    html.H5("Error loading dashboard", className="text-danger"),
-                    html.P(f"{str(e)}", className="small text-muted"),
-                ],
-                className="text-center p-5",
-            )
+            return dbc.Card([
+                dbc.CardHeader(
+                    html.H5("🏁 Race Overview", className="mb-0", style={"fontSize": "1.2rem"}),
+                    className="py-1",
+                    style={"backgroundColor": "#1e1e1e"}
+                ),
+                dbc.CardBody([
+                    html.Div([
+                        html.I(
+                            className="fas fa-times-circle fa-3x mb-3",
+                            style={"color": "#dc3545"}
+                        ),
+                        html.H5("Error loading dashboard", className="text-danger"),
+                        html.P(f"{str(e)}", className="small text-muted"),
+                    ], className="text-center p-5")
+                ], className="p-2", style={
+                    "backgroundColor": "#121212",
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "flex": "1 1 auto",
+                    "minHeight": "0"
+                })
+            ], className="border border-secondary mb-3 h-100", style={
+                "backgroundColor": "#121212",
+                "display": "flex",
+                "flexDirection": "column",
+                "height": "100%",
+                "minHeight": "0"
+            })
 
     @staticmethod
     def _parse_timing_value(value: Any) -> Optional[float]:
@@ -936,71 +988,50 @@ class RaceOverviewDashboard:
         self,
         leaderboard_data: pd.DataFrame,
         focused_driver_code: Optional[str] = None,
-    ):
-        """
-        Build leaderboard table with positions, gaps, and tire info.
-
-        Args:
-            leaderboard_data: DataFrame with position, driver, gap, tire data
-
-        Returns:
-            dash_table.DataTable component
-        """
+    ) -> html.Div:
+        """Build a scrollable leaderboard view that adapts to parent height."""
         if leaderboard_data.empty:
             return html.Div(
                 "No leaderboard data available",
                 className="text-center text-muted p-3",
             )
 
-        # Prepare table data
-        table_rows = []
+        # Prepare row metadata for rendering
+        leaderboard_rows: list[dict[str, Any]] = []
         for _, row in leaderboard_data.iterrows():
             raw_position = row.get('Position')
             try:
                 position = int(raw_position)
             except (TypeError, ValueError):
                 position = 0
-            driver = row.get(
-                'Abbreviation',
-                f"#{row['DriverNumber']}"
-            )
 
+            driver = row.get('Abbreviation', f"#{row.get('DriverNumber', '--')}")
             is_retired = bool(row.get('Retired'))
             retired_status = row.get('RetiredStatus') or 'DNF'
 
             # Format gaps
             gap_to_leader = self._parse_timing_value(row.get('GapToLeader'))
             if is_retired:
-                gap_str = retired_status
-            elif position == 1:
-                gap_str = "Leader"
-            elif gap_to_leader is None:
-                gap_str = "-"
-            elif abs(gap_to_leader) < 0.001:  # Very close to 0
-                gap_str = "-"
+                gap_display = retired_status
+            elif position <= 1:
+                gap_display = "Leader"
+            elif gap_to_leader is None or abs(gap_to_leader) < 0.001:
+                gap_display = "-"
             else:
-                gap_str = f"+{gap_to_leader:.3f}s"
+                gap_display = f"+{gap_to_leader:.3f}s"
 
             interval = self._parse_timing_value(row.get('Interval'))
-            if is_retired:
-                interval_str = "-"
-            elif position == 1:
-                interval_str = "-"
-            elif interval is None:
-                interval_str = "-"
-            elif abs(interval) < 0.001:  # Very close to 0
-                interval_str = "-"
+            if is_retired or position <= 1 or interval is None or abs(interval) < 0.001:
+                interval_display = "-"
             else:
-                interval_str = f"+{interval:.3f}s"
+                interval_display = f"+{interval:.3f}s"
 
-            # Tire info
+            # Tire info rendering
             compound = row.get('Compound', 'UNKNOWN')
             tire_age = row.get('TyreAge', 0)
             if pd.isna(tire_age):
                 tire_age = 0
-
-            # Map compound to color circle (using emoji circles for compactness)
-            tire_colors = {
+            tire_icons = {
                 'SOFT': '🔴',
                 'MEDIUM': '🟡',
                 'HARD': '⚪',
@@ -1008,115 +1039,128 @@ class RaceOverviewDashboard:
                 'WET': '🔵',
                 'UNKNOWN': '⚫'
             }
-            tire_circle = tire_colors.get(compound, '⚫')
+            tire_display = '—' if is_retired else f"{tire_icons.get(compound, '⚫')} {int(tire_age)}"
 
-            if is_retired:
-                tire_str = "—"
-            else:
-                tire_str = f"{tire_circle} {int(tire_age)}"
-            
-            # Pit stops
             pit_stops = row.get('PitStops', 0)
             if pd.isna(pit_stops):
                 pit_stops = 0
             pit_display = '-' if is_retired else int(pit_stops)
 
-            # Get team name for color mapping
-            team_name = row.get('TeamName', '')
-
-            table_rows.append({
-                "Pos": position,
-                "Driver": driver,
-                "Gap": gap_str,
-                "Interval": interval_str,
-                "Tire": tire_str,
-                "Stops": pit_display,
-                "TeamName": team_name,  # Hidden column for conditional styling
+            leaderboard_rows.append({
+                "pos": position,
+                "driver": driver,
+                "gap": gap_display,
+                "interval": interval_display,
+                "tire": tire_display,
+                "stops": pit_display,
+                "team_name": row.get('TeamName', '') or '',
+                "is_retired": is_retired,
             })
 
-        # Build style_data_conditional with team colors for Driver column
-        style_conditional = [
-            # Highlight leader (keep white text for all columns except Driver)
-            {
-                "if": {"filter_query": "{Pos} = 1"},
-                "backgroundColor": "#FFD700",
-                "fontWeight": "bold",
-            },
-            # Highlight top 3
-            {
-                "if": {"filter_query": "{Pos} <= 3"},
-                "backgroundColor": "#3a3a3a",
-            },
-        ]
-        
-        # Add team color rules for Driver column
-        for team_name, color in TEAM_COLORS.items():
-            style_conditional.append({
-                "if": {
-                    "filter_query": f"{{TeamName}} = '{team_name}'",
-                    "column_id": "Driver"
-                },
-                "color": color,
-                "fontWeight": "bold",
-            })
+        grid_template = "42px 1fr 72px 72px 72px 48px"
 
-        if focused_driver_code:
-            style_conditional.append({
-                "if": {"filter_query": f"{{Driver}} = '{focused_driver_code}'"},
-                "backgroundColor": "rgba(225, 6, 0, 0.18)",
-                "borderLeft": "4px solid #e10600",
-                "fontWeight": "bold",
-            })
+        def build_header() -> html.Div:
+            return html.Div(
+                [
+                    html.Div("Pos", className="text-center"),
+                    html.Div("Driver", className="text-start"),
+                    html.Div("Gap", className="text-center"),
+                    html.Div("Int", className="text-center"),
+                    html.Div("Tire", className="text-center"),
+                    html.Div("Stops", className="text-center"),
+                ],
+                style={
+                    "display": "grid",
+                    "gridTemplateColumns": grid_template,
+                    "alignItems": "center",
+                    "backgroundColor": "#e10600",
+                    "color": "white",
+                    "fontWeight": "bold",
+                    "padding": "6px 10px",
+                    "fontSize": "0.75rem",
+                    "border": "1px solid #444",
+                    "borderBottom": "1px solid #333",
+                    "textTransform": "uppercase"
+                }
+            )
 
-        # Create table
-        return dash_table.DataTable(
-            id="race-overview-table",
-            columns=[
-                {"name": "Pos", "id": "Pos"},
-                {"name": "Driver", "id": "Driver"},
-                {"name": "Gap", "id": "Gap"},
-                {"name": "Int", "id": "Interval"},
-                {"name": "Tire", "id": "Tire"},
-                {"name": "Stops", "id": "Stops"},
-                {"name": "", "id": "TeamName"},  # Hidden via CSS
+        def build_row(row_info: dict[str, Any], index: int) -> html.Div:
+            base_bg = "#262626" if index % 2 else "#1d1d1d"
+            row_style = {
+                "display": "grid",
+                "gridTemplateColumns": grid_template,
+                "alignItems": "center",
+                "padding": "4px 10px",
+                "fontSize": "0.75rem",
+                "borderLeft": "3px solid transparent",
+                "borderBottom": "1px solid #333",
+                "backgroundColor": base_bg,
+            }
+
+            if row_info["pos"] == 1:
+                row_style["backgroundColor"] = "#323232"
+                row_style["fontWeight"] = "bold"
+            elif row_info["pos"] <= 3:
+                row_style["backgroundColor"] = "#2a2a2a"
+
+            if row_info["is_retired"]:
+                row_style["opacity"] = 0.6
+                row_style["fontStyle"] = "italic"
+
+            if focused_driver_code and row_info["driver"] == focused_driver_code:
+                row_style.update({
+                    "borderLeft": "4px solid #e10600",
+                    "boxShadow": "0 0 8px rgba(225, 6, 0, 0.3)",
+                })
+
+            driver_style = {
+                "textAlign": "left",
+                "fontWeight": "bold",
+                "color": TEAM_COLORS.get(row_info["team_name"], "#ffffff"),
+                "whiteSpace": "nowrap",
+                "overflow": "hidden",
+                "textOverflow": "ellipsis",
+            }
+
+            return html.Div(
+                [
+                    html.Div(row_info["pos"], className="text-center"),
+                    html.Div(row_info["driver"], style=driver_style),
+                    html.Div(row_info["gap"], className="text-center"),
+                    html.Div(row_info["interval"], className="text-center"),
+                    html.Div(row_info["tire"], className="text-center"),
+                    html.Div(row_info["stops"], className="text-center"),
+                ],
+                style=row_style,
+            )
+
+        header_row = build_header()
+        data_rows = [build_row(info, idx) for idx, info in enumerate(leaderboard_rows)]
+
+        return html.Div(
+            [
+                header_row,
+                html.Div(
+                    data_rows,
+                    style={
+                        "flex": "1 1 auto",
+                        "minHeight": "0",
+                        "overflowY": "auto",
+                        "overflowX": "hidden",
+                        "backgroundColor": "#1d1d1d",
+                    }
+                )
             ],
-            data=table_rows,
-            fixed_rows={'headers': True},
-            style_table={
-                "overflowX": "auto",
-                "backgroundColor": "#1e1e1e",
-                "height": "calc(50vh - 20px)",
-                "overflowY": "auto"
-            },
-            style_header={
-                "backgroundColor": "#e10600",
-                "color": "white",
-                "fontWeight": "bold",
-                "textAlign": "center",
-                "border": "1px solid #444",
-                "padding": "1px 4px",
-                "fontSize": "11px",
-                "height": "14px",
-                "lineHeight": "12px",
-            },
-            style_cell={
-                "backgroundColor": "#2d2d2d",
-                "color": "white",
-                "border": "1px solid #444",
-                "textAlign": "center",
-                "fontSize": "11px",
-                "padding": "1px 2px",
-                "minWidth": "40px",
-                "maxWidth": "100px",
-                "height": "12px",
-                "lineHeight": "10px",
-            },
-            css=[
-                # Hide TeamName column
-                {"selector": ".dash-cell.column-6", "rule": "display: none;"},
-                {"selector": ".dash-header.column-6", "rule": "display: none;"},
-            ],
-            style_data_conditional=style_conditional,  # type: ignore
+            style={
+                "display": "flex",
+                "flexDirection": "column",
+                "flex": "1 1 auto",
+                "minHeight": "0",
+                "height": "100%",
+                "border": "1px solid #333",
+                "borderRadius": "4px",
+                "overflow": "hidden",
+            }
         )
 
     def get_leaderboard_summary(
