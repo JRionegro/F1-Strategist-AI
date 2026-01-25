@@ -27,6 +27,15 @@ from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
 import pandas as pd
 
+try:
+    from dash_extensions import EventListener  # type: ignore
+except ImportError:  # pragma: no cover - fallback if package missing
+    class EventListener(html.Div):
+        """Fallback placeholder when dash-extensions is unavailable."""
+
+        def __init__(self, children=None, events=None, id=None, **kwargs):
+            super().__init__(children=children, id=id, **kwargs)
+
 # OpenF1 data provider (replaces FastF1)
 from src.data.openf1_adapter import get_session as get_openf1_session, SessionAdapter
 from src.data.cache_generation import CacheGenerationService, MeetingSelector, SessionCode
@@ -214,6 +223,8 @@ _cache_job_snapshot: Dict[str, Any] = {
     "timestamp": None,
     "context": None,
 }
+
+NON_DISMISSIBLE_DASHBOARDS: Set[str] = {"race_overview", "track_map"}
 
 CACHE_FILE_EXTENSION = DEFAULT_CACHE_CONFIG.get_file_extension()
 PROCESSED_CACHE_DIR = DEFAULT_CACHE_CONFIG.processed_dir
@@ -2507,19 +2518,31 @@ def create_main_content():
             )
         ]),
         html.Div([
-            # Dashboard container - will be populated dynamically
-            html.Div(id='dashboard-container', children=[
-                html.Div([
-                    html.H3(
-                        "🏎️ F1 Strategist AI",
-                        className="text-center mt-5"
-                    ),
-                    html.P(
-                        "Select dashboards from the sidebar to begin",
-                        className="text-center text-muted"
+            # Dashboard container - populated dynamically but seeded with listener
+            html.Div(
+                id='dashboard-container',
+                children=[
+                    EventListener(
+                        html.Div([
+                            html.Div([
+                                html.H3(
+                                    "🏎️ F1 Strategist AI",
+                                    className="text-center mt-5"
+                                ),
+                                html.P(
+                                    "Select dashboards from the sidebar to begin",
+                                    className="text-center text-muted"
+                                )
+                            ], className="text-center")
+                        ],
+                            className="dashboard-grid-container",
+                            id="dashboard-grid-inner"
+                        ),
+                        events=[{"event": "dashboardorder", "props": ["detail"]}],
+                        id="dashboard-order-listener"
                     )
-                ], className="text-center")
-            ])
+                ]
+            )
         ], className="p-3")
     ], width=10, id='main-content-column')
 
@@ -2540,6 +2563,11 @@ app.layout = dbc.Container([
     }),
     dcc.Store(id='cache-buster-store', data={'timestamp': 0}),
     dcc.Store(id='sidebar-visible-store', data=True),
+    dcc.Store(
+        id='dashboard-order-store',
+        storage_type='local',
+        data={'order': []}
+    ),
     dcc.Store(id='simulation-time-store', data={'time': 0.0, 'timestamp': 0}),
     dcc.Store(id='current-lap-store', data={'lap': 1, 'total': 57}),  # For fast lap updates
     dcc.Store(
@@ -5906,6 +5934,7 @@ def handle_document_editor(
     Input('circuit-selector', 'value'),
     Input('session-selector', 'value'),
     State('telemetry-comparison-store', 'data'),  # Telemetry comparison driver
+    State('dashboard-order-store', 'data'),
     State('circuit-selector', 'options'),
     prevent_initial_call=False
 )
@@ -5917,6 +5946,7 @@ def update_dashboards(
     selected_circuit,
     selected_session,
     telemetry_comparison_data,
+    dashboard_order_state,
     circuit_options,
 ):
     """Update visible dashboards based on selection."""
@@ -5931,6 +5961,43 @@ def update_dashboards(
         parts = focused_driver.split('_')
         driver_code = parts[0] if parts else focused_driver
     
+    selected_dashboard_ids: List[str] = []
+    if isinstance(selected_dashboards, (list, tuple)):
+        selected_dashboard_ids = [str(item) for item in selected_dashboards if item]
+    elif isinstance(selected_dashboards, str) and selected_dashboards:
+        selected_dashboard_ids = [selected_dashboards]
+
+    # Deduplicate while preserving user selection ordering
+    if selected_dashboard_ids:
+        deduped: list[str] = []
+        seen_ids: set[str] = set()
+        for dash_id in selected_dashboard_ids:
+            if dash_id not in seen_ids:
+                deduped.append(dash_id)
+                seen_ids.add(dash_id)
+        selected_dashboard_ids = deduped
+
+    # Apply persisted ordering if available
+    stored_order: list[str] = []
+    if isinstance(dashboard_order_state, dict):
+        raw_order = dashboard_order_state.get('order')
+        if isinstance(raw_order, list):
+            stored_order = [str(item) for item in raw_order if item]
+        elif isinstance(raw_order, str):
+            stored_order = [raw_order]
+
+    if stored_order and selected_dashboard_ids:
+        position_map = {item: idx for idx, item in enumerate(stored_order)}
+        fallback_map = {item: idx for idx, item in enumerate(selected_dashboard_ids)}
+
+        def sort_key(dash_id: str) -> tuple[int, int]:
+            base = position_map.get(dash_id, len(position_map) + fallback_map.get(dash_id, 0))
+            return base, fallback_map.get(dash_id, 0)
+
+        selected_dashboard_ids = sorted(selected_dashboard_ids, key=sort_key)
+
+    selected_dashboards = selected_dashboard_ids
+
     if not selected_dashboards:
         return html.Div([
             html.H4("No dashboards selected", className="text-center mt-5"),
@@ -6661,39 +6728,187 @@ def update_dashboards(
     # Wrap all dashboards in responsive columns
     # CSS handles the layout switching between landscape (3 cols) and portrait (2 cols)
     wrapped_dashboards = []
-    for idx, dash in enumerate(dashboards):
+    for idx, dash_component in enumerate(dashboards):
+        dash_id = selected_dashboards[idx] if idx < len(selected_dashboards) else f"dashboard-{idx}"
         # Border style for visual separation
         border_style = {"borderRight": "1px solid #333"}
-        
-        if isinstance(dash, dbc.Col):
-            # Already wrapped (e.g., weather) - recreate with responsive class
-            wrapped_dashboards.append(
-                html.Div(
-                    dash.children,
-                    className="dashboard-grid-col",
-                    style={**border_style}
-                )
-            )
+
+        tile_id = f"dashboard-tile-{dash_id}"
+        data_attrs = cast(dict[str, Any], {"data-dashboard-id": dash_id})
+
+        inner_children: list[Any]
+        if isinstance(dash_component, dbc.Col):
+            col_children = dash_component.children
+            if isinstance(col_children, (list, tuple)):
+                inner_children = list(col_children)
+            elif col_children is None:
+                inner_children = []
+            else:
+                inner_children = [col_children]
         else:
-            # Wrap with responsive class
-            wrapped_dashboards.append(
-                html.Div(
-                    dash,
-                    className="dashboard-grid-col",
-                    style={**border_style}
+            inner_children = [dash_component]
+
+        closable = dash_id not in NON_DISMISSIBLE_DASHBOARDS
+        tile_children: list[Any] = []
+        if closable:
+            tile_children.append(
+                html.Button(
+                    "×",
+                    id={"type": "dashboard-close", "dash_id": dash_id},
+                    className="btn btn-sm btn-dark dashboard-close-btn",
+                    title="Remove dashboard",
+                    type="button",
+                    n_clicks=0,
+                    style={
+                        "position": "absolute",
+                        "top": "6px",
+                        "right": "6px",
+                        "zIndex": "10",
+                        "width": "1.5rem",
+                        "height": "1.5rem",
+                        "padding": "0",
+                        "lineHeight": "1.25rem",
+                        "borderRadius": "0.35rem",
+                    }
                 )
             )
+        tile_children.extend(inner_children)
+
+        wrapped_dashboards.append(
+            html.Div(
+                tile_children,
+                className="dashboard-grid-col",
+                id=tile_id,
+                **data_attrs,
+                style={**border_style, "position": "relative"}
+            )
+        )
     
     # Return flex container - CSS handles responsive layout
     # Landscape: wraps at 3 items per row (33% each)
     # Portrait: wraps at 2 items per row (50% each)
-    return html.Div(
+    container = html.Div(
         wrapped_dashboards,
-        className="dashboard-grid-container"
+        className="dashboard-grid-container",
+        id="dashboard-grid-inner"
+    )
+
+    sortable_events = [{"event": "dashboardorder", "props": ["detail"]}]
+
+    return EventListener(
+        container,
+        events=sortable_events,
+        id="dashboard-order-listener"
     )
 
 
+@callback(
+    Output('dashboard-order-store', 'data'),
+    Input('dashboard-order-listener', 'event'),
+    Input('dashboard-selector', 'value'),
+    State('dashboard-order-store', 'data'),
+    prevent_initial_call=False
+)
+def sync_dashboard_order(
+    order_event: dict[str, Any] | None,
+    selected_dashboards,
+    current_state: dict[str, Any] | None,
+):
+    """Persist dashboard ordering on drag events and selector changes."""
+
+    def normalize_items(value: Any) -> list[str]:
+        if isinstance(value, (list, tuple)):
+            return [str(item) for item in value if item]
+        if isinstance(value, str) and value:
+            return [value]
+        return []
+
+    def dedupe(seq: list[str]) -> list[str]:
+        seen: set[str] = set()
+        result: list[str] = []
+        for item in seq:
+            if item not in seen:
+                result.append(item)
+                seen.add(item)
+        return result
+
+    stored_state = current_state if isinstance(current_state, dict) else {}
+    current_order = normalize_items(stored_state.get('order'))
+    selected_list = normalize_items(selected_dashboards)
+
+    triggered_id = ctx.triggered_id
+
+    # Seed store on first run if empty
+    if not triggered_id:
+        if selected_list and current_order != selected_list:
+            return {'order': dedupe(selected_list)}
+        raise PreventUpdate
+
+    if triggered_id == 'dashboard-order-listener':
+        if not order_event:
+            raise PreventUpdate
+        detail = order_event.get('detail') if isinstance(order_event, dict) else None
+        detail_list = normalize_items(detail)
+        if not detail_list:
+            raise PreventUpdate
+        new_order = dedupe(detail_list)
+        # Ensure all selected dashboards remain represented
+        for dash_id in selected_list:
+            if dash_id not in new_order:
+                new_order.append(dash_id)
+        if new_order != current_order:
+            return {'order': new_order}
+        raise PreventUpdate
+
+    if triggered_id == 'dashboard-selector':
+        new_order = [item for item in current_order if item in selected_list]
+        for dash_id in selected_list:
+            if dash_id not in new_order:
+                new_order.append(dash_id)
+        new_order = dedupe(new_order)
+        if new_order != current_order:
+            return {'order': new_order}
+        raise PreventUpdate
+
+    raise PreventUpdate
+
+
 # Callback: Render AI dashboard independently to avoid refresh flicker
+@callback(
+    Output('dashboard-selector', 'value'),
+    Input({'type': 'dashboard-close', 'dash_id': ALL}, 'n_clicks'),
+    State('dashboard-selector', 'value'),
+    prevent_initial_call=True
+)
+def close_dashboard_tile(
+    _close_clicks: list[int | None],
+    selected_dashboards,
+):
+    """Remove dashboard from selection when close button is clicked."""
+
+    triggered_id = ctx.triggered_id
+    if not triggered_id or not isinstance(triggered_id, dict):
+        raise PreventUpdate
+
+    dash_id = triggered_id.get('dash_id')
+    if not dash_id or dash_id in NON_DISMISSIBLE_DASHBOARDS:
+        raise PreventUpdate
+
+    current_selection: list[str]
+    if isinstance(selected_dashboards, (list, tuple)):
+        current_selection = [str(item) for item in selected_dashboards if item]
+    elif isinstance(selected_dashboards, str) and selected_dashboards:
+        current_selection = [selected_dashboards]
+    else:
+        current_selection = []
+
+    new_selection = [item for item in current_selection if item != dash_id]
+    if new_selection == current_selection:
+        raise PreventUpdate
+
+    return new_selection
+
+
 @callback(
     Output('ai-dashboard-slot', 'children'),
     Input('chat-messages-store', 'data'),

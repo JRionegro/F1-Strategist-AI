@@ -34,6 +34,7 @@ langchain-text-splitters>=1.1.0
 # Visualizations
 plotly>=5.18.0
 dash>=2.14.0
+dash-extensions>=1.0.7
 streamlit>=1.29.0
 matplotlib>=3.8.0
 seaborn>=0.13.0
