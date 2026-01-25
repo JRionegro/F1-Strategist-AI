@@ -450,10 +450,48 @@ F1 Strategist AI/
 
 ### Prerequisites
 
-- Python 3.13+
-- API Keys: `ANTHROPIC_API_KEY` (Claude), `GOOGLE_API_KEY` (Gemini)
+- **Python**: 3.13+ 
+- **Operating System**: Windows, macOS, or Linux
+- **API Keys**: At least one required:
+  - `ANTHROPIC_API_KEY` (Claude) - Recommended for complex queries
+  - `GOOGLE_API_KEY` (Gemini) - Required if Claude not available
+
+### Platform Compatibility
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| **Windows 11** | ✅ Fully Tested | Python 3.13+, PowerShell/CMD launcher scripts |
+| **macOS Ventura+** | ✅ Compatible | Bash launcher script included |
+| **Linux Ubuntu 22.04+** | ✅ Compatible | Bash launcher script included |
+
+**Key Features:**
+- ✅ Cross-platform Python code using `pathlib.Path`
+- ✅ Platform-specific launcher scripts for all OS
+- ✅ Identical dependencies across platforms
+- ⚠️ ChromaDB may require build tools on Linux (`apt-get install build-essential`)
 
 ### Installation
+
+#### Windows (PowerShell)
+
+```powershell
+# Clone repository
+git clone https://github.com/your-repo/f1-strategist-ai.git
+cd f1-strategist-ai
+
+# Create virtual environment
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Configure environment
+copy .env.example .env
+# Edit .env with your API keys
+```
+
+#### Linux/macOS
 
 ```bash
 # Clone repository
@@ -461,9 +499,8 @@ git clone https://github.com/your-repo/f1-strategist-ai.git
 cd f1-strategist-ai
 
 # Create virtual environment
-python -m venv venv
-.\venv\Scripts\Activate.ps1  # Windows
-source venv/bin/activate     # Linux/Mac
+python3 -m venv venv
+source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
@@ -475,10 +512,41 @@ cp .env.example .env
 
 ### Running the Application
 
+#### Windows (PowerShell)
+
+```powershell
+.\run_app.ps1
+# Open http://localhost:8501
+```
+
+#### Windows (Command Prompt)
+
+```cmd
+run_app.bat
+# Open http://localhost:8501
+```
+
+#### Linux/macOS
+
+```bash
+# First time: make script executable
+chmod +x run_app.sh
+
+# Run application
+./run_app.sh
+# Open http://localhost:8501
+```
+
+#### Manual Start (All Platforms)
+
 ```bash
 python app_dash.py
 # Open http://localhost:8501
 ```
+
+### Quick Start Guide
+
+For detailed setup instructions, see [QUICK_START.md](docs/QUICK_START.md).
 
 ---
 

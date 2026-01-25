@@ -4,18 +4,40 @@
 
 ### Launch Dash UI
 
+#### Windows (PowerShell)
+
 ```powershell
-# Navigate to project directory
-cd "c:\Users\jorgeg\OneDrive - CEGID\Desarrollador 10x con IA\CAPSTON PROJECT\F1\F1 Strategist AI"
+# Using launcher script
+.\run_app.ps1
 
-# Activate virtual environment
+# OR manually
 .\venv\Scripts\Activate.ps1
-
-# Run the Dash application
 python app_dash.py
-
-# Application will be available at http://localhost:8050
 ```
+
+#### Windows (Command Prompt)
+
+```cmd
+# Using launcher script
+run_app.bat
+
+# OR manually
+.\venv\Scripts\activate.bat
+python app_dash.py
+```
+
+#### Linux/macOS
+
+```bash
+# Using launcher script (first time: chmod +x run_app.sh)
+./run_app.sh
+
+# OR manually
+source venv/bin/activate
+python app_dash.py
+```
+
+**Application URL**: `http://localhost:8501`
 
 ### Interface Overview
 
