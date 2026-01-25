@@ -224,8 +224,6 @@ _cache_job_snapshot: Dict[str, Any] = {
     "context": None,
 }
 
-NON_DISMISSIBLE_DASHBOARDS: Set[str] = {"race_overview", "track_map"}
-
 CACHE_FILE_EXTENSION = DEFAULT_CACHE_CONFIG.get_file_extension()
 PROCESSED_CACHE_DIR = DEFAULT_CACHE_CONFIG.processed_dir
 RACES_CACHE_DIR = DEFAULT_CACHE_CONFIG.races_dir
@@ -6732,57 +6730,32 @@ def update_dashboards(
         dash_id = selected_dashboards[idx] if idx < len(selected_dashboards) else f"dashboard-{idx}"
         # Border style for visual separation
         border_style = {"borderRight": "1px solid #333"}
-
+        
         tile_id = f"dashboard-tile-{dash_id}"
         data_attrs = cast(dict[str, Any], {"data-dashboard-id": dash_id})
 
-        inner_children: list[Any]
         if isinstance(dash_component, dbc.Col):
-            col_children = dash_component.children
-            if isinstance(col_children, (list, tuple)):
-                inner_children = list(col_children)
-            elif col_children is None:
-                inner_children = []
-            else:
-                inner_children = [col_children]
-        else:
-            inner_children = [dash_component]
-
-        closable = dash_id not in NON_DISMISSIBLE_DASHBOARDS
-        tile_children: list[Any] = []
-        if closable:
-            tile_children.append(
-                html.Button(
-                    "×",
-                    id={"type": "dashboard-close", "dash_id": dash_id},
-                    className="btn btn-sm btn-dark dashboard-close-btn",
-                    title="Remove dashboard",
-                    type="button",
-                    n_clicks=0,
-                    style={
-                        "position": "absolute",
-                        "top": "6px",
-                        "right": "6px",
-                        "zIndex": "10",
-                        "width": "1.5rem",
-                        "height": "1.5rem",
-                        "padding": "0",
-                        "lineHeight": "1.25rem",
-                        "borderRadius": "0.35rem",
-                    }
+            # Already wrapped (e.g., weather) - recreate with responsive class
+            wrapped_dashboards.append(
+                html.Div(
+                    dash_component.children,
+                    className="dashboard-grid-col",
+                    id=tile_id,
+                    **data_attrs,
+                    style={**border_style}
                 )
             )
-        tile_children.extend(inner_children)
-
-        wrapped_dashboards.append(
-            html.Div(
-                tile_children,
-                className="dashboard-grid-col",
-                id=tile_id,
-                **data_attrs,
-                style={**border_style, "position": "relative"}
+        else:
+            # Wrap with responsive class
+            wrapped_dashboards.append(
+                html.Div(
+                    dash_component,
+                    className="dashboard-grid-col",
+                    id=tile_id,
+                    **data_attrs,
+                    style={**border_style}
+                )
             )
-        )
     
     # Return flex container - CSS handles responsive layout
     # Landscape: wraps at 3 items per row (33% each)
@@ -6874,41 +6847,6 @@ def sync_dashboard_order(
 
 
 # Callback: Render AI dashboard independently to avoid refresh flicker
-@callback(
-    Output('dashboard-selector', 'value'),
-    Input({'type': 'dashboard-close', 'dash_id': ALL}, 'n_clicks'),
-    State('dashboard-selector', 'value'),
-    prevent_initial_call=True
-)
-def close_dashboard_tile(
-    _close_clicks: list[int | None],
-    selected_dashboards,
-):
-    """Remove dashboard from selection when close button is clicked."""
-
-    triggered_id = ctx.triggered_id
-    if not triggered_id or not isinstance(triggered_id, dict):
-        raise PreventUpdate
-
-    dash_id = triggered_id.get('dash_id')
-    if not dash_id or dash_id in NON_DISMISSIBLE_DASHBOARDS:
-        raise PreventUpdate
-
-    current_selection: list[str]
-    if isinstance(selected_dashboards, (list, tuple)):
-        current_selection = [str(item) for item in selected_dashboards if item]
-    elif isinstance(selected_dashboards, str) and selected_dashboards:
-        current_selection = [selected_dashboards]
-    else:
-        current_selection = []
-
-    new_selection = [item for item in current_selection if item != dash_id]
-    if new_selection == current_selection:
-        raise PreventUpdate
-
-    return new_selection
-
-
 @callback(
     Output('ai-dashboard-slot', 'children'),
     Input('chat-messages-store', 'data'),
