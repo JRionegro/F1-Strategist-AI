@@ -3,7 +3,7 @@
 ## Executive Summary
 
 Circuit: {Lusail International Circuit} ({High-speed flowing circuit})
-Analysis Date: {2026-01-06 13:06}
+Analysis Date: {2026-01-24 11:31}
 Safety Rating: N/A/10
 Historical Incident Rate: N/A%
 
@@ -221,5 +221,5 @@ Key precedents at this circuit:
 
 ---
 
-*Document generated: {2026-01-06 13:06}*
+*Document generated: {2026-01-24 11:31}*
 *Data source: OpenF1 API + FIA Race Director Guidelines*

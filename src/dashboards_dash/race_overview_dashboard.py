@@ -531,6 +531,12 @@ class RaceOverviewDashboard:
                             if len(driver_laps) > 0:
                                 logger.info(f"ALO lap numbers: {sorted(driver_laps['LapNumber'].unique())}")
                         
+                        # DEBUG: Log global_lap and simulation_time at simulation start
+                        logger.info(f"TIRE AGE DEBUG - Driver #{driver_num}:")
+                        logger.info(f"  global_lap = {global_lap}")
+                        logger.info(f"  simulation_time = {simulation_time}")
+                        logger.info(f"  Has driver laps data: {not driver_laps.empty}")
+                        
                         # Calculate per-driver lap ONLY if no global lap provided
                         # This ensures tire age stays in sync with the UI lap counter
                         if global_lap is None and not driver_laps.empty:
@@ -627,6 +633,18 @@ class RaceOverviewDashboard:
                                     driver_current_lap = int(driver_laps['LapNumber'].max())
                                 else:
                                     driver_current_lap = 1
+                        else:
+                            # global_lap is provided, use it directly
+                            if global_lap is not None:
+                                driver_current_lap = int(global_lap)
+                                logger.info(f"  Using global_lap directly: driver_current_lap = {driver_current_lap}")
+                            else:
+                                driver_current_lap = 1
+                                logger.info(f"  No data available, defaulting to lap 1")
+                        
+                        # Log final calculated value for all drivers at simulation start
+                        if simulation_time == 0:
+                            logger.info(f"  FINAL driver_current_lap at simulation start = {driver_current_lap}")
                     
                     # Get driver's stints sorted by stint number
                     driver_stints = stints[

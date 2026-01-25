@@ -287,7 +287,7 @@ Based on recent seasons:
 ⏱️ PIT LOSS: 20.5s
 
 OPTIMAL STRATEGIES:
-├── 1-STOP: Lap 23-25 (MEDIUM → HARD)
+├── 1-STOP: Lap 18-25 (MEDIUM → HARD)
 ├── 2-STOP: Laps 12-15, 30-35 (SOFT → MEDIUM → SOFT)
 └── SC REACT: Pit if gap >3s to car behind
 
@@ -300,4 +300,4 @@ KEY METRICS:
 ---
 
 *Generated from template. Data: OpenF1 API, FIA Regulations, Historical Analysis*
-*Last updated: 2026-01-06 13:06*
+*Last updated: 2026-01-24 11:31*

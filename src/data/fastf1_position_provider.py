@@ -78,7 +78,7 @@ class FastF1PositionProvider:
             )
             return primary_path
         
-        # Fallback patterns to try for backwards compatibility
+        # Fallback 1: Try exact patterns with known variations
         fallback_patterns = [
             f"{safe_country}_Grand_Prix_{session_type}_positions.pkl",  # With "Grand Prix"
             f"{safe_country}_Race_positions.pkl",  # "Race" instead of "R"
@@ -93,6 +93,21 @@ class FastF1PositionProvider:
                     primary_path.name
                 )
                 return fallback_path
+        
+        # Fallback 2: Fuzzy search - find any cache file containing country keywords
+        # This handles cases like "Abu Dhabi" -> "United_Arab_Emirates_R_positions.pkl"
+        country_keywords = safe_country.lower().split("_")
+        for cache_file in session_dir.glob(f"*_{session_type}_positions.pkl"):
+            cache_lower = cache_file.stem.lower()
+            # Check if any keyword matches
+            if any(keyword in cache_lower for keyword in country_keywords if len(keyword) > 3):
+                logger.debug(
+                    "Found cache with fuzzy match: %s (keywords=%s, looking for %s)",
+                    cache_file.name,
+                    country_keywords,
+                    primary_path.name
+                )
+                return cache_file
         
         # No existing cache found - return primary path for new cache creation
         logger.debug(

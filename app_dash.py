@@ -363,23 +363,45 @@ def _interpret_session_payload(payload: Dict[str, Any]) -> Tuple[str, str, str]:
     session_type_raw = _extract_session_field(payload, _SESSION_TYPE_FIELDS)
     session_code_raw = _extract_session_field(payload, _SESSION_CODE_FIELDS)
 
-    candidate_code = (
-        (session_code_raw or session_type_raw).upper()
-        if (session_code_raw or session_type_raw)
-        else ""
-    )
-    if not candidate_code:
-        fallback = _SESSION_NAME_TO_CODE.get(session_name)
-        if fallback:
-            candidate_code = fallback
-        elif session_name:
-            candidate_code = session_name.upper()
-        else:
-            candidate_code = "SESSION"
+    # PRIORITY 1: Detect special sessions from session_name first
+    normalized_code = None
+    label = None
+    if session_name:
+        name_lower = session_name.lower()
+        # Check Sprint Qualifying BEFORE generic qualifying/sprint
+        if "sprint" in name_lower and "qualifying" in name_lower:
+            normalized_code = "SQ"
+            label = "Sprint Qualifying"
+        elif "qualifying" in name_lower and "shootout" in name_lower:
+            normalized_code = "SS"
+            label = "Sprint Shootout"
+        elif "shootout" in name_lower:
+            normalized_code = "SS"
+            label = "Sprint Shootout"
+        elif "sprint" in name_lower:
+            normalized_code = "S"
+            label = "Sprint"
 
-    normalized_code = candidate_code.upper()
-    label = _SESSION_CODE_TO_LABEL.get(normalized_code)
+    # PRIORITY 2: Use session_code/session_type if not detected above
+    if normalized_code is None:
+        candidate_code = (
+            (session_code_raw or session_type_raw).upper()
+            if (session_code_raw or session_type_raw)
+            else ""
+        )
+        if not candidate_code:
+            fallback = _SESSION_NAME_TO_CODE.get(session_name)
+            if fallback:
+                candidate_code = fallback
+            elif session_name:
+                candidate_code = session_name.upper()
+            else:
+                candidate_code = "SESSION"
 
+        normalized_code = candidate_code.upper()
+        label = _SESSION_CODE_TO_LABEL.get(normalized_code)
+
+    # PRIORITY 3: Fallback parsing if still not resolved
     if label is None:
         name_lower = session_name.lower()
         if "practice" in name_lower or name_lower.startswith("fp"):
@@ -392,6 +414,9 @@ def _interpret_session_payload(payload: Dict[str, Any]) -> Tuple[str, str, str]:
             else:
                 normalized_code = "P1"
                 label = "Practice 1"
+        elif "sprint" in name_lower and "qualifying" in name_lower:
+            normalized_code = "SQ"
+            label = "Sprint Qualifying"
         elif "qualifying" in name_lower and "shootout" in name_lower:
             normalized_code = "SS"
             label = "Sprint Shootout"
@@ -421,13 +446,21 @@ def _build_session_selector_options(sessions: Sequence[Dict[str, Any]]) -> List[
     options: List[Dict[str, str]] = []
     seen_values: Set[str] = set()
 
+    logger.info(f"Building session options from {len(normalized_sessions)} sessions:")
     for payload in normalized_sessions:
+        session_name = payload.get('session_name', 'Unknown')
         normalized_code, label, _session_name = _interpret_session_payload(payload)
+        logger.info(f"  Session: '{session_name}' → code={normalized_code}, label={label}")
+        
         if normalized_code in seen_values:
+            logger.warning(f"  ⚠️ DUPLICATE CODE {normalized_code} - skipping '{session_name}'")
             continue
+        
         seen_values.add(normalized_code)
         options.append({"label": label, "value": normalized_code})
+        logger.info(f"  ✓ Added option: {label} ({normalized_code})")
 
+    logger.info(f"Built {len(options)} unique session options")
     return options
 
 
@@ -440,10 +473,18 @@ def _find_session_payload(
         return None
 
     normalized_target = target_code.upper()
+    logger.info(f"Searching for session with target_code={normalized_target}")
     for payload in _normalize_record_keys(records):
-        normalized_code, _label, _name = _interpret_session_payload(payload)
+        normalized_code, _label, session_name = _interpret_session_payload(payload)
+        session_key = payload.get("session_key") or payload.get("SessionKey")
+        logger.info(
+            f"  Checking: {session_name} → normalized_code={normalized_code} "
+            f"(session_key={session_key})"
+        )
         if normalized_code == normalized_target:
+            logger.info(f"  ✓ MATCH! Returning session_key={session_key}")
             return payload
+    logger.warning(f"No session found matching target_code={normalized_target}")
     return None
 
 
@@ -3171,6 +3212,19 @@ def update_sessions(circuit_key, year, current_session):
                     year,
                 )
                 return [], None
+            
+            # DEBUG: Log raw sessions from API
+            logger.info(
+                "Received %s sessions from OpenF1 API for meeting_key=%s:",
+                len(sessions),
+                meeting_key,
+            )
+            for session in sessions:
+                logger.info(
+                    "  Session: %s (key=%s)",
+                    session.get('session_name', 'Unknown'),
+                    session.get('session_key', 'N/A'),
+                )
 
         session_options = _build_session_selector_options(sessions)
         session_values = [opt['value'] for opt in session_options]
