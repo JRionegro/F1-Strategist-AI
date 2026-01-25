@@ -8,6 +8,9 @@ insights for Formula 1 racing. The system combines cutting-edge AI technologies
 including multi-agent architectures, Retrieval-Augmented Generation (RAG), and
 real-time data processing to deliver comprehensive strategic analysis.
 
+![F1 Strategist AI - Main Interface](images/main_screen.jpg)
+*Main application interface featuring a collapsible sidebar menu and 6 integrated dashboards for comprehensive race analysis*
+
 ### 🎓 Academic Context
 
 This project was developed as a **Capstone Project** for the **Master's program in 
