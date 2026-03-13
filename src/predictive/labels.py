@@ -75,7 +75,10 @@ def make_pit_window_label(
     if window_half_width < 0:
         raise ValueError("window_half_width must be non-negative")
 
-    center = next_pit_lap(current_lap=current_lap, pit_laps=pit_laps, horizon_laps=horizon_laps)
+    center = next_pit_lap(
+        current_lap=current_lap,
+        pit_laps=pit_laps,
+        horizon_laps=horizon_laps)
     if center is None:
         return PitWindowLabel(start_lap=None, end_lap=None, center_lap=None)
 

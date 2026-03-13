@@ -17,7 +17,7 @@ from src.agents.orchestrator import AgentOrchestrator
 def mock_mcp_client():
     """Create a mock MCP client with realistic F1 data."""
     client = Mock()
-    
+
     # Mock race results
     client.get_race_results = AsyncMock(return_value={
         "session_info": {
@@ -31,7 +31,7 @@ def mock_mcp_client():
             {"position": 3, "driver": "ALO", "team": "Aston Martin", "time": "+38.637s"}
         ]
     })
-    
+
     # Mock lap times
     client.get_lap_times = AsyncMock(return_value={
         "driver": "VER",
@@ -41,7 +41,7 @@ def mock_mcp_client():
             {"lap": 3, "time": "1:33.987", "compound": "MEDIUM"}
         ]
     })
-    
+
     # Mock pit stops
     client.get_pit_stops = AsyncMock(return_value={
         "pit_stops": [
@@ -49,7 +49,7 @@ def mock_mcp_client():
             {"driver": "PER", "lap": 16, "duration": 2.5, "compound_out": "HARD"}
         ]
     })
-    
+
     # Mock weather data
     client.get_weather = AsyncMock(return_value={
         "current": {
@@ -65,7 +65,7 @@ def mock_mcp_client():
             {"time": "16:00", "rain_probability": 20, "temp": 30.0}
         ]
     })
-    
+
     # Mock race control messages
     client.get_race_control_messages = AsyncMock(return_value={
         "messages": [
@@ -83,7 +83,7 @@ def mock_mcp_client():
             }
         ]
     })
-    
+
     # Mock track status
     client.get_track_status = AsyncMock(return_value={
         "status": [
@@ -91,7 +91,7 @@ def mock_mcp_client():
             {"lap": 12, "status": "4", "message": "Yellow Flag"}
         ]
     })
-    
+
     # Mock position data
     client.get_position_data = AsyncMock(return_value={
         "positions": [
@@ -101,7 +101,7 @@ def mock_mcp_client():
             {"lap": 10, "driver": "PER", "position": 2}
         ]
     })
-    
+
     # Mock telemetry
     client.get_telemetry = AsyncMock(return_value={
         "telemetry": [
@@ -110,7 +110,7 @@ def mock_mcp_client():
             {"distance": 200, "speed": 280, "throttle": 100, "brake": 0}
         ]
     })
-    
+
     return client
 
 
@@ -118,18 +118,18 @@ def mock_mcp_client():
 def mock_llm_provider():
     """Create a mock LLM provider for testing."""
     provider = AsyncMock()
-    
+
     # Create a mock response object with content attribute
     class MockLLMResponse:
         def __init__(self, content):
             self.content = content
-    
+
     # Default responses for different agent types
     provider.generate = AsyncMock(return_value=MockLLMResponse(
         content="Based on the data, the optimal strategy is to pit between laps 28-32 for Hard tires. "
                 "This provides a good balance between tire life and maintaining track position."
     ))
-    
+
     return provider
 
 
@@ -137,7 +137,7 @@ def mock_llm_provider():
 def mock_rag_system():
     """Create a mock RAG system for testing."""
     rag = Mock()
-    
+
     # Mock search method (not retrieve)
     class MockSearchResult:
         def __init__(self, content, metadata, score, id_val):
@@ -145,7 +145,7 @@ def mock_rag_system():
             self.metadata = metadata
             self.score = score
             self.id = id_val
-    
+
     rag.search = Mock(return_value=[
         MockSearchResult(
             content="Historical data shows Bahrain favors 1-stop strategy",
@@ -160,7 +160,7 @@ def mock_rag_system():
             id_val="doc2"
         )
     ])
-    
+
     return rag
 
 

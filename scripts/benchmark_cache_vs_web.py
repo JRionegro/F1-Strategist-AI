@@ -6,6 +6,7 @@ repository. The target session is the 2025 Qatar Grand Prix race.
 """
 
 from __future__ import annotations
+from src.data.openf1_data_provider import OpenF1DataProvider
 
 import logging
 from dataclasses import dataclass
@@ -21,7 +22,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.data.openf1_data_provider import OpenF1DataProvider
 
 TARGET_YEAR = 2025
 TARGET_COUNTRY = "Qatar"

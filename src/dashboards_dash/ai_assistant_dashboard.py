@@ -12,7 +12,7 @@ import logging
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 
-from dash import html, dcc
+from dash import html
 import dash_bootstrap_components as dbc
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class AIAssistantDashboard:
     """
     Proactive AI Assistant Dashboard with multi-agent chat interface.
-    
+
     Features:
     - Automatic strategy alerts (pit window, safety car, undercut)
     - User questions routed to 5 specialized agents
@@ -39,13 +39,13 @@ class AIAssistantDashboard:
     ):
         """
         Create the AI Assistant dashboard layout.
-        
+
         Args:
             focused_driver: Currently focused driver code
             race_name: Current race name for display
             session_type: Session type (Race, Qualifying, etc.)
             messages: List of message dicts to render
-            
+
         Returns:
             Dash component tree
         """
@@ -55,11 +55,14 @@ class AIAssistantDashboard:
             if isinstance(messages, dict):
                 messages = [v for v in messages.values() if v is not None]
             # Filter valid messages
-            messages = [m for m in messages if m is not None and isinstance(m, dict)]
-            initial_content = cls.render_messages(messages) if messages else None
+            messages = [
+                m for m in messages if m is not None and isinstance(
+                    m, dict)]
+            initial_content = cls.render_messages(
+                messages) if messages else None
         else:
             initial_content = None
-        
+
         # Default placeholder if no messages
         if not initial_content:
             initial_content = [
@@ -71,7 +74,7 @@ class AIAssistantDashboard:
                     ], className="text-muted small text-center mb-0")
                 ], style={"padding": "20px"})
             ]
-        
+
         return dbc.Card([
             dbc.CardHeader([
                 html.Div([
@@ -107,7 +110,7 @@ class AIAssistantDashboard:
                         style={"fontSize": "0.7rem"}
                     )
                 ], className="mb-2"),
-                
+
                 # Chat messages area - populated from messages parameter
                 html.Div(
                     id='chat-messages-container',
@@ -124,7 +127,7 @@ class AIAssistantDashboard:
                         'min-height': '0'
                     }
                 ),
-                
+
                 # Input area
                 dbc.InputGroup([
                     dbc.Input(
@@ -194,12 +197,12 @@ class AIAssistantDashboard:
                 "height": "100%"
             })
         ], className="mb-3 h-100", style={"overflow": "hidden"})
-    
+
     @staticmethod
     def render_messages(messages: List[Dict]) -> List[html.Div]:
         """
         Render list of messages to Dash components.
-        
+
         Args:
             messages: List of message dicts with keys:
                 - type: 'user', 'assistant', 'alert'
@@ -207,7 +210,7 @@ class AIAssistantDashboard:
                 - timestamp: ISO timestamp string
                 - metadata: Optional dict with confidence, agents_used, etc.
                 - priority: For alerts, 1-5 urgency level
-                
+
         Returns:
             List of rendered message components (newest first)
         """
@@ -216,10 +219,12 @@ class AIAssistantDashboard:
             messages = []
         elif isinstance(messages, dict):
             messages = [v for v in messages.values() if v is not None]
-        
+
         # Filter out any None or non-dict values
-        messages = [m for m in messages if m is not None and isinstance(m, dict)]
-        
+        messages = [
+            m for m in messages if m is not None and isinstance(
+                m, dict)]
+
         if not messages:
             return [
                 html.Div([
@@ -230,7 +235,7 @@ class AIAssistantDashboard:
                     ], className="text-muted small text-center mb-0")
                 ], style={"padding": "20px"})
             ]
-        
+
         rendered = []
         # Group messages into pairs (user question + assistant answer)
         # Then reverse pairs so most recent Q&A appears at top
@@ -240,7 +245,7 @@ class AIAssistantDashboard:
         while i < len(messages):
             msg = messages[i]
             msg_type = msg.get('type', 'assistant')
-            
+
             # If it's a user message, try to pair with next assistant message
             if msg_type == 'user' and i + 1 < len(messages):
                 next_msg = messages[i + 1]
@@ -249,14 +254,15 @@ class AIAssistantDashboard:
                     pairs.append([msg, next_msg])
                     i += 2
                     continue
-            
-            # If it's an alert or standalone message, keep it as a single-item pair
+
+            # If it's an alert or standalone message, keep it as a single-item
+            # pair
             pairs.append([msg])
             i += 1
-        
+
         # Reverse pairs so most recent is at top
         pairs.reverse()
-        
+
         # Render each pair (question first, then answer within each pair)
         for pair in pairs:
             for msg in pair:
@@ -265,11 +271,11 @@ class AIAssistantDashboard:
                 timestamp = msg.get('timestamp', '')
                 metadata = msg.get('metadata', {})
                 priority = msg.get('priority', 0)
-                
+
                 if msg_type == 'user':
                     rendered.append(
-                        AIAssistantDashboard.create_user_message(content, timestamp)
-                    )
+                        AIAssistantDashboard.create_user_message(
+                            content, timestamp))
                 elif msg_type == 'alert':
                     rendered.append(
                         AIAssistantDashboard.create_alert_message(
@@ -282,17 +288,18 @@ class AIAssistantDashboard:
                             content, timestamp, metadata
                         )
                     )
-        
+
         return rendered
-    
+
     @staticmethod
     def create_user_message(
         content: str,
         timestamp: str = ""
     ) -> html.Div:
         """Create a user message bubble (blue, right-aligned)."""
-        time_str = timestamp[-8:-3] if len(timestamp) > 8 else datetime.now().strftime("%H:%M")
-        
+        time_str = timestamp[-8:-
+                             3] if len(timestamp) > 8 else datetime.now().strftime("%H:%M")
+
         return html.Div([
             html.Div([
                 html.Div(
@@ -314,7 +321,7 @@ class AIAssistantDashboard:
                 )
             ])
         ], className="mb-2", style={'clear': 'both'})
-    
+
     @staticmethod
     def create_assistant_message(
         content: str,
@@ -322,8 +329,9 @@ class AIAssistantDashboard:
         metadata: Optional[Dict[str, Any]] = None
     ) -> html.Div:
         """Create an assistant message bubble (gray, left-aligned)."""
-        time_str = timestamp[-8:-3] if len(timestamp) > 8 else datetime.now().strftime("%H:%M")
-        
+        time_str = timestamp[-8:-
+                             3] if len(timestamp) > 8 else datetime.now().strftime("%H:%M")
+
         # Build metadata footer
         footer_items = []
         if metadata:
@@ -337,7 +345,7 @@ class AIAssistantDashboard:
                 footer_items.append(
                     html.Span(f"🤖 {agents}", className="me-2")
                 )
-        
+
         return html.Div([
             html.Div([
                 html.Div(
@@ -357,7 +365,7 @@ class AIAssistantDashboard:
                 ], style={'marginTop': '2px'})
             ])
         ], className="mb-2", style={'clear': 'both'})
-    
+
     @staticmethod
     def create_alert_message(
         content: str,
@@ -366,15 +374,16 @@ class AIAssistantDashboard:
     ) -> html.Div:
         """
         Create a proactive alert message bubble (amber/orange).
-        
+
         Priority colors:
         - 5 (highest): red background
-        - 4: orange background  
+        - 4: orange background
         - 3: amber/yellow background
         - 1-2: muted background
         """
-        time_str = timestamp[-8:-3] if len(timestamp) > 8 else datetime.now().strftime("%H:%M")
-        
+        time_str = timestamp[-8:-
+                             3] if len(timestamp) > 8 else datetime.now().strftime("%H:%M")
+
         # Color based on priority
         if priority >= 5:
             bg_color = 'linear-gradient(135deg, #dc3545, #b02a37)'
@@ -392,7 +401,7 @@ class AIAssistantDashboard:
             bg_color = '#3d3d3d'
             text_color = '#e0e0e0'
             border = '1px solid #ffc107'
-        
+
         return html.Div([
             html.Div([
                 html.Div([
@@ -420,7 +429,7 @@ class AIAssistantDashboard:
                 )
             ])
         ], className="mb-2", style={'clear': 'both'})
-    
+
     @staticmethod
     def create_thinking_indicator() -> html.Div:
         """Create a thinking/loading indicator."""

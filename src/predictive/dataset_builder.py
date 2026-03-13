@@ -54,23 +54,40 @@ def _normalize_lap_frames_for_dataset(laps: pd.DataFrame) -> pd.DataFrame:
         {
             "driver_id": df[driver_col].astype(str).str.strip(),
             "lap_number": df[lap_col].astype(int),
-            "compound": df.get("Compound", df.get("compound")),
-            "lap_time_s": _lap_time_seconds(df).astype(float, errors="ignore"),
-            "gap_ahead_s": df.get("GapAhead", df.get("gap_ahead_s")),
-            "gap_behind_s": df.get("GapBehind", df.get("gap_behind_s")),
-            "position": df.get("Position", df.get("position", df.get("PositionOrder"))),
-        }
-    )
+            "compound": df.get(
+                "Compound",
+                df.get("compound")),
+            "lap_time_s": _lap_time_seconds(df).astype(
+                float,
+                errors="ignore"),
+            "gap_ahead_s": df.get(
+                "GapAhead",
+                df.get("gap_ahead_s")),
+            "gap_behind_s": df.get(
+                "GapBehind",
+                df.get("gap_behind_s")),
+            "position": df.get(
+                "Position",
+                df.get(
+                    "position",
+                    df.get("PositionOrder"))),
+        })
 
     return normalized
 
 
-def _normalize_pit_events(pits: Optional[pd.DataFrame], laps: pd.DataFrame) -> pd.DataFrame:
+def _normalize_pit_events(
+        pits: Optional[pd.DataFrame], laps: pd.DataFrame) -> pd.DataFrame:
     """Normalize pit events into driver/lap pairs."""
 
     if pits is not None and not pits.empty:
         driver_col = None
-        for candidate in ("driver_id", "Driver", "Abbreviation", "DriverNumber"):
+        for candidate in (
+            "driver_id",
+            "Driver",
+            "Abbreviation",
+            "DriverNumber"
+        ):
             if candidate in pits.columns:
                 driver_col = candidate
                 break
@@ -84,12 +101,14 @@ def _normalize_pit_events(pits: Optional[pd.DataFrame], laps: pd.DataFrame) -> p
         if driver_col is not None and lap_col is not None:
             normalized = pits[[driver_col, lap_col]].copy()
             normalized.columns = ["driver_id", "lap_number"]
-            normalized["driver_id"] = normalized["driver_id"].astype(str).str.strip()
+            normalized["driver_id"] = normalized["driver_id"].astype(
+                str).str.strip()
             normalized["lap_number"] = normalized["lap_number"].astype(int)
             return normalized
 
     if {"PitOutTime", "LapNumber"}.issubset(laps.columns):
-        fallback = laps[laps["PitOutTime"].notna()][["LapNumber", "Driver"]].copy()
+        fallback = laps[laps["PitOutTime"].notna()][[
+            "LapNumber", "Driver"]].copy()
         fallback.columns = ["lap_number", "driver_id"]
         fallback["driver_id"] = fallback["driver_id"].astype(str).str.strip()
         fallback["lap_number"] = fallback["lap_number"].astype(int)
@@ -149,7 +168,9 @@ def build_pit_window_dataset(
         if last_lap_time_s is not None:
             lap_times_by_driver[driver_id].append(float(last_lap_time_s))
 
-        rolling_lap_time_s = rolling_mean(lap_times_by_driver[driver_id], window=rolling_window)
+        rolling_lap_time_s = rolling_mean(
+            lap_times_by_driver[driver_id],
+            window=rolling_window)
 
         label = make_pit_window_label(
             current_lap=lap_number_int,
@@ -162,12 +183,17 @@ def build_pit_window_dataset(
             "driver_id": driver_id,
             "lap_number": lap_number_int,
             "compound": state.get("compound"),
-            "stint_lap": compute_stint_lap(lap_number_int, state.get("last_pit_lap")),
+            "stint_lap": compute_stint_lap(
+                lap_number_int,
+                state.get("last_pit_lap")),
             "last_lap_time_s": float(last_lap_time_s) if last_lap_time_s is not None else None,
             "rolling_lap_time_s": float(rolling_lap_time_s) if rolling_lap_time_s is not None else None,
-            "gap_ahead_s": float(state["gap_ahead_s"]) if state.get("gap_ahead_s") is not None else None,
-            "gap_behind_s": float(state["gap_behind_s"]) if state.get("gap_behind_s") is not None else None,
-            "position": int(state["position"]) if state.get("position") is not None else None,
+            "gap_ahead_s": float(
+                state["gap_ahead_s"]) if state.get("gap_ahead_s") is not None else None,
+            "gap_behind_s": float(
+                state["gap_behind_s"]) if state.get("gap_behind_s") is not None else None,
+            "position": int(
+                    state["position"]) if state.get("position") is not None else None,
             "pit_window_start_lap": label.start_lap,
             "pit_window_end_lap": label.end_lap,
             "pit_window_center_lap": label.center_lap,
@@ -179,7 +205,8 @@ def build_pit_window_dataset(
 
     df = pd.DataFrame(rows)
 
-    missing = [col for col in PIT_WINDOW_REQUIRED_COLUMNS if col not in df.columns]
+    missing = [
+        col for col in PIT_WINDOW_REQUIRED_COLUMNS if col not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
 
@@ -203,7 +230,8 @@ def build_states_from_lap_frames(
     """
 
     def _clean(value: Any) -> Any:
-        # Convert pandas NaN to None so downstream validation accepts missing values.
+        # Convert pandas NaN to None so downstream validation accepts missing
+        # values.
         return None if pd.isna(value) else value
 
     required = {"driver_id", "lap_number"}
@@ -221,10 +249,12 @@ def build_states_from_lap_frames(
 
     states: list[dict[str, Any]] = []
     # Sort by driver then lap for deterministic ordering
-    laps_sorted_df = laps.copy().sort_values(by=["driver_id", "lap_number"]).reset_index(drop=True)
+    laps_sorted_df = laps.copy().sort_values(
+        by=["driver_id", "lap_number"]).reset_index(drop=True)
 
     # Track last pit per driver as we iterate laps in order
-    last_pit_by_driver: dict[str, Optional[int]] = {drv: None for drv in laps_sorted_df["driver_id"].unique()}
+    last_pit_by_driver: dict[str, Optional[int]] = {
+        drv: None for drv in laps_sorted_df["driver_id"].unique()}
 
     for _, row in laps_sorted_df.iterrows():
         driver_id = str(row["driver_id"])
@@ -300,11 +330,13 @@ def build_pit_window_dataset_from_cache(
         ValueError: If cached lap data is missing.
     """
 
-    laps_df = cache_manager.get_cached_race_data(year, race_name, DataType.LAP_TIMES)
+    laps_df = cache_manager.get_cached_race_data(
+        year, race_name, DataType.LAP_TIMES)
     if laps_df is None or laps_df.empty:
         raise ValueError("cached laps not found for race")
 
-    pits_df = cache_manager.get_cached_race_data(year, race_name, DataType.PIT_STOPS)
+    pits_df = cache_manager.get_cached_race_data(
+        year, race_name, DataType.PIT_STOPS)
 
     normalized_laps = _normalize_lap_frames_for_dataset(laps_df)
     normalized_pits = _normalize_pit_events(pits_df, laps_df)
@@ -342,6 +374,7 @@ def persist_dataset(df: pd.DataFrame, output_path: str | Path) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Sort for determinism
-    sorted_df = df.sort_values(by=["driver_id", "lap_number"]).reset_index(drop=True)
+    sorted_df = df.sort_values(
+        by=["driver_id", "lap_number"]).reset_index(drop=True)
     sorted_df.to_csv(output_path, index=False)
     return output_path

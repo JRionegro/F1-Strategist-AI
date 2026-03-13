@@ -4,7 +4,6 @@ Embeddings provider using sentence-transformers.
 Wraps the all-MiniLM-L6-v2 model for generating text embeddings.
 """
 
-import logging
 from typing import Any
 
 try:
@@ -49,7 +48,8 @@ class EmbeddingsProvider:
         logger.info(
             f"Loading embeddings model: {model_name} on {device}"
         )
-        self.model = SentenceTransformer(model_name, device=device)  # type: ignore
+        self.model = SentenceTransformer(
+            model_name, device=device)  # type: ignore
         logger.info(f"Model loaded: {model_name}")
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:

@@ -147,13 +147,12 @@ class DocumentLoader:
             circuit_path = year_path / "circuits" / circuit.lower()
             if circuit_path.exists():
                 circuit_docs = self._load_directory(
-                    circuit_path,
-                    {"year": year, "circuit": circuit.lower(), "scope": "circuit"},
-                )
+                    circuit_path, {
+                        "year": year, "circuit": circuit.lower(), "scope": "circuit"}, )
                 documents.extend(circuit_docs)
                 logger.info(
-                    f"Loaded {len(circuit_docs)} documents for {circuit} {year}"
-                )
+                    f"Loaded {
+                        len(circuit_docs)} documents for {circuit} {year}")
             else:
                 logger.warning(
                     f"No documents found for circuit {circuit} in {year}"
@@ -289,7 +288,8 @@ class DocumentLoader:
                     frontmatter = yaml.safe_load(parts[1]) or {}
                     content = parts[2].strip()
                 except yaml.YAMLError as e:
-                    logger.warning(f"Invalid YAML frontmatter in {file_path}: {e}")
+                    logger.warning(
+                        f"Invalid YAML frontmatter in {file_path}: {e}")
 
         return content, frontmatter
 
@@ -348,7 +348,8 @@ class DocumentLoader:
             Extracted text content
         """
         try:
-            from docx import Document as DocxDocument  # type: ignore[import-untyped]
+            # type: ignore[import-untyped]
+            from docx import Document as DocxDocument
 
             doc = DocxDocument(str(file_path))
             paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
@@ -383,7 +384,8 @@ class DocumentLoader:
 
         # Try to use LangChain splitter if available
         try:
-            from langchain_text_splitters import RecursiveCharacterTextSplitter  # type: ignore[import-untyped]
+            # type: ignore[import-untyped]
+            from langchain_text_splitters import RecursiveCharacterTextSplitter
 
             # Markdown-aware separators
             separators = [
@@ -457,8 +459,9 @@ class DocumentLoader:
                 if current_chunk:
                     chunk_metadata = {**metadata, "chunk_index": chunk_index}
                     chunks.append(
-                        Document(content=current_chunk.strip(), metadata=chunk_metadata)
-                    )
+                        Document(
+                            content=current_chunk.strip(),
+                            metadata=chunk_metadata))
                     chunk_index += 1
 
                 # Start new chunk with overlap from end of previous
@@ -473,8 +476,9 @@ class DocumentLoader:
         if current_chunk.strip():
             chunk_metadata = {**metadata, "chunk_index": chunk_index}
             chunks.append(
-                Document(content=current_chunk.strip(), metadata=chunk_metadata)
-            )
+                Document(
+                    content=current_chunk.strip(),
+                    metadata=chunk_metadata))
 
         return chunks
 
@@ -707,19 +711,20 @@ converted: true
     ) -> dict:
         """
         Suggest document category using LLM analysis.
-        
+
         Args:
             document_content: Full document text or excerpt
             filename: Original filename for context
             llm_manager: LLM manager instance (optional, will import globally)
-            
+
         Returns:
             Dict with keys: category, confidence, reasoning
         """
         try:
             # Extract first 2000 characters for analysis
-            excerpt = document_content[:2000] if len(document_content) > 2000 else document_content
-            
+            excerpt = document_content[:2000] if len(
+                document_content) > 2000 else document_content
+
             # Import LLM manager if not provided
             if llm_manager is None:
                 try:
@@ -730,9 +735,8 @@ converted: true
                     return {
                         'category': 'other',
                         'confidence': 0.0,
-                        'reasoning': 'LLM unavailable - manual categorization required'
-                    }
-            
+                        'reasoning': 'LLM unavailable - manual categorization required'}
+
             # Build prompt
             prompt = f"""Analyze this F1 document and categorize it into ONE of these categories:
 
@@ -743,14 +747,14 @@ Categories:
 - race_control: Flags, penalties, safety car, VSC, race incidents, steward decisions
 - race_position: Position tracking, overtakes, gaps between drivers, race order
 - fia: FIA regulations, sporting code, technical regulations, rule clarifications
-  * Examples: "FIA Formula 1 Sporting Regulations", "FIA Technical Regulations", 
+  * Examples: "FIA Formula 1 Sporting Regulations", "FIA Technical Regulations",
     "International Sporting Code", documents with "Article", "regulation", "sporting code"
-  * Keywords: "FIA", "sporting regulations", "technical regulations", "article", 
+  * Keywords: "FIA", "sporting regulations", "technical regulations", "article",
     "appendix", "championship", "regulatory", "official", "federation"
 - global: General F1 information, circuit layouts, driver info, team data
 
-IMPORTANT: If the document contains official FIA regulations, sporting code, or technical rules 
-with numbered articles and formal language, it should ALWAYS be categorized as 'fia', even if 
+IMPORTANT: If the document contains official FIA regulations, sporting code, or technical rules
+with numbered articles and formal language, it should ALWAYS be categorized as 'fia', even if
 it also discusses strategy or performance.
 
 Document Information:
@@ -759,11 +763,10 @@ Document Information:
 {excerpt}
 
 Analyze the content and return a JSON object with:
-{{
-    "category": "one of the categories above",
+{"category": "one of the categories above",
     "confidence": 0.0 to 1.0 (how certain you are),
     "reasoning": "brief explanation of why this category fits"
-}}
+}
 
 Only return the JSON object, no other text."""
 
@@ -788,9 +791,8 @@ Only return the JSON object, no other text."""
                     return {
                         'category': 'other',
                         'confidence': 0.0,
-                        'reasoning': 'LLM call failed - manual categorization required'
-                    }
-            
+                        'reasoning': 'LLM call failed - manual categorization required'}
+
             # Parse JSON response
             import json
             try:
@@ -801,31 +803,45 @@ Only return the JSON object, no other text."""
                     if clean_response.startswith('json'):
                         clean_response = clean_response[4:]
                 clean_response = clean_response.strip()
-                
+
                 result = json.loads(clean_response)
-                
+
                 # Validate category
-                valid_categories = ['strategy', 'weather', 'performance', 'race_control', 'race_position', 'fia', 'global', 'other']
+                valid_categories = [
+                    'strategy',
+                    'weather',
+                    'performance',
+                    'race_control',
+                    'race_position',
+                    'fia',
+                    'global',
+                    'other']
                 if result.get('category') not in valid_categories:
                     result['category'] = 'other'
                     result['confidence'] = 0.0
-                
+
                 # Ensure confidence is float
                 result['confidence'] = float(result.get('confidence', 0.0))
-                
-                logger.info(f"LLM suggested category: {result['category']} (confidence: {result['confidence']:.2f})")
+
+                logger.info(
+                    f"LLM suggested category: {
+                        result['category']} (confidence: {
+                        result['confidence']:.2f})")
                 return result
-                
+
             except Exception as parse_error:
                 logger.warning(f"Could not parse LLM response: {parse_error}")
                 return {
                     'category': 'other',
                     'confidence': 0.0,
-                    'reasoning': f'Could not parse LLM response: {str(parse_error)[:100]}'
-                }
-                
+                    'reasoning': f'Could not parse LLM response: {
+                        str(parse_error)[
+                            :100]}'}
+
         except Exception as e:
-            logger.error(f"Error in suggest_category_with_llm: {e}", exc_info=True)
+            logger.error(
+                f"Error in suggest_category_with_llm: {e}",
+                exc_info=True)
             return {
                 'category': 'other',
                 'confidence': 0.0,
@@ -835,37 +851,39 @@ Only return the JSON object, no other text."""
     def backup_existing_document(self, filepath: Path) -> Optional[Path]:
         """
         Create backup of existing document before replacement.
-        
+
         Args:
             filepath: Path to file that will be replaced
-            
+
         Returns:
             Path to backup file, or None if file doesn't exist
         """
         try:
             filepath = Path(filepath)
-            
+
             if not filepath.exists():
                 logger.info(f"No existing file to backup: {filepath}")
                 return None
-            
+
             # Create backup filename with timestamp
             from datetime import datetime
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            backup_filename = f"{filepath.stem}.backup.{timestamp}{filepath.suffix}"
+            backup_filename = f"{
+                filepath.stem}.backup.{timestamp}{
+                filepath.suffix}"
             backup_path = filepath.parent / backup_filename
-            
+
             # Copy file to backup
             import shutil
             shutil.copy2(filepath, backup_path)
-            
+
             logger.info(f"Created backup: {backup_path}")
-            
+
             # Log to upload history
             self._log_backup_to_history(filepath, backup_path)
-            
+
             return backup_path
-            
+
         except Exception as e:
             logger.error(f"Error creating backup: {e}", exc_info=True)
             return None
@@ -873,7 +891,7 @@ Only return the JSON object, no other text."""
     def _log_backup_to_history(self, original_path: Path, backup_path: Path):
         """
         Log backup creation to .upload_history.json.
-        
+
         Args:
             original_path: Original file path
             backup_path: Backup file path
@@ -881,16 +899,16 @@ Only return the JSON object, no other text."""
         try:
             from datetime import datetime
             import json
-            
+
             history_file = self.base_dir / ".upload_history.json"
-            
+
             # Load existing history
             if history_file.exists():
                 with open(history_file, 'r', encoding='utf-8') as f:
                     history = json.load(f)
             else:
                 history = []
-            
+
             # Add new entry
             entry = {
                 'timestamp': datetime.now().isoformat(),
@@ -899,13 +917,12 @@ Only return the JSON object, no other text."""
                 'backup_file': str(backup_path.relative_to(self.base_dir))
             }
             history.append(entry)
-            
+
             # Save history
             with open(history_file, 'w', encoding='utf-8') as f:
                 json.dump(history, f, indent=2)
-                
+
             logger.debug(f"Logged backup to history: {entry}")
-            
+
         except Exception as e:
             logger.warning(f"Could not log backup to history: {e}")
-

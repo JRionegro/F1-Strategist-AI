@@ -41,7 +41,7 @@ class HybridRouter(LLMProvider):
         """
         # Call parent constructor with gemini config as base
         super().__init__(gemini_config)
-        
+
         self.claude = ClaudeProvider(claude_config)
         self.gemini = GeminiProvider(gemini_config)
         self.threshold_low = complexity_threshold_low

@@ -6,7 +6,7 @@ Synchronized with simulation time for historical playback.
 """
 
 from typing import Any, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import timedelta
 import re
 
 import dash_bootstrap_components as dbc
@@ -40,9 +40,11 @@ class RaceControlDashboard:
         if self._cached_session_key == session_key and self._cached_messages is not None:
             return self._cached_messages, self._cached_drivers
 
-        logger.info(f"Fetching race control messages for session {session_key}")
+        logger.info(
+            f"Fetching race control messages for session {session_key}")
         try:
-            messages = self.provider.get_race_control_messages(session_key=session_key)
+            messages = self.provider.get_race_control_messages(
+                session_key=session_key)
             drivers = self.provider.get_drivers(session_key=session_key)
 
             if messages.empty:
@@ -70,18 +72,22 @@ class RaceControlDashboard:
             return filtered_messages
 
         try:
-            current_time = session_start_time + timedelta(seconds=simulation_time)
+            current_time = session_start_time + \
+                timedelta(seconds=simulation_time)
             current_time = pd.Timestamp(current_time)
 
-            # Normalize timeline to UTC to match OpenF1 timestamps and avoid tz comparison errors
+            # Normalize timeline to UTC to match OpenF1 timestamps and avoid tz
+            # comparison errors
             if current_time.tzinfo is None:
                 current_time = current_time.tz_localize("UTC")
             else:
                 current_time = current_time.tz_convert("UTC")
 
-            time_series = pd.to_datetime(messages.get('Time'), utc=True, errors='coerce')
+            time_series = pd.to_datetime(
+                messages.get('Time'), utc=True, errors='coerce')
             if time_series.isna().all():
-                logger.debug("Race control messages missing valid timestamps; skipping filter")
+                logger.debug(
+                    "Race control messages missing valid timestamps; skipping filter")
                 return messages
 
             filtered_messages = messages[time_series <= current_time].copy()
@@ -152,7 +158,9 @@ class RaceControlDashboard:
                     )
                 ], style={"display": "flex", "alignItems": "center"})
             ], className="p-2")
-        ], id="race-control-status-card", className="mb-2 border border-secondary", style={"backgroundColor": "#2d2d2d"})
+        ], id="race-control-status-card",
+            className="mb-2 border border-secondary",
+            style={"backgroundColor": "#2d2d2d"})
 
     def _create_messages_timeline(
         self,
@@ -161,11 +169,13 @@ class RaceControlDashboard:
         drivers: Optional[pd.DataFrame] = None
     ):
         """Create scrollable timeline of race control messages."""
-        
+
         # Log focused driver to track changes
         if focused_driver:
-            logger.info(f"🎯 Creating timeline with focused_driver: {focused_driver} (total messages: {len(messages)})")
-        
+            logger.info(
+                f"🎯 Creating timeline with focused_driver: {focused_driver} (total messages: {
+                    len(messages)})")
+
         if messages.empty:
             return dbc.Card(
                 dbc.CardBody(
@@ -197,84 +207,92 @@ class RaceControlDashboard:
 
         # Limit to last 100 messages and sort by most recent first
         messages_display = messages.tail(100).copy()
-        messages_display = messages_display.sort_values(by='Time', ascending=False)
+        messages_display = messages_display.sort_values(
+            by='Time', ascending=False)
 
         # Get driver info for focused driver
         driver_number = None
         driver_code = None
         driver_full_name = None
-        driver_last_name = None
-        
-        # Parse focused_driver if it's in format "CODE_YEAR_NUMBER" (e.g., "HAM_2025_44")
+
+        # Parse focused_driver if it's in format "CODE_YEAR_NUMBER" (e.g.,
+        # "HAM_2025_44")
         if focused_driver:
             parts = focused_driver.split('_')
             if len(parts) >= 3:
                 # Format: CODE_YEAR_NUMBER
                 driver_code_from_id = parts[0]
                 driver_number_from_id = parts[2]
-                logger.info(f"Parsed focused_driver '{focused_driver}': code={driver_code_from_id}, number={driver_number_from_id}")
-                
+                logger.info(
+                    f"Parsed focused_driver '{focused_driver}': "
+                    f"code={driver_code_from_id}, number={driver_number_from_id}")
+
                 # Use parsed values
                 driver_code = driver_code_from_id
                 driver_number = driver_number_from_id
             else:
                 # Simple format (just code or number)
                 driver_code = focused_driver
-        
+
         # Try to enrich with full driver info from drivers DataFrame
         if drivers is not None and not drivers.empty:
             try:
                 # Column names after normalization in openf1_data_provider
                 # DriverNumber, Abbreviation, DriverName, TeamName, TeamColor
-                
+
                 # Try to find driver by number or code
                 driver_match = None
-                
+
                 # Check if columns exist
                 has_driver_number = 'DriverNumber' in drivers.columns or 'driver_number' in drivers.columns
                 has_abbreviation = 'Abbreviation' in drivers.columns or 'name_acronym' in drivers.columns
-                
+
                 search_value = driver_code if driver_code else focused_driver
                 search_number = driver_number if driver_number else focused_driver
-                
+
                 # Validate search values to avoid None errors
                 search_value_upper = search_value.upper() if search_value else ""
                 search_number_str = str(search_number) if search_number else ""
-                
+
                 if has_driver_number and has_abbreviation:
                     number_col = 'DriverNumber' if 'DriverNumber' in drivers.columns else 'driver_number'
                     abbr_col = 'Abbreviation' if 'Abbreviation' in drivers.columns else 'name_acronym'
-                    
+
                     driver_match = drivers[
                         (drivers[number_col].astype(str) == search_number_str) |
                         (drivers[abbr_col] == search_value_upper)
                     ]
                 elif has_driver_number:
                     number_col = 'DriverNumber' if 'DriverNumber' in drivers.columns else 'driver_number'
-                    driver_match = drivers[drivers[number_col].astype(str) == search_number_str]
+                    driver_match = drivers[drivers[number_col].astype(
+                        str) == search_number_str]
                 elif has_abbreviation:
                     abbr_col = 'Abbreviation' if 'Abbreviation' in drivers.columns else 'name_acronym'
-                    driver_match = drivers[drivers[abbr_col] == search_value_upper]
-                
+                    driver_match = drivers[drivers[abbr_col]
+                                           == search_value_upper]
+
                 if driver_match is not None and not driver_match.empty:
                     driver_info = driver_match.iloc[0]
-                    
-                    # Get driver details with fallbacks (override with DataFrame values if available)
-                    driver_number = str(driver_info.get('DriverNumber', driver_info.get('driver_number', driver_number)))
-                    driver_code = driver_info.get('Abbreviation', driver_info.get('name_acronym', driver_code))
-                    driver_full_name = driver_info.get('DriverName', driver_info.get('full_name', ''))
-                    
-                    # Extract last name from full name if available
-                    if driver_full_name and ' ' in driver_full_name:
-                        driver_last_name = driver_full_name.split()[-1]
-                    elif 'last_name' in driver_info:
-                        driver_last_name = driver_info.get('last_name', '')
-                    
+
+                    # Get driver details with fallbacks (override with
+                    # DataFrame values if available)
+                    driver_number = str(
+                        driver_info.get(
+                            'DriverNumber',
+                            driver_info.get(
+                                'driver_number',
+                                driver_number)))
+                    driver_code = driver_info.get(
+                        'Abbreviation', driver_info.get(
+                            'name_acronym', driver_code))
+                    driver_full_name = driver_info.get(
+                        'DriverName', driver_info.get('full_name', ''))
+
                     logger.info(
-                        f"Focused driver detected: {driver_code} (#{driver_number}) - {driver_full_name}"
-                    )
+                        f"Focused driver detected: {driver_code} (#{driver_number}) - {driver_full_name}")
                 else:
-                    logger.info(f"Using parsed driver info: {driver_code} (#{driver_number})")
+                    logger.info(
+                        f"Using parsed driver info: {driver_code} (#{driver_number})")
             except Exception as e:
                 logger.warning(f"Error processing focused driver info: {e}")
                 # Keep parsed values from focused_driver string
@@ -282,20 +300,22 @@ class RaceControlDashboard:
         # Classify and format messages
         message_rows = []
         highlighted_count = 0
-        
+
         for idx, (_, row) in enumerate(messages_display.iterrows()):
             msg_type, color = self._classify_message(row)
 
             # Format time and message
             try:
-                time_str = row['Time'].strftime("%H:%M:%S") if pd.notna(row['Time']) else "--:--:--"
-            except:
+                time_str = row['Time'].strftime(
+                    "%H:%M:%S") if pd.notna(row['Time']) else "--:--:--"
+            except Exception:
                 time_str = "--:--:--"
 
             message_text = row.get('Message', 'Unknown message')
             category = row.get('Category', '')
 
-            # Check if message references the focused driver in canonical format
+            # Check if message references the focused driver in canonical
+            # format
             is_focused_driver = False
             if (
                 focused_driver
@@ -325,7 +345,7 @@ class RaceControlDashboard:
                 "borderLeft": f"3px solid {text_color}",
                 "backgroundColor": "#1e1e1e" if idx % 2 == 0 else "#2d2d2d"
             }
-            
+
             if is_focused_driver:
                 row_style.update({
                     "backgroundColor": "#ffc107",
@@ -389,7 +409,8 @@ class RaceControlDashboard:
             "minHeight": "0"
         })
 
-    def _create_summary_panel(self, status_summary: dict[str, Any]) -> dbc.Card:
+    def _create_summary_panel(
+            self, status_summary: dict[str, Any]) -> dbc.Card:
         """Create compact summary card for recent race control activity."""
 
         flag_value = str(status_summary.get('flag', 'GREEN')).upper()
@@ -406,9 +427,17 @@ class RaceControlDashboard:
             dbc.Badge(flag_value, color=flag_color, className="me-1")
         ]
         if status_summary.get('safety_car'):
-            status_badges.append(dbc.Badge("SC", color="warning", className="me-1"))
+            status_badges.append(
+                dbc.Badge(
+                    "SC",
+                    color="warning",
+                    className="me-1"))
         if status_summary.get('virtual_safety_car'):
-            status_badges.append(dbc.Badge("VSC", color="info", className="me-1"))
+            status_badges.append(
+                dbc.Badge(
+                    "VSC",
+                    color="info",
+                    className="me-1"))
 
         recent_events = [
             str(item) for item in status_summary.get('recent_events') or []
@@ -486,9 +515,21 @@ class RaceControlDashboard:
         Returns:
             Tuple of (message_type, color) where color is Bootstrap contextual color
         """
-        category = str(row.get('Category', '')).upper() if pd.notna(row.get('Category')) else ''
-        message = str(row.get('Message', '')).upper() if pd.notna(row.get('Message')) else ''
-        flag = str(row.get('Flag', '')).upper() if pd.notna(row.get('Flag')) else ''
+        category = str(
+            row.get(
+                'Category',
+                '')).upper() if pd.notna(
+            row.get('Category')) else ''
+        message = str(
+            row.get(
+                'Message',
+                '')).upper() if pd.notna(
+            row.get('Message')) else ''
+        flag = str(
+            row.get(
+                'Flag',
+                '')).upper() if pd.notna(
+            row.get('Flag')) else ''
 
         # Priority order
         if 'RED FLAG' in message or flag == 'RED':
@@ -517,39 +558,41 @@ class RaceControlDashboard:
     ) -> int:
         """
         Calculate current lap from available data sources.
-        
+
         Priority order:
         1. From simulation_time + lap timing data (for real-time/live)
         2. From messages (last resort fallback)
         3. Return 0 if no data available
-        
+
         Args:
             session_key: OpenF1 session key
             simulation_time: Simulation time in seconds
             session_start_time: Session start timestamp
             messages: Filtered race control messages
-            
+
         Returns:
             Current lap number
         """
-        # Strategy 1: Calculate from timing data (works for both simulation and real-time)
+        # Strategy 1: Calculate from timing data (works for both simulation and
+        # real-time)
         if session_key and simulation_time is not None and session_start_time:
             try:
                 # Get lap timing data from OpenF1
                 laps = self.provider.get_laps(session_key=session_key)
-                
+
                 if not laps.empty and 'LapStartTime' in laps.columns:
                     # Calculate current timestamp
-                    current_time = session_start_time + timedelta(seconds=simulation_time)
-                    
+                    current_time = session_start_time + \
+                        timedelta(seconds=simulation_time)
+
                     # Find which lap we're in by comparing timestamps
                     # Use leader's laps (DriverNumber=1) for consistency
                     leader_laps = laps[laps['DriverNumber'] == 1].copy()
-                    
+
                     if not leader_laps.empty:
                         # Sort by lap number
                         leader_laps = leader_laps.sort_values('LapNumber')
-                        
+
                         # Find current lap
                         for idx, row in leader_laps.iterrows():
                             lap_start = row.get('LapStartTime')
@@ -559,30 +602,29 @@ class RaceControlDashboard:
                                 lap_num_int = int(lap_num)
                             except (TypeError, ValueError):
                                 continue
-                            
+
                             if pd.notna(lap_start):
                                 # Convert timedelta to absolute time
                                 if isinstance(lap_start, timedelta):
                                     lap_start_abs = session_start_time + lap_start
                                 else:
                                     lap_start_abs = lap_start
-                                
+
                                 # Check if we're in this lap
                                 if pd.notna(lap_end):
                                     if isinstance(lap_end, timedelta):
                                         lap_end_abs = session_start_time + lap_end
                                     else:
                                         lap_end_abs = lap_end
-                                    
+
                                     if lap_start_abs <= current_time <= lap_end_abs:
                                         current_lap = max(1, lap_num_int)
                                         logger.debug(
-                                            "Calculated lap from timing: OpenF1 lap %s",
-                                            lap_num_int
-                                        )
+                                            "Calculated lap from timing: OpenF1 lap %s", lap_num_int)
                                         return current_lap
                                 else:
-                                    # Lap not finished yet, check if we've started it
+                                    # Lap not finished yet, check if we've
+                                    # started it
                                     if current_time >= lap_start_abs:
                                         current_lap = max(1, lap_num_int)
                                         logger.debug(
@@ -590,34 +632,36 @@ class RaceControlDashboard:
                                             lap_num_int
                                         )
                                         return current_lap
-                        
+
                         # If no exact match, determine pre-race or post-race
-                        first_lap_start = leader_laps.iloc[0].get('LapStartTime')
+                        first_lap_start = leader_laps.iloc[0].get(
+                            'LapStartTime')
                         if pd.notna(first_lap_start):
                             if isinstance(first_lap_start, timedelta):
                                 first_lap_start_abs = session_start_time + first_lap_start
                             else:
                                 first_lap_start_abs = first_lap_start
-                            
+
                             if current_time < first_lap_start_abs:
                                 return 0  # Pre-race
-                        
+
                         # Post-race or in last lap
                         try:
                             last_lap = int(leader_laps.iloc[-1]['LapNumber'])
                         except (TypeError, ValueError):
                             return 1
                         return max(1, last_lap)
-                        
+
             except Exception as e:
-                logger.warning(f"Could not calculate lap from timing data: {e}")
-        
+                logger.warning(
+                    f"Could not calculate lap from timing data: {e}")
+
         # Strategy 2: Extract from messages (old fallback method)
         lap_from_messages = self._extract_current_lap(messages)
         if lap_from_messages > 0:
             logger.debug(f"Using lap from messages: {lap_from_messages}")
             return lap_from_messages
-        
+
         # No data available
         return 0
 
@@ -724,7 +768,8 @@ class RaceControlDashboard:
             and status_detail in {"SC Ending", "VSC Ending"}
             and current_lap is not None
         ):
-            # If we have a lap hint for the ending message, hide after the next lap
+            # If we have a lap hint for the ending message, hide after the next
+            # lap
             if sc_end_lap_hint is not None and current_lap > sc_end_lap_hint:
                 return "GREEN", None
             # If no lap hint, assume it should clear after current lap advances by 1
@@ -842,13 +887,13 @@ class RaceControlDashboard:
     ) -> dict:
         """
         Get race control status summary for AI context.
-        
+
         Args:
             session_key: OpenF1 session key
             simulation_time: Current simulation time in seconds
             session_start_time: Session start timestamp
             current_lap: Current lap number
-            
+
         Returns:
             Dict with race control summary:
             {
@@ -863,20 +908,22 @@ class RaceControlDashboard:
         # Use cached data if available
         if self._cached_session_key != session_key or self._cached_messages is None:
             return {'error': 'No cached data available'}
-        
+
         messages = self._cached_messages
-        
+
         # Determine time column (OpenF1 provider renames 'date' to 'Time')
         time_col = 'Time' if 'Time' in messages.columns else 'Timestamp'
-        
+
         # Filter messages by simulation time
-        current_timestamp = session_start_time + pd.Timedelta(seconds=simulation_time)
+        current_timestamp = session_start_time + \
+            pd.Timedelta(seconds=simulation_time)
         try:
-            filtered_messages = messages[messages[time_col] <= current_timestamp]
+            filtered_messages = messages[messages[time_col]
+                                         <= current_timestamp]
         except Exception as e:
             logger.warning(f"Error filtering messages by time: {e}")
             filtered_messages = messages
-        
+
         if filtered_messages.empty:
             return {
                 'flag': 'GREEN',
@@ -886,32 +933,33 @@ class RaceControlDashboard:
                 'penalties': [],
                 'incidents': []
             }
-        
+
         # Determine current flag status from recent messages
         flag = 'GREEN'
         safety_car = False
         virtual_safety_car = False
-        
+
         # Check last 15 messages for SC/VSC status
-        recent_sorted = filtered_messages.sort_values(time_col, ascending=False).head(15)
-        
+        recent_sorted = filtered_messages.sort_values(
+            time_col, ascending=False).head(15)
+
         for _, msg in recent_sorted.iterrows():
             category = str(msg.get('Category', '')).upper()
             message = str(msg.get('Message', '')).upper()
-            
+
             # Check for RED FLAG
             if 'RED FLAG' in message or 'REDFLAG' in category:
                 flag = 'RED'
                 break
-            
+
             # Check for SAFETY CAR (deployed, not ending)
             sc_patterns = ['SAFETY CAR DEPLOYED', 'SAFETY CAR IN THIS LAP',
-                          'SAFETYCAR', 'SC DEPLOYED', 'THE SAFETY CAR']
+                           'SAFETYCAR', 'SC DEPLOYED', 'THE SAFETY CAR']
             sc_ending = ['ENDING', 'IN THIS LAP', 'WITHDRAW']
-            
+
             is_sc_deployed = any(p in message for p in sc_patterns)
             is_sc_ending = any(e in message for e in sc_ending)
-            
+
             if is_sc_deployed and not is_sc_ending:
                 flag = 'SC'
                 safety_car = True
@@ -920,11 +968,11 @@ class RaceControlDashboard:
                 # SC ending - track is going green
                 flag = 'GREEN'
                 break
-            
+
             # Check for VIRTUAL SAFETY CAR
             vsc_patterns = ['VIRTUAL SAFETY CAR', 'VSC DEPLOYED', 'VSC ']
             is_vsc = any(p in message for p in vsc_patterns)
-            
+
             if is_vsc and not is_sc_ending:
                 flag = 'VSC'
                 virtual_safety_car = True
@@ -932,19 +980,19 @@ class RaceControlDashboard:
             elif 'VSC' in message and is_sc_ending:
                 flag = 'GREEN'
                 break
-            
+
             # Check for YELLOW
             if 'YELLOW' in message or category == 'FLAG':
                 flag = 'YELLOW'
                 # Don't break - keep looking for SC/VSC
-        
+
         # Get recent events (last 5 messages)
         recent_events = []
         for _, msg in recent_sorted.head(5).iterrows():
             msg_text = msg.get('Message', '')
             if msg_text:
                 recent_events.append(str(msg_text))
-        
+
         # Get penalties and incidents
         penalties = []
         incidents = []
@@ -954,12 +1002,12 @@ class RaceControlDashboard:
                 penalties.append(msg.get('Message', ''))
             elif 'OFF TRACK' in message or 'INCIDENT' in message:
                 incidents.append(msg.get('Message', ''))
-        
+
         logger.debug(
             f"Race control status: flag={flag}, SC={safety_car}, "
             f"VSC={virtual_safety_car}, recent_events={len(recent_events)}"
         )
-        
+
         return {
             'flag': flag,
             'safety_car': safety_car,
@@ -969,14 +1017,18 @@ class RaceControlDashboard:
             'incidents': incidents[-3:] if incidents else []
         }
 
-    def get_signature(
-        self,
-        session_key: Optional[int],
-        simulation_time: Optional[float],
-        session_start_time: Optional[pd.Timestamp],
-        focused_driver: Optional[str] = None,
-        current_lap: Optional[int] = None,
-    ) -> Optional[Tuple[int, int, Optional[str], Optional[str], Optional[str], Optional[int]]]:
+    def get_signature(self,
+                      session_key: Optional[int],
+                      simulation_time: Optional[float],
+                      session_start_time: Optional[pd.Timestamp],
+                      focused_driver: Optional[str] = None,
+                      current_lap: Optional[int] = None,
+                      ) -> Optional[Tuple[int,
+                                          int,
+                                          Optional[str],
+                                          Optional[str],
+                                          Optional[str],
+                                          Optional[int]]]:
         """Build immutable signature describing the rendered state."""
 
         if session_key is None:
@@ -1017,11 +1069,13 @@ class RaceControlDashboard:
                 latest_time = pd.to_datetime(latest_row[time_col], utc=True)
                 latest_time_str = latest_time.isoformat()
             except Exception as exc:  # noqa: BLE001
-                logger.debug("Could not normalize latest message time: %s", exc)
+                logger.debug(
+                    "Could not normalize latest message time: %s", exc)
                 latest_time_str = str(latest_row.get(time_col))
 
         latest_message = latest_row.get('Message')
-        latest_message_str = str(latest_message) if pd.notna(latest_message) else None
+        latest_message_str = str(latest_message) if pd.notna(
+            latest_message) else None
 
         focused_key = (focused_driver or "").upper() or None
 
@@ -1126,12 +1180,16 @@ class RaceControlDashboard:
                 session_start_time=session_start_time,
                 current_lap=display_lap
             )
-            if isinstance(summary_data, dict) and not summary_data.get('error'):
+            if isinstance(
+                    summary_data,
+                    dict) and not summary_data.get('error'):
                 summary_card = self._create_summary_panel(summary_data)
             else:
-                summary_card = build_summary_placeholder("Summary unavailable.")
+                summary_card = build_summary_placeholder(
+                    "Summary unavailable.")
         else:
-            summary_card = build_summary_placeholder("Waiting for timing data.")
+            summary_card = build_summary_placeholder(
+                "Waiting for timing data.")
 
         # Store components for callback access
         self._current_timeline = timeline_component

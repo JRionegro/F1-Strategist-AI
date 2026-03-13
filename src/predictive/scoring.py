@@ -14,7 +14,8 @@ from src.predictive.modeling import FEATURE_COLUMNS
 logger = logging.getLogger(__name__)
 
 
-REQUIRED_COLUMNS = set(FEATURE_COLUMNS) | {"lap_number", "pit_window_center_lap"}
+REQUIRED_COLUMNS = set(FEATURE_COLUMNS) | {
+    "lap_number", "pit_window_center_lap"}
 
 
 def _summarize_scores(df: pd.DataFrame, top_n: int) -> dict[str, Any]:
@@ -63,7 +64,9 @@ def score_pit_window_csv(
     df = pd.read_csv(input_path)
     missing = REQUIRED_COLUMNS - set(df.columns)
     if missing:
-        raise ValueError(f"Input dataset missing required columns: {sorted(missing)}")
+        raise ValueError(
+            f"Input dataset missing required columns: {
+                sorted(missing)}")
 
     service = PitPredictorService(artifact_path)
     service.load()

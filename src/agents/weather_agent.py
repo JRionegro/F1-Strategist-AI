@@ -18,13 +18,13 @@ logger = logging.getLogger(__name__)
 class WeatherAgent(BaseAgent):
     """
     Specialized agent for F1 weather impact and timing analysis.
-    
+
     Race Mode Responsibilities:
     - Rain prediction during race
     - Impact on tire degradation
     - Wet/intermediate tire change windows
     - Track and air temperature monitoring
-    
+
     Qualifying Mode Responsibilities:
     - Imminent rain risk assessment
     - Track temperature evolution
@@ -32,26 +32,26 @@ class WeatherAgent(BaseAgent):
     - Wind impact on lap times
     - Track limits conditions
     """
-    
+
     def get_system_prompt(self) -> str:
         """
         Get system prompt for Weather Agent.
-        
+
         Adapts based on session type (race vs qualifying).
-        
+
         Returns:
             System prompt string with role and capabilities
         """
         if not self.context:
             return self._get_default_prompt()
-        
+
         if self.context.session_type == "qualifying":
             return self._get_qualifying_prompt()
         elif self.context.session_type in ["race", "sprint"]:
             return self._get_race_prompt()
         else:
             return self._get_default_prompt()
-    
+
     def _get_default_prompt(self) -> str:
         """Default prompt for Weather Agent."""
         return """You are an expert F1 Weather Agent specializing in weather impact analysis.
@@ -66,7 +66,7 @@ Your expertise includes:
 Provide clear, time-sensitive recommendations based on current conditions and forecasts.
 Always explain confidence levels and risk factors in your predictions.
 """
-    
+
     def _get_race_prompt(self) -> str:
         """Prompt for race weather analysis mode."""
         return """You are an expert F1 Weather Agent for the {race} {year}.
@@ -114,7 +114,7 @@ FORMAT: Provide urgent, actionable weather alerts with timing and confidence.
             race=self.context.race_name if self.context else "Unknown",
             year=self.context.year if self.context else "Unknown"
         )
-    
+
     def _get_qualifying_prompt(self) -> str:
         """Prompt for qualifying weather analysis mode."""
         return """You are an expert F1 Weather Agent for qualifying at {race} {year}.
@@ -164,13 +164,12 @@ ALWAYS:
 FORMAT: Provide urgent GO/WAIT decisions with timing windows and risk assessment.
 """.format(
             race=self.context.race_name if self.context else "Unknown",
-            year=self.context.year if self.context else "Unknown"
-        )
-    
+            year=self.context.year if self.context else "Unknown")
+
     def get_available_tools(self) -> List[str]:
         """
         Get list of MCP tools available to Weather Agent.
-        
+
         Returns:
             List of tool names
         """
@@ -180,11 +179,11 @@ FORMAT: Provide urgent GO/WAIT decisions with timing windows and risk assessment
             "get_session_info",
             "get_lap_times"
         ]
-    
+
     def validate_query(self, query: str) -> bool:
         """
         Validate if query is suitable for Weather Agent.
-        
+
         Weather queries typically contain keywords related to:
         - Weather conditions
         - Rain/wet/dry
@@ -192,18 +191,18 @@ FORMAT: Provide urgent GO/WAIT decisions with timing windows and risk assessment
         - Track conditions
         - Wind
         - Timing windows
-        
+
         Args:
             query: User query string
-            
+
         Returns:
             True if query is suitable for Weather Agent
         """
         if not query or len(query.strip()) == 0:
             return False
-        
+
         query_lower = query.lower()
-        
+
         # Weather-related keywords
         weather_keywords = [
             "weather", "rain", "wet", "dry", "damp",
@@ -217,6 +216,6 @@ FORMAT: Provide urgent GO/WAIT decisions with timing windows and risk assessment
             "now or later", "when to go",
             "hot", "cold", "cool", "warm"
         ]
-        
+
         # Check if any weather keyword is in the query
         return any(keyword in query_lower for keyword in weather_keywords)

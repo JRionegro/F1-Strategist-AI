@@ -4,13 +4,12 @@ Unit and integration tests for RAG vector store implementations.
 Tests cover embeddings generation, ChromaDB operations, and search.
 """
 
-import os
 import pytest
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from src.rag.vector_store import VectorStore, SearchResult
+from src.rag.vector_store import SearchResult
 from src.rag.embeddings import EmbeddingsProvider
 from src.rag.config import get_chromadb_config, get_vector_store_provider
 
@@ -438,7 +437,7 @@ class TestChromaDBIntegration:
             collection_name="test_persist",
             persist_directory=temp_chromadb_dir
         )
-        ids = store1.add_documents(sample_documents, metadatas)
+        store1.add_documents(sample_documents, metadatas)
         count1 = store1.get_collection_stats()["document_count"]
 
         # Create new store instance with same directory

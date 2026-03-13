@@ -9,7 +9,7 @@ import logging
 import re
 import threading
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from time import sleep
 from typing import Any, DefaultDict, Dict, List, Optional, Sequence
@@ -34,7 +34,7 @@ def _slugify(value: str) -> str:
 class OpenF1DataProvider:
     """
     Data provider using OpenF1 API for unified historical/live access.
-    
+
     Advantages over FastF1:
     - Same API for historical and real-time data
     - No data structure translation needed
@@ -44,11 +44,15 @@ class OpenF1DataProvider:
     """
 
     BASE_URL = "https://api.openf1.org/v1"
-    
-    def __init__(self, rate_limit_delay: float = 0.5, verify_ssl: bool = False):
+
+    def __init__(
+        self,
+        rate_limit_delay: float = 0.5,
+        verify_ssl: bool = False
+    ):
         """
         Initialize OpenF1 provider.
-        
+
         Args:
             rate_limit_delay: Seconds to wait between API calls
             verify_ssl: Whether to verify SSL certificates (False for corporate proxies)
@@ -66,7 +70,9 @@ class OpenF1DataProvider:
             import urllib3
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-    def register_session_metadata(self, session_key: Optional[int], metadata: Dict[str, Any]) -> None:
+    def register_session_metadata(
+        self, session_key: Optional[int], metadata: Dict[str, Any]
+    ) -> None:
         """Store session metadata to resolve cache paths for subsequent requests."""
         if session_key is None:
             return
@@ -95,7 +101,7 @@ class OpenF1DataProvider:
     ) -> List[Dict]:
         """
         Make API request with rate limiting and exponential backoff retry.
-        
+
         Args:
             endpoint: API endpoint (e.g., 'sessions', 'laps')
             params: Query parameters
@@ -103,29 +109,32 @@ class OpenF1DataProvider:
             base_delay: Base delay in seconds for exponential backoff
             max_502_retries: Maximum retries for 502 Bad Gateway errors
             retry_502_delay: Fixed delay between 502 retries (seconds)
-            
+
         Returns:
             List of JSON objects from API response
         """
         url = f"{self.BASE_URL}/{endpoint}"
         retries_502 = 0
-        
+
         for attempt in range(max_retries + 1):
             self._rate_limit()
             self._increment_api_call_count(endpoint)
-            
+
             try:
-                response = requests.get(url, params=params, timeout=30, verify=self.verify_ssl)
+                response = requests.get(
+                    url, params=params, timeout=30,
+                    verify=self.verify_ssl
+                )
                 response.raise_for_status()
                 data = response.json()
                 logger.debug(
                     f"OpenF1 API: GET {endpoint} -> {len(data)} records"
                 )
                 return data
-                
+
             except requests.HTTPError as e:
                 status_code = e.response.status_code if e.response is not None else None
-                
+
                 # Handle 502 Bad Gateway with fixed retries
                 if status_code == 502:
                     retries_502 += 1
@@ -143,7 +152,7 @@ class OpenF1DataProvider:
                             f"after {max_502_retries} retries. Giving up."
                         )
                         raise
-                
+
                 # Handle 429 Rate Limit with exponential backoff
                 elif status_code == 429:
                     if attempt < max_retries:
@@ -164,7 +173,7 @@ class OpenF1DataProvider:
                 else:
                     logger.error(f"OpenF1 API HTTP error on {endpoint}: {e}")
                     raise
-                    
+
             except requests.RequestException as e:
                 logger.error(f"OpenF1 API error on {endpoint}: {e}")
                 if attempt < max_retries:
@@ -178,7 +187,7 @@ class OpenF1DataProvider:
                     continue
                 else:
                     raise
-        
+
         return []
 
     def _increment_api_call_count(self, endpoint: str) -> None:
@@ -210,7 +219,8 @@ class OpenF1DataProvider:
         else:
             total = sum(counts.values())
             details = ", ".join(
-                f"{endpoint}={count}" for endpoint, count in sorted(counts.items())
+                f"{endpoint}={count}"
+                for endpoint, count in sorted(counts.items())
             )
             logger.log(
                 level,
@@ -223,62 +233,64 @@ class OpenF1DataProvider:
             self.reset_api_call_counts()
 
     def get_session(
-        self, 
-        year: int, 
+        self,
+        year: int,
         round_number: Optional[int] = None,
         session_name: Optional[str] = None,
         country_name: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Get session information.
-        
+
         Args:
             year: Season year
             round_number: Round number (optional, can use country_name instead)
             session_name: Session type ('Race', 'Qualifying', etc.)
             country_name: Country name for the race
-            
+
         Returns:
             Session metadata dict or None if not found
         """
         params: Dict[str, Any] = {"year": year}
-        
+
         if session_name:
             params["session_name"] = session_name
         if country_name:
             params["country_name"] = country_name
-            
+
         sessions = self._request("sessions", params)
-        
+
         if not sessions:
             logger.warning(f"No sessions found for {year} round {round_number}")
             return None
-            
+
         # If round_number specified, filter by it
         if round_number:
-            sessions = [s for s in sessions if s.get("round_number") == round_number]
-            
+            sessions = [s for s in sessions if s.get(
+                "round_number") == round_number]
+
         if not sessions:
             return None
-            
+
         # Return most recent matching session
         sessions.sort(key=lambda x: x.get("date_start", ""), reverse=True)
         return sessions[0]
 
     def get_drivers(
-        self, 
+        self,
         session_key: int
     ) -> pd.DataFrame:
         """
         Get drivers participating in a session.
-        
+
         Args:
             session_key: OpenF1 session identifier
-            
+
         Returns:
             DataFrame with driver information
         """
-        cached_df = self._load_cached_race_dataframe(session_key, DataType.DRIVER_INFO)
+        cached_df = self._load_cached_race_dataframe(
+            session_key, DataType.DRIVER_INFO)
         if cached_df is not None and not cached_df.empty:
             logger.info(
                 "Loaded %s drivers from cache for session %s",
@@ -295,7 +307,7 @@ class OpenF1DataProvider:
             return pd.DataFrame()
 
         df = pd.DataFrame(drivers)
-        
+
         # Normalize column names for compatibility
         column_mapping = {
             "driver_number": "DriverNumber",
@@ -304,10 +316,10 @@ class OpenF1DataProvider:
             "team_name": "TeamName",
             "team_colour": "TeamColor"
         }
-        
+
         df = df.rename(columns=column_mapping)
         logger.info(f"Loaded {len(df)} drivers for session {session_key}")
-        
+
         return df
 
     # ------------------------------------------------------------------
@@ -338,8 +350,9 @@ class OpenF1DataProvider:
             return None
 
         # Ensure meeting/session keys propagate from cache when missing
-        if "meeting_key" not in cached_frame.columns and metadata.get("meeting_key") is not None:
-            cached_frame = cached_frame.assign(meeting_key=metadata.get("meeting_key"))
+        meeting_key_val = metadata.get("meeting_key")
+        if "meeting_key" not in cached_frame.columns and meeting_key_val is not None:
+            cached_frame = cached_frame.assign(meeting_key=meeting_key_val)
         if "session_key" not in cached_frame.columns:
             cached_frame = cached_frame.assign(session_key=int(session_key))
         return cached_frame
@@ -370,15 +383,21 @@ class OpenF1DataProvider:
                 self._cached_race_dirs[session_key] = race_dir
                 return race_dir
 
-        date_matches = sorted(path for path in year_dir.glob(f"{date_str}_*") if path.is_dir())
+        date_matches = sorted(
+            p for p in year_dir.glob(f"{date_str}_*") if p.is_dir()
+        )
         if len(date_matches) == 1:
             self._cached_race_dirs[session_key] = date_matches[0]
             return date_matches[0]
 
         if date_matches:
-            meeting_key = str(metadata.get("meeting_key") or metadata.get("MeetingKey") or "").lower()
-            circuit_key = str(metadata.get("circuit_key") or metadata.get("CircuitKey") or "").lower()
-            identifiers = {value for value in (meeting_key, circuit_key) if value}
+            meeting_key = str(metadata.get("meeting_key")
+                              or metadata.get("MeetingKey") or "").lower()
+            circuit_key = str(metadata.get("circuit_key")
+                              or metadata.get("CircuitKey") or "").lower()
+            identifiers = {
+                v for v in (meeting_key, circuit_key) if v
+            }
             for candidate in date_matches:
                 lowered = candidate.name.lower()
                 if any(identifier in lowered for identifier in identifiers):
@@ -402,7 +421,8 @@ class OpenF1DataProvider:
             except (TypeError, ValueError):
                 continue
 
-        date_text = metadata.get("date_start") or metadata.get("session_start") or metadata.get("meeting_start")
+        date_text = metadata.get("date_start") or metadata.get(
+            "session_start") or metadata.get("meeting_start")
         if date_text:
             parsed = pd.to_datetime(date_text, format="mixed", errors="coerce")
             if pd.notna(parsed):
@@ -412,7 +432,8 @@ class OpenF1DataProvider:
     @staticmethod
     def _extract_session_date(metadata: Dict[str, Any]) -> Optional[str]:
         """Return ISO date string for the session start."""
-        date_text = metadata.get("date_start") or metadata.get("session_start") or metadata.get("meeting_start")
+        date_text = metadata.get("date_start") or metadata.get(
+            "session_start") or metadata.get("meeting_start")
         if not date_text:
             year_value = metadata.get("year") or metadata.get("Year")
             if year_value is None:
@@ -427,17 +448,21 @@ class OpenF1DataProvider:
             return None
         return parsed.date().isoformat()
 
-    def _collect_slug_candidates(self, metadata: Dict[str, Any], date_str: str) -> List[str]:
+    def _collect_slug_candidates(
+        self, metadata: Dict[str, Any], date_str: str
+    ) -> List[str]:
         """Build possible cache directory slugs for the session."""
         candidate_slugs: List[str] = []
 
-        raw_cache_slug = metadata.get("cache_slug") or metadata.get("CacheSlug")
+        raw_cache_slug = metadata.get(
+            "cache_slug") or metadata.get("CacheSlug")
         if isinstance(raw_cache_slug, str) and raw_cache_slug.strip():
             normalized_slug = raw_cache_slug.strip()
             if normalized_slug.startswith(date_str):
                 candidate_slugs.append(normalized_slug)
             else:
-                candidate_slugs.append(f"{date_str}_{_slugify(normalized_slug)}")
+                candidate_slugs.append(
+                    f"{date_str}_{_slugify(normalized_slug)}")
 
         name_keys = [
             ("meeting_name", "MeetingName"),
@@ -466,7 +491,9 @@ class OpenF1DataProvider:
         return candidate_slugs
 
     @staticmethod
-    def _first_metadata_value(metadata: Dict[str, Any], keys: tuple[str, ...]) -> Optional[str]:
+    def _first_metadata_value(
+        metadata: Dict[str, Any], keys: tuple[str, ...]
+    ) -> Optional[str]:
         """Return the first non-empty metadata value for the provided keys."""
         for key in keys:
             value = metadata.get(key)
@@ -555,7 +582,8 @@ class OpenF1DataProvider:
         if cached_df is not None:
             df = cached_df.copy()
             df = self._filter_by_driver(df, driver_number)
-            df = self._coerce_datetime_columns(df, ["LapStartTime", "LapEndTime"])
+            df = self._coerce_datetime_columns(
+                df, ["LapStartTime", "LapEndTime"])
             logger.info(
                 "Loaded %s laps for session %s from cache",
                 len(df),
@@ -592,12 +620,13 @@ class OpenF1DataProvider:
             "is_pit_out_lap": "PitOutTime",
             "is_pit_in_lap": "PitInTime"
         }
-        
+
         df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
 
         # Add LapEndTime calculation
         if "LapStartTime" in df.columns and "LapTime_seconds" in df.columns:
-            df["LapEndTime"] = df["LapStartTime"] + pd.to_timedelta(df["LapTime_seconds"], unit="s")
+            df["LapEndTime"] = df["LapStartTime"] + \
+                pd.to_timedelta(df["LapTime_seconds"], unit="s")
 
         logger.info(f"Loaded {len(df)} laps for session {session_key}")
 
@@ -610,15 +639,16 @@ class OpenF1DataProvider:
     ) -> pd.DataFrame:
         """
         Get position/interval data during session.
-        
+
         Args:
             session_key: OpenF1 session identifier
             driver_number: Filter by specific driver (optional)
-            
+
         Returns:
             DataFrame with position updates
         """
-        cached_df = self._load_cached_race_dataframe(session_key, DataType.POSITIONS)
+        cached_df = self._load_cached_race_dataframe(
+            session_key, DataType.POSITIONS)
         if cached_df is not None:
             df = cached_df.copy()
             df = self._filter_by_driver(df, driver_number)
@@ -633,29 +663,29 @@ class OpenF1DataProvider:
         params = {"session_key": session_key}
         if driver_number:
             params["driver_number"] = driver_number
-            
+
         positions = self._request("position", params)
-        
+
         if not positions:
             logger.warning(f"No position data for session {session_key}")
             return pd.DataFrame()
-            
+
         df = pd.DataFrame(positions)
-        
+
         # Convert timestamp
         if "date" in df.columns:
             df["date"] = pd.to_datetime(df["date"], format='mixed')
-            
+
         column_mapping = {
             "driver_number": "DriverNumber",
             "position": "Position",
             "date": "Timestamp"
         }
-        
+
         df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
-        
+
         logger.info(f"Loaded {len(df)} position updates for session {session_key}")
-        
+
         return df
 
     def get_stints(
@@ -665,15 +695,16 @@ class OpenF1DataProvider:
     ) -> pd.DataFrame:
         """
         Get tire stint information.
-        
+
         Args:
             session_key: OpenF1 session identifier
             driver_number: Filter by specific driver (optional)
-            
+
         Returns:
             DataFrame with stint/tire data
         """
-        cached_df = self._load_cached_race_dataframe(session_key, DataType.TIRE_STRATEGY)
+        cached_df = self._load_cached_race_dataframe(
+            session_key, DataType.TIRE_STRATEGY)
         if cached_df is not None:
             df = cached_df.copy()
             df = self._filter_by_driver(df, driver_number)
@@ -687,15 +718,15 @@ class OpenF1DataProvider:
         params = {"session_key": session_key}
         if driver_number:
             params["driver_number"] = driver_number
-            
+
         stints = self._request("stints", params)
-        
+
         if not stints:
             logger.warning(f"No stint data for session {session_key}")
             return pd.DataFrame()
-            
+
         df = pd.DataFrame(stints)
-        
+
         column_mapping = {
             "driver_number": "DriverNumber",
             "stint_number": "StintNumber",
@@ -704,11 +735,11 @@ class OpenF1DataProvider:
             "compound": "Compound",
             "tyre_age_at_start": "TyreAge"
         }
-        
+
         df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
-        
+
         logger.info(f"Loaded {len(df)} stints for session {session_key}")
-        
+
         return df
 
     def get_race_control_messages(
@@ -717,14 +748,15 @@ class OpenF1DataProvider:
     ) -> pd.DataFrame:
         """
         Get race control messages (flags, SC, VSC, etc.).
-        
+
         Args:
             session_key: OpenF1 session identifier
-            
+
         Returns:
             DataFrame with race control events
         """
-        cached_df = self._load_cached_race_dataframe(session_key, DataType.RACE_CONTROL)
+        cached_df = self._load_cached_race_dataframe(
+            session_key, DataType.RACE_CONTROL)
         if cached_df is not None:
             df = cached_df.copy()
             df = self._coerce_datetime_columns(df, ["Time"])
@@ -737,27 +769,28 @@ class OpenF1DataProvider:
 
         params = {"session_key": session_key}
         messages = self._request("race_control", params)
-        
+
         if not messages:
-            logger.warning(f"No race control messages for session {session_key}")
+            logger.warning(
+                f"No race control messages for session {session_key}")
             return pd.DataFrame()
-            
+
         df = pd.DataFrame(messages)
-        
+
         if "date" in df.columns:
             df["date"] = pd.to_datetime(df["date"], format='mixed')
-            
+
         column_mapping = {
             "date": "Time",
             "category": "Category",
             "message": "Message",
             "flag": "Flag"
         }
-        
+
         df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
-        
+
         logger.info(f"Loaded {len(df)} race control messages for session {session_key}")
-        
+
         return df
 
     def get_pit_stops(
@@ -767,15 +800,16 @@ class OpenF1DataProvider:
     ) -> pd.DataFrame:
         """
         Get pit stop data.
-        
+
         Args:
             session_key: OpenF1 session identifier
             driver_number: Filter by specific driver (optional)
-            
+
         Returns:
             DataFrame with pit stop information
         """
-        cached_df = self._load_cached_race_dataframe(session_key, DataType.PIT_STOPS)
+        cached_df = self._load_cached_race_dataframe(
+            session_key, DataType.PIT_STOPS)
         if cached_df is not None:
             df = cached_df.copy()
             df = self._filter_by_driver(df, driver_number)
@@ -790,29 +824,29 @@ class OpenF1DataProvider:
         params = {"session_key": session_key}
         if driver_number:
             params["driver_number"] = driver_number
-            
+
         pit_stops = self._request("pit", params)
-        
+
         if not pit_stops:
             logger.warning(f"No pit stop data for session {session_key}")
             return pd.DataFrame()
-            
+
         df = pd.DataFrame(pit_stops)
-        
+
         if "date" in df.columns:
             df["date"] = pd.to_datetime(df["date"], format='mixed')
-            
+
         column_mapping = {
             "driver_number": "DriverNumber",
             "lap_number": "Lap",
             "pit_duration": "PitDuration",
             "date": "Time"
         }
-        
+
         df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
-        
+
         logger.info(f"Loaded {len(df)} pit stops for session {session_key}")
-        
+
         return df
 
     def get_weather(
@@ -821,14 +855,15 @@ class OpenF1DataProvider:
     ) -> pd.DataFrame:
         """
         Get weather data for session.
-        
+
         Args:
             session_key: OpenF1 session identifier
-            
+
         Returns:
             DataFrame with weather conditions
         """
-        cached_df = self._load_cached_race_dataframe(session_key, DataType.WEATHER)
+        cached_df = self._load_cached_race_dataframe(
+            session_key, DataType.WEATHER)
         if cached_df is not None:
             df = cached_df.copy()
             df = self._coerce_datetime_columns(df, ["Time"])
@@ -841,16 +876,16 @@ class OpenF1DataProvider:
 
         params = {"session_key": session_key}
         weather = self._request("weather", params)
-        
+
         if not weather:
             logger.warning(f"No weather data for session {session_key}")
             return pd.DataFrame()
-            
+
         df = pd.DataFrame(weather)
-        
+
         if "date" in df.columns:
             df["date"] = pd.to_datetime(df["date"], format='mixed')
-            
+
         column_mapping = {
             "date": "Time",
             "air_temperature": "AirTemp",
@@ -861,11 +896,11 @@ class OpenF1DataProvider:
             "wind_direction": "WindDirection",
             "rainfall": "Rainfall"
         }
-        
+
         df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
-        
+
         logger.info(f"Loaded {len(df)} weather records for session {session_key}")
-        
+
         return df
 
     def get_intervals(
@@ -875,15 +910,16 @@ class OpenF1DataProvider:
     ) -> pd.DataFrame:
         """
         Get interval/gap data (time gaps between drivers).
-        
+
         Args:
             session_key: OpenF1 session identifier
             driver_number: Filter by specific driver (optional)
-            
+
         Returns:
             DataFrame with interval data
         """
-        cached_df = self._load_cached_race_dataframe(session_key, DataType.INTERVALS)
+        cached_df = self._load_cached_race_dataframe(
+            session_key, DataType.INTERVALS)
         if cached_df is not None:
             df = cached_df.copy()
             df = self._filter_by_driver(df, driver_number)
@@ -898,29 +934,29 @@ class OpenF1DataProvider:
         params = {"session_key": session_key}
         if driver_number:
             params["driver_number"] = driver_number
-            
+
         intervals = self._request("intervals", params)
-        
+
         if not intervals:
             logger.warning(f"No interval data for session {session_key}")
             return pd.DataFrame()
-            
+
         df = pd.DataFrame(intervals)
-        
+
         if "date" in df.columns:
             df["date"] = pd.to_datetime(df["date"], format='mixed')
-            
+
         column_mapping = {
             "driver_number": "DriverNumber",
             "gap_to_leader": "GapToLeader",
             "interval": "Interval",
             "date": "Timestamp"
         }
-        
+
         df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
-        
+
         logger.info(f"Loaded {len(df)} interval records for session {session_key}")
-        
+
         return df
 
     def get_car_data(
@@ -932,7 +968,7 @@ class OpenF1DataProvider:
     ) -> pd.DataFrame:
         """
         Get car telemetry data (speed, RPM, gear, throttle, brake, DRS).
-        
+
         Args:
             session_key: OpenF1 session identifier
             driver_number: Filter by specific driver (optional)
@@ -940,16 +976,18 @@ class OpenF1DataProvider:
                        Example: "2025-11-30T16:10:00"
             date_end: ISO format timestamp for end filter (optional)
                      Example: "2025-11-30T16:12:00"
-            
+
         Returns:
             DataFrame with car telemetry data
         """
-        cached_df = self._load_cached_race_dataframe(session_key, DataType.CAR_DATA)
+        cached_df = self._load_cached_race_dataframe(
+            session_key, DataType.CAR_DATA)
         if cached_df is not None:
             df = cached_df.copy()
             df = self._filter_by_driver(df, driver_number)
             df = self._coerce_datetime_columns(df, ["Timestamp"])
-            df = self._filter_by_time_range(df, "Timestamp", date_start, date_end)
+            df = self._filter_by_time_range(
+                df, "Timestamp", date_start, date_end)
             logger.info(
                 "Loaded %s car data records for session %s from cache",
                 len(df),
@@ -964,27 +1002,26 @@ class OpenF1DataProvider:
             params["date>"] = date_start  # OpenF1 uses date> not date>=
         if date_end:
             params["date<"] = date_end
-            
+
         try:
             car_data = self._request("car_data", params)
         except requests.HTTPError as exc:
             status_code = exc.response.status_code if exc.response is not None else None
             if status_code == 422:
                 logger.warning(
-                    f"Car telemetry not available for session {session_key} (HTTP 422)"
-                )
+                    f"Car telemetry not available for session {session_key} (HTTP 422)")
                 return pd.DataFrame()
             raise
-        
+
         if not car_data:
             logger.warning(f"No car data for session {session_key}")
             return pd.DataFrame()
-            
+
         df = pd.DataFrame(car_data)
-        
+
         if "date" in df.columns:
             df["date"] = pd.to_datetime(df["date"], format='mixed')
-            
+
         column_mapping = {
             "driver_number": "DriverNumber",
             "date": "Timestamp",
@@ -995,11 +1032,11 @@ class OpenF1DataProvider:
             "brake": "Brake",
             "drs": "DRS"
         }
-        
+
         df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
-        
+
         logger.info(f"Loaded {len(df)} car data records for session {session_key}")
-        
+
         return df
 
     def get_location(
@@ -1009,29 +1046,29 @@ class OpenF1DataProvider:
     ) -> pd.DataFrame:
         """
         Get GPS location data for drivers on track.
-        
+
         Args:
             session_key: OpenF1 session identifier
             driver_number: Filter by specific driver (optional)
-            
+
         Returns:
             DataFrame with GPS coordinates
         """
         params = {"session_key": session_key}
         if driver_number:
             params["driver_number"] = driver_number
-            
+
         location = self._request("location", params)
-        
+
         if not location:
             logger.warning(f"No location data for session {session_key}")
             return pd.DataFrame()
-            
+
         df = pd.DataFrame(location)
-        
+
         if "date" in df.columns:
             df["date"] = pd.to_datetime(df["date"], format='mixed')
-            
+
         column_mapping = {
             "driver_number": "DriverNumber",
             "date": "Timestamp",
@@ -1039,11 +1076,11 @@ class OpenF1DataProvider:
             "y": "Y",
             "z": "Z"
         }
-        
+
         df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
-        
+
         logger.info(f"Loaded {len(df)} location records for session {session_key}")
-        
+
         return df
 
     def get_team_radio(
@@ -1053,39 +1090,39 @@ class OpenF1DataProvider:
     ) -> pd.DataFrame:
         """
         Get team radio messages.
-        
+
         Args:
             session_key: OpenF1 session identifier
             driver_number: Filter by specific driver (optional)
-            
+
         Returns:
             DataFrame with team radio messages and audio URLs
         """
         params = {"session_key": session_key}
         if driver_number:
             params["driver_number"] = driver_number
-            
+
         radio = self._request("team_radio", params)
-        
+
         if not radio:
             logger.warning(f"No team radio data for session {session_key}")
             return pd.DataFrame()
-            
+
         df = pd.DataFrame(radio)
-        
+
         if "date" in df.columns:
             df["date"] = pd.to_datetime(df["date"], format='mixed')
-            
+
         column_mapping = {
             "driver_number": "DriverNumber",
             "date": "Timestamp",
             "recording_url": "AudioURL"
         }
-        
+
         df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
-        
+
         logger.info(f"Loaded {len(df)} team radio messages for session {session_key}")
-        
+
         return df
 
     def get_meetings(
@@ -1096,12 +1133,12 @@ class OpenF1DataProvider:
     ) -> pd.DataFrame:
         """
         Get meeting (race weekend) information.
-        
+
         Args:
             session_key: OpenF1 session identifier (optional)
             year: Filter by year (optional)
             country_name: Filter by country (optional)
-            
+
         Returns:
             DataFrame with meeting/event information
         """
@@ -1112,18 +1149,18 @@ class OpenF1DataProvider:
             params["year"] = year
         if country_name:
             params["country_name"] = country_name
-            
+
         meetings = self._request("meetings", params)
-        
+
         if not meetings:
             logger.warning("No meetings found")
             return pd.DataFrame()
-            
+
         df = pd.DataFrame(meetings)
-        
+
         if "date_start" in df.columns:
             df["date_start"] = pd.to_datetime(df["date_start"], format='mixed')
-            
+
         column_mapping = {
             "meeting_key": "MeetingKey",
             "meeting_name": "MeetingName",
@@ -1134,11 +1171,11 @@ class OpenF1DataProvider:
             "date_start": "StartDate",
             "year": "Year"
         }
-        
+
         df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
-        
+
         logger.info(f"Loaded {len(df)} meetings")
-        
+
         return df
 
     def get_overtakes(
@@ -1148,48 +1185,46 @@ class OpenF1DataProvider:
     ) -> pd.DataFrame:
         """
         Get overtaking maneuvers during a session.
-        
+
         Args:
             session_key: OpenF1 session identifier
             driver_number: Optional filter for specific driver
-            
+
         Returns:
-            DataFrame with columns: DriverNumber, OvertakingDriverNumber, 
+            DataFrame with columns: DriverNumber, OvertakingDriverNumber,
             Timestamp, LapNumber
         """
         logger.info(
             f"Getting overtakes for session {session_key}"
             + (f", driver {driver_number}" if driver_number else "")
         )
-        
+
         params = {"session_key": session_key}
         if driver_number:
             params["driver_number"] = driver_number
-        
+
         overtakes = self._request("overtakes", params)
-        
+
         if not overtakes:
             logger.warning("No overtakes found")
             return pd.DataFrame()
-        
+
         df = pd.DataFrame(overtakes)
-        
+
         if "date" in df.columns:
             df["date"] = pd.to_datetime(df["date"], format='mixed')
-        
+
         column_mapping = {
             "driver_number": "DriverNumber",
             "overtaking_driver_number": "OvertakingDriverNumber",
             "date": "Timestamp",
             "lap_number": "LapNumber"
         }
-        
-        df = df.rename(
-            columns={k: v for k, v in column_mapping.items() if k in df.columns}
-        )
-        
+
+        df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
+
         logger.info(f"Loaded {len(df)} overtakes for session {session_key}")
-        
+
         return df
 
     def stream_live_data(
@@ -1201,36 +1236,38 @@ class OpenF1DataProvider:
     ):
         """
         Stream live data during an ongoing session (for future real-time feature).
-        
+
         Args:
             session_key: OpenF1 session identifier
             data_type: Type of data to stream ('position', 'laps', etc.)
             callback: Function to call with new data
             poll_interval: Seconds between polls
         """
-        logger.info(f"Starting live stream for session {session_key}, type: {data_type}")
-        
+        logger.info(
+            f"Starting live stream for session {session_key}, type: {data_type}")
+
         last_timestamp = None
-        
+
         while True:
             try:
                 params = {"session_key": session_key}
-                
+
                 # Only get new data since last poll
                 if last_timestamp:
                     params["date>"] = last_timestamp.isoformat()
-                
+
                 data = self._request(data_type, params)
-                
+
                 if data and callback:
                     callback(data)
-                    
+
                     # Update last timestamp
                     if "date" in data[-1]:
-                        last_timestamp = pd.to_datetime(data[-1]["date"], format='mixed')
-                
+                        last_timestamp = pd.to_datetime(
+                            data[-1]["date"], format='mixed')
+
                 sleep(poll_interval)
-                
+
             except KeyboardInterrupt:
                 logger.info("Live stream stopped by user")
                 break

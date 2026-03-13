@@ -140,7 +140,8 @@ def setup_logging(
     logging.getLogger('httpcore').setLevel(logging.WARNING)
     logging.getLogger('chromadb').setLevel(logging.WARNING)
     logging.getLogger('sentence_transformers').setLevel(logging.WARNING)
-    logging.getLogger('dash').setLevel(logging.WARNING)  # Quiet Dash startup msg
+    logging.getLogger('dash').setLevel(
+        logging.WARNING)  # Quiet Dash startup msg
     logging.getLogger('dash.dash').setLevel(logging.WARNING)
 
     # Log startup message

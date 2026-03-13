@@ -98,11 +98,14 @@ def load_model_artifact(
     metadata = ModelMetadata(**metadata_dict)
 
     if metadata.version != expected_version:
-        raise ValueError(f"model version mismatch: {metadata.version} != {expected_version}")
+        raise ValueError(
+            f"model version mismatch: {
+                metadata.version} != {expected_version}")
 
     expected_features_list = list(expected_features)
     if metadata.feature_columns != expected_features_list:
-        raise ValueError("feature columns mismatch; artifact is stale or incompatible")
+        raise ValueError(
+            "feature columns mismatch; artifact is stale or incompatible")
 
     return model, metadata
 

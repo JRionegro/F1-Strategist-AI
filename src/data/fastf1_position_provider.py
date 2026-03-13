@@ -1,7 +1,11 @@
 """FastF1 powered position provider used by the track map dashboard."""
 from __future__ import annotations
+from src.utils.logging_config import LogCategory, get_logger
+import pandas as pd
+import numpy as np
+from fastf1.core import Session
+import fastf1
 
-import logging
 import math
 import pickle
 from datetime import datetime
@@ -12,12 +16,6 @@ from numbers import Real
 FloatDict = Dict[str, float]
 DriverPosition = Dict[str, Union[float, FloatDict]]
 
-import fastf1
-from fastf1.core import Session
-import numpy as np
-import pandas as pd
-
-from src.utils.logging_config import LogCategory, get_logger
 
 logger = get_logger(LogCategory.DATA)
 
@@ -54,22 +52,29 @@ class FastF1PositionProvider:
         self._circuit_outline_cache: Optional[Dict[str, pd.DataFrame]] = None
         self._loading_lock: bool = False
 
-        logger.info("FastF1PositionProvider ready (cache dir: %s)", self.cache_dir)
+        logger.info(
+            "FastF1PositionProvider ready (cache dir: %s)",
+            self.cache_dir)
 
-    def _get_positions_cache_path(self, year: int, country: str, session_type: str) -> Path:
+    def _get_positions_cache_path(
+            self,
+            year: int,
+            country: str,
+            session_type: str) -> Path:
         """
         Get the positions cache path, trying multiple naming patterns.
-        
+
         Returns the first existing cache file, or generates the expected path
         if no cache exists.
         """
         safe_country = country.replace(" ", "_").replace("/", "_")
         session_dir = self.cache_dir / str(year)
         session_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Primary pattern: {country}_{session_type}_positions.pkl
-        primary_path = session_dir / f"{safe_country}_{session_type}_positions.pkl"
-        
+        primary_path = session_dir / \
+            f"{safe_country}_{session_type}_positions.pkl"
+
         # Try primary pattern first
         if primary_path.exists():
             logger.debug(
@@ -77,13 +82,14 @@ class FastF1PositionProvider:
                 primary_path.name
             )
             return primary_path
-        
+
         # Fallback 1: Try exact patterns with known variations
         fallback_patterns = [
-            f"{safe_country}_Grand_Prix_{session_type}_positions.pkl",  # With "Grand Prix"
+            # With "Grand Prix"
+            f"{safe_country}_Grand_Prix_{session_type}_positions.pkl",
             f"{safe_country}_Race_positions.pkl",  # "Race" instead of "R"
         ]
-        
+
         for pattern in fallback_patterns:
             fallback_path = session_dir / pattern
             if fallback_path.exists():
@@ -93,37 +99,39 @@ class FastF1PositionProvider:
                     primary_path.name
                 )
                 return fallback_path
-        
+
         # Fallback 2: Fuzzy search - find any cache file containing country keywords
-        # This handles cases like "Abu Dhabi" -> "United_Arab_Emirates_R_positions.pkl"
+        # This handles cases like "Abu Dhabi" ->
+        # "United_Arab_Emirates_R_positions.pkl"
         country_keywords = safe_country.lower().split("_")
         for cache_file in session_dir.glob(f"*_{session_type}_positions.pkl"):
             cache_lower = cache_file.stem.lower()
             # Check if any keyword matches
-            if any(keyword in cache_lower for keyword in country_keywords if len(keyword) > 3):
+            if any(
+                    keyword in cache_lower for keyword in country_keywords if len(keyword) > 3):
                 logger.debug(
                     "Found cache with fuzzy match: %s (keywords=%s, looking for %s)",
                     cache_file.name,
                     country_keywords,
-                    primary_path.name
-                )
+                    primary_path.name)
                 return cache_file
-        
+
         # No existing cache found - return primary path for new cache creation
         logger.debug(
             "No existing cache found. Expected: %s (country=%s, session_type=%s)",
             primary_path.name,
             country,
-            session_type
-        )
+            session_type)
         return primary_path
 
     @staticmethod
-    def translate_openf1_session(openf1_session: Dict[str, str]) -> Dict[str, str | int]:
+    def translate_openf1_session(
+            openf1_session: Dict[str, str]) -> Dict[str, str | int]:
         """Translate an OpenF1 session payload into FastF1 parameters."""
         date_start = openf1_session.get("date_start")
         if date_start:
-            year = datetime.fromisoformat(date_start.replace("Z", "+00:00")).year
+            year = datetime.fromisoformat(
+                date_start.replace("Z", "+00:00")).year
         else:
             year = datetime.utcnow().year
 
@@ -133,11 +141,16 @@ class FastF1PositionProvider:
             country = meeting_name.replace(" Grand Prix", "").strip()
 
         session_name = openf1_session.get("session_name", "Race")
-        identifier = FastF1PositionProvider.SESSION_TYPE_MAPPING.get(session_name, "R")
+        identifier = FastF1PositionProvider.SESSION_TYPE_MAPPING.get(
+            session_name, "R")
 
         return {"year": year, "round": country, "identifier": identifier}
 
-    def load_session(self, year: int, country: str, session_type: str = "R") -> bool:
+    def load_session(
+            self,
+            year: int,
+            country: str,
+            session_type: str = "R") -> bool:
         """Load telemetry for the requested session."""
         session_key = (year, country, session_type)
         if self._current_session_key == session_key and self.positions_df is not None:
@@ -145,20 +158,25 @@ class FastF1PositionProvider:
             return True
 
         if self._loading_lock:
-            logger.warning("Session load already running; skipping duplicate request")
+            logger.warning(
+                "Session load already running; skipping duplicate request")
             return False
 
         self._loading_lock = True
         self.session_params = session_key
-        cache_path = self._get_positions_cache_path(year, country, session_type)
+        cache_path = self._get_positions_cache_path(
+            year, country, session_type)
 
         try:
             if cache_path.exists():
-                logger.info("Loading positions from cache: %s", cache_path.name)
+                logger.info(
+                    "Loading positions from cache: %s",
+                    cache_path.name)
                 with cache_path.open("rb") as handle:
                     cache_data = pickle.load(handle)
 
-                if cache_data.get("schema_version") != self.CACHE_SCHEMA_VERSION:
+                if cache_data.get(
+                        "schema_version") != self.CACHE_SCHEMA_VERSION:
                     raise ValueError("Cache schema mismatch")
 
                 positions = cache_data.get("positions")
@@ -168,10 +186,14 @@ class FastF1PositionProvider:
                 self.positions_df = positions
                 self._driver_mapping = cache_data.get("driver_mapping", {})
                 self.session = cache_data.get("session")
-                self._session_time_offset = float(cache_data.get("time_offset", 0.0))
+                self._session_time_offset = float(
+                    cache_data.get("time_offset", 0.0))
                 time_bounds = cache_data.get("time_bounds")
                 if isinstance(time_bounds, tuple) and len(time_bounds) == 2:
-                    self._time_bounds = (float(time_bounds[0]), float(time_bounds[1]))
+                    self._time_bounds = (
+                        float(
+                            time_bounds[0]), float(
+                            time_bounds[1]))
                 else:
                     self._calculate_time_bounds()
 
@@ -185,7 +207,11 @@ class FastF1PositionProvider:
         try:
             logger.info("Loading session from FastF1...")
             session_obj = fastf1.get_session(year, country, session_type)
-            session_obj.load(telemetry=True, laps=True, weather=False, messages=False)
+            session_obj.load(
+                telemetry=True,
+                laps=True,
+                weather=False,
+                messages=False)
             self.session = session_obj
         except Exception as exc:  # noqa: BLE001
             logger.error("Failed to load FastF1 session: %s", exc)
@@ -206,9 +232,12 @@ class FastF1PositionProvider:
             self._loading_lock = False
             return False
 
-        if hasattr(self.session, "results") and self.session.results is not None:
+        if hasattr(
+                self.session,
+                "results") and self.session.results is not None:
             for _, row in self.session.results.iterrows():
-                self._driver_mapping[int(row["DriverNumber"])] = row["Abbreviation"]
+                self._driver_mapping[int(
+                    row["DriverNumber"])] = row["Abbreviation"]
 
         self._preload_all_positions()
         self._save_positions_cache(cache_path)
@@ -238,31 +267,40 @@ class FastF1PositionProvider:
                 continue
 
             filtered = driver_df.dropna(subset=["X", "Y", "SessionTime"])
-            filtered = filtered.loc[(filtered["X"] != 0) | (filtered["Y"] != 0)]
+            filtered = filtered.loc[(filtered["X"] != 0)
+                                    | (filtered["Y"] != 0)]
             if filtered.empty:
                 continue
 
             filtered = filtered.copy()
-            filtered.loc[:, "time"] = filtered["SessionTime"].dt.total_seconds().astype(float)
+            filtered.loc[:, "time"] = filtered["SessionTime"].dt.total_seconds().astype(
+                float)
             filtered.loc[:, "x"] = filtered["X"].astype(float)
             filtered.loc[:, "y"] = filtered["Y"].astype(float)
-            filtered.loc[:, "z"] = filtered.get("Z", pd.Series(0.0, index=filtered.index)).fillna(0.0).astype(float)
+            filtered.loc[:, "z"] = filtered.get("Z", pd.Series(
+                0.0, index=filtered.index)).fillna(0.0).astype(float)
 
             driver_laps = self.session.laps.pick_drivers(driver_id)
-            lap_info = driver_laps[["LapNumber", "LapStartTime"]].dropna().copy()
-            lap_info.loc[:, "LapStartTime"] = pd.to_timedelta(lap_info["LapStartTime"])
+            lap_info = driver_laps[["LapNumber",
+                                    "LapStartTime"]].dropna().copy()
+            lap_info.loc[:, "LapStartTime"] = pd.to_timedelta(
+                lap_info["LapStartTime"])
             lap_info.sort_values("LapStartTime", inplace=True)
 
             if not lap_info.empty:
                 lap_numbers = lap_info["LapNumber"].astype(int).to_numpy()
-                lap_start_seconds = lap_info["LapStartTime"].apply(lambda td: float(td.total_seconds())).to_numpy()
+                lap_start_seconds = lap_info["LapStartTime"].apply(
+                    lambda td: float(td.total_seconds())).to_numpy()
             else:
                 lap_numbers = np.array([1])
                 lap_start_seconds = np.array([0.0])
 
             step = max(1, len(filtered) // target_samples)
             sampled = filtered.iloc[::step].copy()
-            idx = np.searchsorted(lap_start_seconds, sampled["time"].to_numpy(), side="right") - 1
+            idx = np.searchsorted(
+                lap_start_seconds,
+                sampled["time"].to_numpy(),
+                side="right") - 1
             idx = np.clip(idx, 0, len(lap_numbers) - 1)
             sampled.loc[:, "lap_number"] = lap_numbers[idx]
             sampled.loc[:, "driver_number"] = driver_id
@@ -309,8 +347,12 @@ class FastF1PositionProvider:
     def _determine_session_time_offset(self) -> float:
         if self.session is not None and hasattr(self.session, "laps"):
             lap_data = self.session.laps
-            if isinstance(lap_data, pd.DataFrame) and "LapStartTime" in lap_data.columns:
-                valid = pd.to_timedelta(lap_data["LapStartTime"].dropna(), errors="coerce").dropna()
+            if isinstance(
+                    lap_data,
+                    pd.DataFrame) and "LapStartTime" in lap_data.columns:
+                valid = pd.to_timedelta(
+                    lap_data["LapStartTime"].dropna(),
+                    errors="coerce").dropna()
                 if not valid.empty:
                     return max(float(valid.min().total_seconds()), 0.0)
 
@@ -333,7 +375,10 @@ class FastF1PositionProvider:
         with cache_path.open("wb") as handle:
             pickle.dump(data, handle)
         size_mb = cache_path.stat().st_size / (1024 * 1024)
-        logger.info("Saved position cache (%.2f MB): %s", size_mb, cache_path.name)
+        logger.info(
+            "Saved position cache (%.2f MB): %s",
+            size_mb,
+            cache_path.name)
 
     def get_session_time_offset(self) -> float:
         """Return the cached session time offset in seconds."""
@@ -405,7 +450,8 @@ class FastF1PositionProvider:
     def get_driver_abbreviation(self, driver_number: int) -> Optional[str]:
         return self._driver_mapping.get(driver_number)
 
-    def get_driver_position(self, driver_number: int, lap_number: int) -> Optional[Dict[str, float]]:
+    def get_driver_position(self, driver_number: int,
+                            lap_number: int) -> Optional[Dict[str, float]]:
         if self.session is None:
             return None
 
@@ -447,7 +493,8 @@ class FastF1PositionProvider:
             driver_numbers = list(self._driver_mapping.keys())
 
         if elapsed_time is None:
-            logger.warning("Elapsed time not provided; unable to map positions")
+            logger.warning(
+                "Elapsed time not provided; unable to map positions")
             return {}
 
         adjusted_time = self.clamp_session_time(float(elapsed_time))
@@ -459,16 +506,19 @@ class FastF1PositionProvider:
             if driver_data.empty:
                 continue
 
-            driver_data = driver_data.sort_values("time").reset_index(drop=True)
+            driver_data = driver_data.sort_values(
+                "time").reset_index(drop=True)
 
             filtered_data = driver_data
             if lap_number is not None and "lap_number" in driver_data.columns:
                 try:
-                    lap_mask = driver_data["lap_number"].astype(int) == int(lap_number)
+                    lap_mask = driver_data["lap_number"].astype(
+                        int) == int(lap_number)
                 except Exception:  # noqa: BLE001
                     lap_mask = driver_data["lap_number"] == lap_number
                 if lap_mask.any():
-                    filtered_data = driver_data.loc[lap_mask].reset_index(drop=True)
+                    filtered_data = driver_data.loc[lap_mask].reset_index(
+                        drop=True)
                     if filtered_data.empty:
                         filtered_data = driver_data
                 else:
@@ -477,7 +527,11 @@ class FastF1PositionProvider:
             time_values = filtered_data["time"].to_numpy(dtype=float)
             if time_values.size == 0:
                 continue
-            insert_idx = int(np.searchsorted(time_values, adjusted_time, side="left"))
+            insert_idx = int(
+                np.searchsorted(
+                    time_values,
+                    adjusted_time,
+                    side="left"))
             prev_idx = max(insert_idx - 1, 0)
             next_idx = min(insert_idx, len(filtered_data) - 1)
             prev_row = filtered_data.iloc[prev_idx]
@@ -504,10 +558,14 @@ class FastF1PositionProvider:
             time_val = prev_time + (next_time - prev_time) * ratio
 
             current_lap_val = next_row.get("lap_number")
-            if isinstance(current_lap_val, Real) and math.isfinite(float(current_lap_val)):
+            if isinstance(
+                    current_lap_val,
+                    Real) and math.isfinite(
+                    float(current_lap_val)):
                 lap_number_value = int(round(float(current_lap_val)))
             else:
-                lap_number_value = int(lap_number) if lap_number is not None else -1
+                lap_number_value = int(
+                    lap_number) if lap_number is not None else -1
 
             positions[driver_number] = {
                 "x": x_val,
@@ -543,8 +601,13 @@ class FastF1PositionProvider:
         if self.session is None and self.session_params is not None:
             year, country, session_type = self.session_params
             try:
-                reload_session = fastf1.get_session(year, country, session_type)
-                reload_session.load(telemetry=True, laps=True, weather=False, messages=False)
+                reload_session = fastf1.get_session(
+                    year, country, session_type)
+                reload_session.load(
+                    telemetry=True,
+                    laps=True,
+                    weather=False,
+                    messages=False)
                 self.session = reload_session
             except Exception as exc:  # noqa: BLE001
                 logger.error("Failed to reload session for outline: %s", exc)
@@ -567,7 +630,8 @@ class FastF1PositionProvider:
 
         x_center = telemetry["X"].astype(float).to_numpy()
         y_center = telemetry["Y"].astype(float).to_numpy()
-        z_center = telemetry.get("Z", pd.Series(0.0, index=telemetry.index)).fillna(0.0).astype(float).to_numpy()
+        z_center = telemetry.get("Z", pd.Series(0.0, index=telemetry.index)).fillna(
+            0.0).astype(float).to_numpy()
         distance = telemetry["Distance"].astype(float).to_numpy()
 
         dx = np.gradient(x_center)
@@ -584,14 +648,20 @@ class FastF1PositionProvider:
         x_inner = x_center - nx * half_width
         y_inner = y_center - ny * half_width
 
-        center_df = pd.DataFrame({"X": x_center, "Y": y_center, "Z": z_center, "Distance": distance})
-        inner_df = pd.DataFrame({"X": x_inner, "Y": y_inner, "Z": z_center, "Distance": distance})
-        outer_df = pd.DataFrame({"X": x_outer, "Y": y_outer, "Z": z_center, "Distance": distance})
+        center_df = pd.DataFrame(
+            {"X": x_center, "Y": y_center, "Z": z_center, "Distance": distance})
+        inner_df = pd.DataFrame(
+            {"X": x_inner, "Y": y_inner, "Z": z_center, "Distance": distance})
+        outer_df = pd.DataFrame(
+            {"X": x_outer, "Y": y_outer, "Z": z_center, "Distance": distance})
 
         if not center_df.empty:
-            center_df = pd.concat([center_df, center_df.iloc[[0]]], ignore_index=True)
-            inner_df = pd.concat([inner_df, inner_df.iloc[[0]]], ignore_index=True)
-            outer_df = pd.concat([outer_df, outer_df.iloc[[0]]], ignore_index=True)
+            center_df = pd.concat(
+                [center_df, center_df.iloc[[0]]], ignore_index=True)
+            inner_df = pd.concat(
+                [inner_df, inner_df.iloc[[0]]], ignore_index=True)
+            outer_df = pd.concat(
+                [outer_df, outer_df.iloc[[0]]], ignore_index=True)
 
         outline = {"center": center_df, "inner": inner_df, "outer": outer_df}
         self._circuit_outline_cache = outline
@@ -604,7 +674,8 @@ class FastF1PositionProvider:
         self._current_session_key = None
         logger.info("Position provider caches cleared")
 
-    def get_session_info(self) -> Optional[Dict[str, Union[int, str, List[int]]]]:
+    def get_session_info(
+            self) -> Optional[Dict[str, Union[int, str, List[int]]]]:
         if self.session_params is None:
             return None
 

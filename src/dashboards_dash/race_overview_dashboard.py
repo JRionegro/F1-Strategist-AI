@@ -4,10 +4,8 @@ Race Overview Dashboard - Real-time leaderboard using OpenF1 APIs.
 Shows live positions, gaps, tire compounds using Intervals API for accuracy.
 """
 
-import logging
 import math
 import re
-from datetime import datetime
 from numbers import Real
 from typing import Any, Dict, Optional, Tuple
 
@@ -78,17 +76,25 @@ class RaceOverviewDashboard:
         except requests.HTTPError as exc:  # pragma: no cover - network guard
             if exc.response is not None and exc.response.status_code == 429:
                 logger.warning(
-                    "Rate limit while warming cache for session %s", session_key
-                )
+                    "Rate limit while warming cache for session %s",
+                    session_key)
                 return False, "rate_limit"
-            logger.error("HTTP error warming cache for session %s: %s", session_key, exc)
+            logger.error(
+                "HTTP error warming cache for session %s: %s",
+                session_key,
+                exc)
             return False, "http_error"
         except Exception as exc:  # pragma: no cover - defensive
-            logger.error("Error warming cache for session %s: %s", session_key, exc)
+            logger.error(
+                "Error warming cache for session %s: %s",
+                session_key,
+                exc)
             return False, "error"
 
         if positions.empty:
-            logger.warning("Empty position dataset while warming cache for session %s", session_key)
+            logger.warning(
+                "Empty position dataset while warming cache for session %s",
+                session_key)
             return False, "empty"
 
         self._cached_session_key = session_key
@@ -184,8 +190,8 @@ class RaceOverviewDashboard:
                 self._cached_positions is None
             ):
                 logger.info(
-                    "Loading fresh data for session %s (cache miss)", session_key
-                )
+                    "Loading fresh data for session %s (cache miss)",
+                    session_key)
                 success, reason = self.warm_cache(session_key)
                 if not success:
                     if reason == "rate_limit":
@@ -193,34 +199,26 @@ class RaceOverviewDashboard:
                             [
                                 html.I(
                                     className="fas fa-hourglass-half fa-3x mb-3",
-                                    style={"color": "#ffc107"}
-                                ),
+                                    style={
+                                        "color": "#ffc107"}),
                                 html.H5(
                                     "API Rate Limit Reached",
-                                    className="text-warning"
-                                ),
+                                    className="text-warning"),
                                 html.P(
                                     "The OpenF1 API is temporarily rate-limiting requests. "
                                     "The system is automatically retrying with exponential backoff...",
-                                    className="small text-muted mb-2"
-                                ),
+                                    className="small text-muted mb-2"),
                                 html.P(
                                     "Please wait 5-10 seconds and the session will load automatically.",
-                                    className="small text-muted"
-                                ),
+                                    className="small text-muted"),
                                 html.Div(
                                     [
                                         html.Div(
                                             className="spinner-border text-warning mt-3",
-                                            role="status"
-                                        ),
+                                            role="status"),
                                         html.Span(
                                             "Retrying...",
-                                            className="sr-only"
-                                        )
-                                    ]
-                                )
-                            ],
+                                            className="sr-only")])],
                             className="text-center p-5",
                         )
 
@@ -230,16 +228,14 @@ class RaceOverviewDashboard:
                                 [
                                     html.I(
                                         className="fas fa-exclamation-circle fa-3x mb-3",
-                                        style={"color": "#dc3545"}
-                                    ),
+                                        style={
+                                            "color": "#dc3545"}),
                                     html.H5(
                                         "Error Loading Session",
-                                        className="text-danger"
-                                    ),
+                                        className="text-danger"),
                                     html.P(
                                         "Unable to load timing data for this session right now.",
-                                        className="small text-muted"
-                                    ),
+                                        className="small text-muted"),
                                 ],
                                 className="text-center p-5",
                             )
@@ -248,24 +244,20 @@ class RaceOverviewDashboard:
                             [
                                 html.I(
                                     className="fas fa-exclamation-triangle fa-3x mb-3",
-                                    style={"color": "#ffc107"}
-                                ),
+                                    style={
+                                        "color": "#ffc107"}),
                                 html.H5(
                                     "No timing data available",
-                                    className="text-warning"
-                                ),
+                                    className="text-warning"),
                                 html.P(
                                     "The OpenF1 service returned no leaderboard information.",
-                                    className="small text-muted"
-                                ),
+                                    className="small text-muted"),
                             ],
                             className="text-center p-5",
                         )
 
                     logger.info(
-                        "Using previously cached data after warm_cache failure (%s)",
-                        reason,
-                    )
+                        "Using previously cached data after warm_cache failure (%s)", reason, )
             else:
                 logger.info(f"Using cached data for session {session_key}")
 
@@ -307,23 +299,23 @@ class RaceOverviewDashboard:
                 current_timestamp = session_start_time + pd.Timedelta(
                     seconds=adjusted_sim_seconds
                 )
-                
+
                 logger.info(
                     f"Current simulation timestamp: {current_timestamp} "
                     f"(session_start={session_start_time}, "
                     f"elapsed={simulation_time:.1f}s, formation_offset={offset_seconds:.1f}s)"
                 )
-                
+
                 # Get all positions at or before current simulation time
                 filtered_positions = positions[
                     positions['Timestamp'] <= current_timestamp
                 ]
-                
+
                 logger.info(
                     f"Filtered positions: {len(filtered_positions)} out of "
                     f"{len(positions)} at time {simulation_time:.1f}s"
                 )
-                
+
                 if filtered_positions.empty:
                     # No data yet at this time
                     latest_time = session_start_time
@@ -369,9 +361,9 @@ class RaceOverviewDashboard:
                         intervals['Timestamp'] <= current_timestamp
                     ]
                     logger.info(
-                        f"Filtered intervals: {len(filtered_intervals)} out of "
-                        f"{len(intervals)}"
-                    )
+                        f"Filtered intervals: {
+                            len(filtered_intervals)} out of " f"{
+                            len(intervals)}")
                     if not filtered_intervals.empty:
                         # Get the MOST RECENT interval for EACH driver
                         latest_intervals = (
@@ -380,11 +372,11 @@ class RaceOverviewDashboard:
                             .groupby('DriverNumber')
                             .tail(1)
                         )
-                        latest_interval_time = filtered_intervals['Timestamp'].max()
-                        logger.info(
-                            f"Latest intervals (per driver) at {latest_interval_time}: "
-                            f"{len(latest_intervals)} records"
+                        latest_interval_time = filtered_intervals['Timestamp'].max(
                         )
+                        logger.info(
+                            f"Latest intervals (per driver) at {latest_interval_time}: " f"{
+                                len(latest_intervals)} records")
                         logger.debug(
                             "Interval coverage -> sim=%.3fs offset=%.3fs latest=%s count=%d",
                             simulation_time,
@@ -404,7 +396,7 @@ class RaceOverviewDashboard:
                         .tail(1)
                     )
                     latest_interval_time = intervals['Timestamp'].max()
-                
+
                 if not latest_intervals.empty:
                     # Merge positions with intervals, stints, and drivers
                     leaderboard_data = latest_positions.merge(
@@ -442,90 +434,126 @@ class RaceOverviewDashboard:
                     "(intervals empty or positions empty)"
                 )
 
-            # Get REAL lap data from OpenF1 API (ALWAYS, not just when stints exist)
+            # Get REAL lap data from OpenF1 API (ALWAYS, not just when stints
+            # exist)
             try:
-                logger.info(f"\n{'='*80}")
-                logger.info(f"CALLING OPENF1 API get_laps()")
-                logger.info(f"{'='*80}")
+                logger.info(f"\n{'=' * 80}")
+                logger.info("CALLING OPENF1 API get_laps()")
+                logger.info(f"{'=' * 80}")
                 logger.info(f"session_key: {session_key}")
                 logger.info(f"simulation_time: {simulation_time}")
-                
+
                 all_laps = self.provider.get_laps(
                     session_key=session_key
                 )
-                
-                logger.info(f"\n{'='*80}")
-                logger.info(f"OPENF1 API RESPONSE")
-                logger.info(f"{'='*80}")
+
+                logger.info(f"\n{'=' * 80}")
+                logger.info("OPENF1 API RESPONSE")
+                logger.info(f"{'=' * 80}")
                 logger.info(f"Total lap records received: {len(all_laps)}")
                 if not all_laps.empty:
-                    logger.info(f"Columns in response: {all_laps.columns.tolist()}")
-                    logger.info(f"Unique lap numbers: {sorted(all_laps['LapNumber'].unique())}")
-                    logger.info(f"Unique driver numbers: {sorted(all_laps['DriverNumber'].unique())}")
+                    logger.info(
+                        f"Columns in response: {
+                            all_laps.columns.tolist()}")
+                    logger.info(
+                        f"Unique lap numbers: {
+                            sorted(
+                                all_laps['LapNumber'].unique())}")
+                    logger.info(
+                        f"Unique driver numbers: {
+                            sorted(
+                                all_laps['DriverNumber'].unique())}")
                     logger.info(f"First 5 rows:\n{all_laps.head()}")
-                    
+
                     # DETAILED ANALYSIS: First 5 laps structure
-                    logger.info(f"\n{'='*80}")
-                    logger.info(f"DETAILED ANALYSIS OF FIRST 5 LAPS")
-                    logger.info(f"{'='*80}")
+                    logger.info(f"\n{'=' * 80}")
+                    logger.info("DETAILED ANALYSIS OF FIRST 5 LAPS")
+                    logger.info(f"{'=' * 80}")
                     for lap_num in [1, 2, 3, 4, 5]:
                         lap_data = all_laps[all_laps['LapNumber'] == lap_num]
                         if not lap_data.empty:
                             logger.info(f"\n--- LAP {lap_num} ---")
                             logger.info(f"Total records: {len(lap_data)}")
-                            logger.info(f"Drivers in this lap: {sorted(lap_data['DriverNumber'].unique())}")
-                            
+                            logger.info(
+                                f"Drivers in this lap: {
+                                    sorted(
+                                        lap_data['DriverNumber'].unique())}")
+
                             # Check timestamps
                             sample_driver = lap_data.iloc[0]
-                            logger.info(f"Sample driver #{sample_driver['DriverNumber']}:")
-                            logger.info(f"  LapStartTime: {sample_driver.get('LapStartTime', 'N/A')}")
-                            logger.info(f"  LapEndTime: {sample_driver.get('LapEndTime', 'N/A')}")
-                            logger.info(f"  DateStart: {sample_driver.get('DateStart', 'N/A')}")
-                            
+                            logger.info(
+                                f"Sample driver #{
+                                    sample_driver['DriverNumber']}:")
+                            logger.info(
+                                f"  LapStartTime: {
+                                    sample_driver.get(
+                                        'LapStartTime',
+                                        'N/A')}")
+                            logger.info(
+                                f"  LapEndTime: {
+                                    sample_driver.get(
+                                        'LapEndTime',
+                                        'N/A')}")
+                            logger.info(
+                                f"  DateStart: {
+                                    sample_driver.get(
+                                        'DateStart',
+                                        'N/A')}")
+
                             # Count how many have valid timestamps
-                            valid_start = lap_data['LapStartTime'].notna().sum()
+                            valid_start = lap_data['LapStartTime'].notna(
+                            ).sum()
                             valid_end = lap_data['LapEndTime'].notna().sum()
-                            logger.info(f"  Valid LapStartTime: {valid_start}/{len(lap_data)}")
-                            logger.info(f"  Valid LapEndTime: {valid_end}/{len(lap_data)}")
+                            logger.info(
+                                f"  Valid LapStartTime: {valid_start}/{len(lap_data)}")
+                            logger.info(
+                                f"  Valid LapEndTime: {valid_end}/{len(lap_data)}")
                         else:
                             logger.info(f"\n--- LAP {lap_num}: NO DATA ---")
             except Exception as e:
                 logger.error(f"Error loading lap data: {e}")
                 all_laps = pd.DataFrame()
 
-            # Calculate dynamic tire age from stints based on ACTUAL lap numbers
+            # Calculate dynamic tire age from stints based on ACTUAL lap
+            # numbers
             if stints is not None and not stints.empty:
                 logger.info(
                     f"Calculating tire age for {len(leaderboard_data)} "
                     f"drivers with {len(stints)} stints"
                 )
-                
+
                 # Use global current_lap from controller if provided
-                # This ensures tire age is synced with the lap counter shown in UI
+                # This ensures tire age is synced with the lap counter shown in
+                # UI
                 global_lap = current_lap  # From render() parameter
                 if global_lap is not None:
                     logger.debug(f"Using global current_lap: {global_lap}")
-                
+
                 # Build lists for tire data
                 tire_ages = []
                 compounds = []
                 pit_stops = []
-                
+
                 # DEBUG: Log all driver numbers in leaderboard
-                driver_numbers_in_leaderboard = leaderboard_data['DriverNumber'].tolist()
-                logger.info(f"ALL DRIVERS IN LEADERBOARD: {driver_numbers_in_leaderboard}")
-                logger.info(f"Is ALO (#14) in leaderboard? {14 in driver_numbers_in_leaderboard}")
-                
+                driver_numbers_in_leaderboard = leaderboard_data['DriverNumber'].tolist(
+                )
+                logger.info(
+                    f"ALL DRIVERS IN LEADERBOARD: {driver_numbers_in_leaderboard}")
+                logger.info(
+                    f"Is ALO (#14) in leaderboard? {
+                        14 in driver_numbers_in_leaderboard}")
+
                 # Calculate tire age for each driver based on ACTUAL lap
                 for idx, row in leaderboard_data.iterrows():
                     driver_num = row['DriverNumber']
-                    
+
                     tire_age = 0
                     compound = 'UNKNOWN'
-                    # Use global lap if provided, otherwise fallback to calculating per-driver
+                    # Use global lap if provided, otherwise fallback to
+                    # calculating per-driver
                     driver_current_lap = global_lap if global_lap is not None else 1
                     driver_laps = pd.DataFrame()  # Initialize to fix Pylance error
-                    
+
                     # Get driver's actual current lap from lap data PER DRIVER
                     is_alonso = (driver_num == 14)
                     if not all_laps.empty and 'DriverNumber' in all_laps.columns:
@@ -533,29 +561,44 @@ class RaceOverviewDashboard:
                         driver_laps = all_laps[
                             all_laps['DriverNumber'] == driver_num
                         ].copy()
-                        
+
                         # DEBUG: Check if ALO has lap data
                         if is_alonso:
-                            logger.info(f"\n{'='*80}")
-                            logger.info(f"ALO DRIVER-SPECIFIC LAP FILTERING")
-                            logger.info(f"{'='*80}")
+                            logger.info(f"\n{'=' * 80}")
+                            logger.info("ALO DRIVER-SPECIFIC LAP FILTERING")
+                            logger.info(f"{'=' * 80}")
                             logger.info(f"DriverNumber filter: {driver_num}")
-                            logger.info(f"Total laps in all_laps: {len(all_laps)}")
-                            logger.info(f"ALO laps after filtering: {len(driver_laps)} laps")
-                            logger.info(f"ALO columns: {driver_laps.columns.tolist()}")
-                            logger.info(f"ALO simulation_time: {simulation_time}")
-                            logger.info(f"ALO session_start_time: {session_start_time}")
+                            logger.info(
+                                f"Total laps in all_laps: {
+                                    len(all_laps)}")
+                            logger.info(
+                                f"ALO laps after filtering: {
+                                    len(driver_laps)} laps")
+                            logger.info(
+                                f"ALO columns: {
+                                    driver_laps.columns.tolist()}")
+                            logger.info(
+                                f"ALO simulation_time: {simulation_time}")
+                            logger.info(
+                                f"ALO session_start_time: {session_start_time}")
                             if len(driver_laps) > 0:
-                                logger.info(f"ALO lap numbers: {sorted(driver_laps['LapNumber'].unique())}")
-                        
-                        # DEBUG: Log global_lap and simulation_time at simulation start
+                                logger.info(
+                                    f"ALO lap numbers: {
+                                        sorted(
+                                            driver_laps['LapNumber'].unique())}")
+
+                        # DEBUG: Log global_lap and simulation_time at
+                        # simulation start
                         logger.info(f"TIRE AGE DEBUG - Driver #{driver_num}:")
                         logger.info(f"  global_lap = {global_lap}")
                         logger.info(f"  simulation_time = {simulation_time}")
-                        logger.info(f"  Has driver laps data: {not driver_laps.empty}")
-                        
+                        logger.info(
+                            f"  Has driver laps data: {
+                                not driver_laps.empty}")
+
                         # Calculate per-driver lap ONLY if no global lap provided
-                        # This ensures tire age stays in sync with the UI lap counter
+                        # This ensures tire age stays in sync with the UI lap
+                        # counter
                         if global_lap is None and not driver_laps.empty:
                             if (
                                 simulation_time is not None
@@ -563,114 +606,151 @@ class RaceOverviewDashboard:
                                 and 'LapStartTime' in driver_laps.columns
                             ):
                                 # Get the driver's first lap start time
-                                driver_laps_sorted = driver_laps.sort_values('LapNumber')
+                                driver_laps_sorted = driver_laps.sort_values(
+                                    'LapNumber')
                                 first_lap_start = driver_laps_sorted['LapStartTime'].iloc[0]
                                 last_lap_start = driver_laps_sorted['LapStartTime'].iloc[-1]
-                                
+
                                 # Calculate simulation timestamp relative to session start
-                                # Ensure both values are not None before arithmetic
-                                sim_timestamp = session_start_time + pd.Timedelta(
-                                    seconds=float(simulation_time)
-                                )
-                                
+                                # Ensure both values are not None before
+                                # arithmetic
+                                sim_timestamp = session_start_time + \
+                                    pd.Timedelta(seconds=float(simulation_time))
+
                                 # Initialize started_laps for logging
                                 started_laps = pd.DataFrame()
-                                
-                                # Filter out laps with NaT (formation lap) FIRST
+
+                                # Filter out laps with NaT (formation lap)
+                                # FIRST
                                 valid_laps = driver_laps[
                                     driver_laps['LapStartTime'].notna()
                                 ].copy()
-                                
+
                                 if valid_laps.empty:
-                                    driver_current_lap = int(valid_laps['LapNumber'].min()) if not valid_laps.empty else 2
+                                    driver_current_lap = int(
+                                        valid_laps['LapNumber'].min()) if not valid_laps.empty else 2
                                 elif simulation_time == 0:
                                     # At simulation start, use the FIRST valid lap from OpenF1
                                     # (typically lap 2, which is the first racing lap after formation)
-                                    driver_current_lap = int(valid_laps['LapNumber'].min())
+                                    driver_current_lap = int(
+                                        valid_laps['LapNumber'].min())
                                 else:
                                     # Find the lap currently IN PROGRESS
                                     # This is the lap that started MOST RECENTLY before sim_timestamp
-                                    # and either hasn't ended yet OR ended after sim_timestamp
-                                    
+                                    # and either hasn't ended yet OR ended
+                                    # after sim_timestamp
+
                                     started_laps = valid_laps[
                                         valid_laps['LapStartTime'] <= sim_timestamp
                                     ]
-                                    
+
                                     if not started_laps.empty and 'LapNumber' in started_laps.columns:
-                                        # Sort by LapStartTime descending to get most recent lap first
+                                        # Sort by LapStartTime descending to
+                                        # get most recent lap first
                                         started_laps_sorted = started_laps.sort_values(
-                                            'LapStartTime', ascending=False
-                                        )
-                                        
+                                            'LapStartTime', ascending=False)
+
                                         # The current lap is the FIRST (most recent) lap that:
                                         # 1. Started before sim_timestamp
-                                        # 2. Either has no end time OR ended after sim_timestamp
+                                        # 2. Either has no end time OR ended
+                                        # after sim_timestamp
                                         for _, lap_row in started_laps_sorted.iterrows():
-                                            lap_start = lap_row['LapStartTime']
-                                            lap_end = lap_row.get('LapEndTime', pd.NaT)
-                                            
-                                            # If lap has no end time, it's the current lap
+                                            lap_end = lap_row.get(
+                                                'LapEndTime', pd.NaT)
+
+                                            # If lap has no end time, it's the
+                                            # current lap
                                             if pd.isna(lap_end):
-                                                driver_current_lap = int(lap_row['LapNumber'])
+                                                driver_current_lap = int(
+                                                    lap_row['LapNumber'])
                                                 break
-                                            # If lap ended after sim_timestamp, it's still in progress
+                                            # If lap ended after sim_timestamp,
+                                            # it's still in progress
                                             elif lap_end > sim_timestamp:
-                                                driver_current_lap = int(lap_row['LapNumber'])
+                                                driver_current_lap = int(
+                                                    lap_row['LapNumber'])
                                                 break
                                         else:
-                                            # If no lap found, use the first one that started
-                                            driver_current_lap = int(started_laps_sorted.iloc[0]['LapNumber'])
+                                            # If no lap found, use the first
+                                            # one that started
+                                            driver_current_lap = int(
+                                                started_laps_sorted.iloc[0]['LapNumber'])
                                     else:
                                         driver_current_lap = 1
-                                
+
                                 # DETAILED LOGGING FOR ALONSO
                                 if is_alonso:
-                                    logger.info(f"\n{'='*80}")
-                                    logger.info(f"ALO CURRENT LAP CALCULATION (DRIVER #14 ONLY)")
-                                    logger.info(f"{'='*80}")
-                                    logger.info(f"sim_timestamp: {sim_timestamp}")
-                                    logger.info(f"valid_laps count: {len(valid_laps)}")
-                                    logger.info(f"started_laps count: {len(started_laps)}")
+                                    logger.info(f"\n{'=' * 80}")
+                                    logger.info(
+                                        "ALO CURRENT LAP CALCULATION (DRIVER #14 ONLY)")
+                                    logger.info(f"{'=' * 80}")
+                                    logger.info(
+                                        f"sim_timestamp: {sim_timestamp}")
+                                    logger.info(
+                                        f"valid_laps count: {
+                                            len(valid_laps)}")
+                                    logger.info(
+                                        f"started_laps count: {
+                                            len(started_laps)}")
                                     logger.info(f"Driver Number: {driver_num}")
-                                    logger.info(f"Simulation Time: {simulation_time}s")
-                                    logger.info(f"Session Start Time: {session_start_time}")
-                                    logger.info(f"Sim Timestamp: {sim_timestamp}")
-                                    logger.info(f"First Lap Start: {first_lap_start}")
-                                    logger.info(f"Last Lap Start: {last_lap_start}")
-                                    logger.info(f"Total Laps in Data: {len(driver_laps_sorted)}")
-                                    logger.info(f"Started Laps Count: {len(started_laps)}")
-                                    logger.info(f"CALCULATED CURRENT LAP: {driver_current_lap}")
-                                    logger.info(f"Time since first lap: {(sim_timestamp - first_lap_start).total_seconds()}s")
+                                    logger.info(
+                                        f"Simulation Time: {simulation_time}s")
+                                    logger.info(
+                                        f"Session Start Time: {session_start_time}")
+                                    logger.info(
+                                        f"Sim Timestamp: {sim_timestamp}")
+                                    logger.info(
+                                        f"First Lap Start: {first_lap_start}")
+                                    logger.info(
+                                        f"Last Lap Start: {last_lap_start}")
+                                    logger.info(
+                                        f"Total Laps in Data: {
+                                            len(driver_laps_sorted)}")
+                                    logger.info(
+                                        f"Started Laps Count: {
+                                            len(started_laps)}")
+                                    logger.info(
+                                        f"CALCULATED CURRENT LAP: {driver_current_lap}")
+                                    logger.info(
+                                        f"Time since first lap: {(sim_timestamp - first_lap_start).total_seconds()}s")
                                     if not started_laps.empty:
-                                        logger.info(f"Last started lap number: {started_laps['LapNumber'].max()}")
-                                        logger.info(f"Last started lap LapStartTime: {started_laps.iloc[-1]['LapStartTime']}")
+                                        logger.info(
+                                            f"Last started lap number: {
+                                                started_laps['LapNumber'].max()}")
+                                        logger.info(
+                                            f"Last started lap LapStartTime: {started_laps.iloc[-1]['LapStartTime']}")
                             else:
                                 # If no simulation time, use latest lap
                                 if 'LapNumber' in driver_laps.columns:
-                                    driver_current_lap = int(driver_laps['LapNumber'].max())
+                                    driver_current_lap = int(
+                                        driver_laps['LapNumber'].max())
                                 else:
                                     driver_current_lap = 1
                         else:
                             # global_lap is provided, use it directly
                             if global_lap is not None:
                                 driver_current_lap = int(global_lap)
-                                logger.info(f"  Using global_lap directly: driver_current_lap = {driver_current_lap}")
+                                logger.info(
+                                    f"  Using global_lap directly: driver_current_lap = {driver_current_lap}")
                             else:
                                 driver_current_lap = 1
-                                logger.info(f"  No data available, defaulting to lap 1")
-                        
-                        # Log final calculated value for all drivers at simulation start
+                                logger.info(
+                                    "  No data available, defaulting to lap 1")
+
+                        # Log final calculated value for all drivers at
+                        # simulation start
                         if simulation_time == 0:
-                            logger.info(f"  FINAL driver_current_lap at simulation start = {driver_current_lap}")
-                    
+                            logger.info(
+                                f"  FINAL driver_current_lap at simulation start = {driver_current_lap}")
+
                     # Get driver's stints sorted by stint number
                     driver_stints = stints[
                         stints['DriverNumber'] == driver_num
                     ].sort_values('StintNumber')
-                    
+
                     # DEBUG: Log stint details for ALO
                     if is_alonso:
-                        logger.info(f"\n--- RAW STINT DATA FOR ALO ---")
+                        logger.info("\n--- RAW STINT DATA FOR ALO ---")
                         for idx, s in driver_stints.iterrows():
                             logger.info(
                                 f"  Stint {s.get('StintNumber', 'N/A')}: "
@@ -679,82 +759,102 @@ class RaceOverviewDashboard:
                                 f"Compound={s.get('Compound', 'N/A')}, "
                                 f"TyreAge={s.get('TyreAge', 'N/A')}"
                             )
-                        logger.info(f"Current lap for pit stop calculation: {driver_current_lap}")
-                        logger.info(f"Using GLOBAL lap: {global_lap is not None}")
-                    
+                        logger.info(
+                            f"Current lap for pit stop calculation: {driver_current_lap}")
+                        logger.info(
+                            f"Using GLOBAL lap: {
+                                global_lap is not None}")
+
                     # Calculate number of pit stops COMPLETED up to current lap
                     # A pit stop is COMPLETED when driver STARTS a new stint (not stint 1)
-                    # IMPORTANT: Only count if current lap is PAST the stint start lap
+                    # IMPORTANT: Only count if current lap is PAST the stint
+                    # start lap
                     num_pit_stops = 0
                     for _, stint in driver_stints.iterrows():
                         stint_start = stint.get('StintStart', 0)
                         stint_number = stint.get('StintNumber', 1)
-                        
+
                         if is_alonso:
                             logger.info(
                                 f"  Checking stint {stint_number}: "
                                 f"start={stint_start}, driver_current_lap={driver_current_lap}, "
                                 f"started={stint_start <= driver_current_lap if pd.notna(stint_start) else False}"
                             )
-                        
+
                         # Pit stop completed = STARTED a new stint (not stint 1)
-                        # BUT: only if current lap > stint start (already in that stint)
-                        if pd.notna(stint_start) and driver_current_lap > stint_start and stint_number > 1:
+                        # BUT: only if current lap > stint start (already in
+                        # that stint)
+                        if pd.notna(
+                                stint_start) and driver_current_lap > stint_start and stint_number > 1:
                             num_pit_stops += 1
                             if is_alonso:
-                                logger.info(f"    -> Pit stop counted! Total now: {num_pit_stops}")
-                    
+                                logger.info(
+                                    f"    -> Pit stop counted! Total now: {num_pit_stops}")
+
                     if not driver_stints.empty:
                         # Find current stint based on actual lap number
                         current_stint = None
                         for _, stint in driver_stints.iterrows():
                             stint_start = stint.get('StintStart', 0)
                             stint_end = stint.get('StintEnd', 999)
-                            
-                            if pd.notna(stint_start) and stint_start <= driver_current_lap:
-                                if pd.isna(stint_end) or driver_current_lap <= stint_end:
+
+                            if pd.notna(
+                                    stint_start) and stint_start <= driver_current_lap:
+                                if pd.isna(
+                                        stint_end) or driver_current_lap <= stint_end:
                                     current_stint = stint
                                     break
-                        
+
                         # If no exact match, use last stint
                         if current_stint is None:
                             current_stint = driver_stints.iloc[-1]
-                        
-                        # Calculate tire age using controller lap (no formation lap in OpenF1)
-                        tyre_age_at_start = int(current_stint.get('TyreAge', 0) or 0)
-                        stint_start_lap = int(current_stint.get('StintStart', 1))
+
+                        # Calculate tire age using controller lap (no formation
+                        # lap in OpenF1)
+                        tyre_age_at_start = int(
+                            current_stint.get('TyreAge', 0) or 0)
+                        stint_start_lap = int(
+                            current_stint.get('StintStart', 1))
                         stint_end_lap = current_stint.get('StintEnd', 'N/A')
                         stint_number = int(current_stint.get('StintNumber', 1))
 
-                        # Age grows by laps started since stint start; lap 2 shows age 1
-                        laps_since_stint_start = max(0, driver_current_lap - stint_start_lap)
-                        tire_age = max(0, tyre_age_at_start + laps_since_stint_start)
+                        # Age grows by laps started since stint start; lap 2
+                        # shows age 1
+                        laps_since_stint_start = max(
+                            0, driver_current_lap - stint_start_lap)
+                        tire_age = max(
+                            0, tyre_age_at_start + laps_since_stint_start)
 
                         compound = current_stint.get('Compound', 'UNKNOWN')
-                        
+
                         # DETAILED LOGGING FOR ALONSO
                         if is_alonso:
-                            logger.info(f"\n--- ALO TIRE AGE CALCULATION (DRIVER #14) ---")
-                            logger.info(f"✅ Current lap (global from controller): {driver_current_lap}")
-                            logger.info(f"📊 Using global_lap: {global_lap is not None}")
+                            logger.info(
+                                "\n--- ALO TIRE AGE CALCULATION (DRIVER #14) ---")
+                            logger.info(
+                                f"✅ Current lap (global from controller): {driver_current_lap}")
+                            logger.info(
+                                f"📊 Using global_lap: {
+                                    global_lap is not None}")
                             logger.info(f"Total Stints: {len(driver_stints)}")
-                            logger.info(f"🔧 Pit Stops CALCULATED: {num_pit_stops}")
-                            logger.info(f"Current Stint Number: {stint_number}")
+                            logger.info(
+                                f"🔧 Pit Stops CALCULATED: {num_pit_stops}")
+                            logger.info(
+                                f"Current Stint Number: {stint_number}")
                             logger.info(f"Stint Start Lap: {stint_start_lap}")
                             logger.info(f"Stint End Lap: {stint_end_lap}")
                             logger.info(
-                                f"Tyre Age at Start of this stint: {tyre_age_at_start}"
-                            )
+                                f"Tyre Age at Start of this stint: {tyre_age_at_start}")
                             logger.info(
-                                f"Laps since stint start: {laps_since_stint_start}"
-                            )
+                                f"Laps since stint start: {laps_since_stint_start}")
                             logger.info(f"Current Compound: {compound}")
-                            logger.info(f"🏁 TIRE AGE (includes formation lap): {tire_age}")
+                            logger.info(
+                                f"🏁 TIRE AGE (includes formation lap): {tire_age}")
                             logger.info(
                                 f"Formula: {tyre_age_at_start} + "
                                 f"{laps_since_stint_start} laps = {tire_age}"
                             )
-                            logger.info(f"\nAll stints summary:")
+                            logger.info("\nAll stints summary:")
                             for _, s in driver_stints.iterrows():
                                 logger.info(
                                     f"  Stint {s.get('StintNumber', '?')}: "
@@ -762,8 +862,8 @@ class RaceOverviewDashboard:
                                     f"{s.get('Compound', '?')}, "
                                     f"Age at start: {s.get('TyreAge', '?')}"
                                 )
-                            logger.info(f"{'='*80}\n")
-                        
+                            logger.info(f"{'=' * 80}\n")
+
                         # Debug logging for first driver
                         elif idx == 0:
                             logger.info(
@@ -772,34 +872,45 @@ class RaceOverviewDashboard:
                                 f"tyre_age_at_start={tyre_age_at_start}, "
                                 f"calculated_age={tire_age}, compound={compound}"
                             )
-                    
+
                     tire_ages.append(tire_age)
                     compounds.append(compound)
                     pit_stops.append(num_pit_stops)
-                
+
                 # Assign all at once
                 leaderboard_data['TyreAge'] = tire_ages
                 leaderboard_data['Compound'] = compounds
                 leaderboard_data['PitStops'] = pit_stops
-                
+
                 # Log sample tire data for debugging
                 if not leaderboard_data.empty:
                     sample = leaderboard_data.iloc[0]
-                    logger.info(f"Sample tire data - Driver #{sample['DriverNumber']}: {sample['Compound']} ({sample['TyreAge']} laps), Pit Stops: {sample['PitStops']}")
-                    
+                    logger.info(
+                        f"Sample tire data - Driver #{
+                            sample['DriverNumber']}: {
+                            sample['Compound']} ({
+                            sample['TyreAge']} laps), Pit Stops: {
+                            sample['PitStops']}")
+
                     # Find ALO to log his specific data
                     alo_data = leaderboard_data[leaderboard_data['DriverNumber'] == '14']
                     if not alo_data.empty:
                         alo_row = alo_data.iloc[0]
-                        logger.info(f"\n🔍 ALO FINAL DATA IN LEADERBOARD:")
+                        logger.info("\n🔍 ALO FINAL DATA IN LEADERBOARD:")
                         logger.info(f"  Driver #: {alo_row['DriverNumber']}")
-                        logger.info(f"  Position: {alo_row.get('Position', 'N/A')}")
+                        logger.info(
+                            f"  Position: {
+                                alo_row.get(
+                                    'Position',
+                                    'N/A')}")
                         logger.info(f"  Tire Age: {alo_row['TyreAge']} laps")
                         logger.info(f"  Compound: {alo_row['Compound']}")
                         logger.info(f"  Pit Stops: {alo_row['PitStops']}")
-                        logger.info(f"  👉 These values will be DISPLAYED in the UI")
+                        logger.info(
+                            "  👉 These values will be DISPLAYED in the UI")
             else:
-                logger.warning("No stint data available for tire age calculation")
+                logger.warning(
+                    "No stint data available for tire age calculation")
                 leaderboard_data['Compound'] = 'UNKNOWN'
                 leaderboard_data['TyreAge'] = 0
                 leaderboard_data['PitStops'] = 0
@@ -828,12 +939,16 @@ class RaceOverviewDashboard:
 
             active_retirements: Dict[int, Dict[str, Any]] = {}
             if retirement_lookup:
-                elapsed_value = float(simulation_time) if isinstance(simulation_time, Real) and math.isfinite(float(simulation_time)) else None
+                elapsed_value = float(simulation_time) if isinstance(
+                    simulation_time, Real) and math.isfinite(
+                    float(simulation_time)) else None
                 for driver_num, info in retirement_lookup.items():
                     retire_time_value = info.get("time")
                     retire_lap_value = info.get("lap")
                     should_flag = False
-                    if elapsed_value is not None and isinstance(retire_time_value, Real) and math.isfinite(float(retire_time_value)):
+                    if elapsed_value is not None and isinstance(
+                            retire_time_value, Real) and math.isfinite(
+                            float(retire_time_value)):
                         should_flag = elapsed_value >= float(retire_time_value)
                     elif isinstance(retire_lap_value, int) and current_lap is not None:
                         should_flag = current_lap >= max(retire_lap_value, 1)
@@ -870,8 +985,10 @@ class RaceOverviewDashboard:
                             return None
                         return status_map.get(driver_key)
 
-                    leaderboard_data['Retired'] = driver_numbers_series.apply(_map_retired)
-                    leaderboard_data['RetiredStatus'] = driver_numbers_series.apply(_map_status)
+                    leaderboard_data['Retired'] = driver_numbers_series.apply(
+                        _map_retired)
+                    leaderboard_data['RetiredStatus'] = driver_numbers_series.apply(
+                        _map_status)
                 else:
                     leaderboard_data['Retired'] = False
                     leaderboard_data['RetiredStatus'] = None
@@ -880,10 +997,6 @@ class RaceOverviewDashboard:
                 leaderboard_data,
                 focused_driver_code=focused_driver_code,
             )
-
-            # Session info is embedded in the data
-            session_name = 'Race'
-            meeting_name = 'Grand Prix'
 
             # Build dashboard
             return dbc.Container(
@@ -1005,7 +1118,10 @@ class RaceOverviewDashboard:
             except (TypeError, ValueError):
                 position = 0
 
-            driver = row.get('Abbreviation', f"#{row.get('DriverNumber', '--')}")
+            driver = row.get(
+                'Abbreviation', f"#{
+                    row.get(
+                        'DriverNumber', '--')}")
             is_retired = bool(row.get('Retired'))
             retired_status = row.get('RetiredStatus') or 'DNF'
 
@@ -1021,7 +1137,8 @@ class RaceOverviewDashboard:
                 gap_display = f"+{gap_to_leader:.3f}s"
 
             interval = self._parse_timing_value(row.get('Interval'))
-            if is_retired or position <= 1 or interval is None or abs(interval) < 0.001:
+            if is_retired or position <= 1 or interval is None or abs(
+                    interval) < 0.001:
                 interval_display = "-"
             else:
                 interval_display = f"+{interval:.3f}s"
@@ -1039,7 +1156,10 @@ class RaceOverviewDashboard:
                 'WET': '🔵',
                 'UNKNOWN': '⚫'
             }
-            tire_display = '—' if is_retired else f"{tire_icons.get(compound, '⚫')} {int(tire_age)}"
+            tire_display = '—' if is_retired else f"{
+                tire_icons.get(
+                    compound, '⚫')} {
+                int(tire_age)}"
 
             pit_stops = row.get('PitStops', 0)
             if pd.isna(pit_stops):
@@ -1137,7 +1257,8 @@ class RaceOverviewDashboard:
             )
 
         header_row = build_header()
-        data_rows = [build_row(info, idx) for idx, info in enumerate(leaderboard_rows)]
+        data_rows = [build_row(info, idx)
+                     for idx, info in enumerate(leaderboard_rows)]
 
         return html.Div(
             [
@@ -1177,7 +1298,7 @@ class RaceOverviewDashboard:
     ) -> dict:
         """
         Get compact leaderboard summary for AI context.
-        
+
         Args:
             session_key: OpenF1 session key
             simulation_time: Current simulation time in seconds
@@ -1186,7 +1307,7 @@ class RaceOverviewDashboard:
             focused_driver: Driver code/number to focus on (e.g., "RUS" or "63")
             pit_window_range: Number of positions ahead/behind to include
             pit_proba_lookup: Optional callable returning pit probability for driver and lap
-            
+
         Returns:
             Dict with leaderboard summary:
             {
@@ -1200,25 +1321,27 @@ class RaceOverviewDashboard:
             success, reason = self.warm_cache(session_key)
             if not success or self._cached_positions is None:
                 return {'error': f'No cached data available ({reason})'}
-        
+
         positions = self._cached_positions
         intervals = self._cached_intervals
         stints = self._cached_stints
         drivers = self._cached_drivers
-        
+
         # Filter by simulation time
         if session_start_time is not None and simulation_time is not None:
-            current_timestamp = session_start_time + pd.Timedelta(seconds=simulation_time)
-            filtered_positions = positions[positions['Timestamp'] <= current_timestamp]
+            current_timestamp = session_start_time + \
+                pd.Timedelta(seconds=simulation_time)
+            filtered_positions = positions[positions['Timestamp']
+                                           <= current_timestamp]
         else:
             filtered_positions = positions
 
         if filtered_positions.empty and not positions.empty:
             filtered_positions = positions
-        
+
         if filtered_positions.empty:
             return {'error': 'No position data at this time'}
-        
+
         # Get latest position for each driver
         latest_positions = (
             filtered_positions
@@ -1227,15 +1350,17 @@ class RaceOverviewDashboard:
             .tail(1)
             .sort_values('Position')
         )
-        
+
         # Merge with intervals
         current_timestamp = None
         if session_start_time is not None and simulation_time is not None:
-            current_timestamp = session_start_time + pd.Timedelta(seconds=simulation_time)
+            current_timestamp = session_start_time + \
+                pd.Timedelta(seconds=simulation_time)
 
         if intervals is not None and not intervals.empty:
             if current_timestamp is not None:
-                filtered_intervals = intervals[intervals['Timestamp'] <= current_timestamp]
+                filtered_intervals = intervals[intervals['Timestamp']
+                                               <= current_timestamp]
             else:
                 filtered_intervals = intervals
 
@@ -1273,7 +1398,8 @@ class RaceOverviewDashboard:
 
         # Normalize driver number, position, and gap columns
         if 'DriverNumber' in leaderboard.columns:
-            leaderboard['DriverNumber'] = leaderboard['DriverNumber'].astype(str)
+            leaderboard['DriverNumber'] = leaderboard['DriverNumber'].astype(
+                str)
         if 'Position' in leaderboard.columns:
             leaderboard['Position'] = pd.to_numeric(
                 leaderboard['Position'],
@@ -1281,21 +1407,24 @@ class RaceOverviewDashboard:
             )
             leaderboard = leaderboard.dropna(subset=['Position'])
             leaderboard['Position'] = leaderboard['Position'].astype(int)
-            leaderboard = leaderboard.sort_values('Position').reset_index(drop=True)
+            leaderboard = leaderboard.sort_values(
+                'Position').reset_index(drop=True)
         for gap_col in ('GapToLeader', 'Interval'):
             if gap_col in leaderboard.columns:
                 leaderboard[gap_col] = pd.to_numeric(
                     leaderboard[gap_col], errors='coerce'
                 )
-        
+
         # Get tire data from stints
         tire_data = {}
         if stints is not None and not stints.empty:
             stints_copy = stints.copy()
             if 'DriverNumber' in stints_copy.columns:
-                stints_copy['DriverNumber'] = stints_copy['DriverNumber'].astype(str)
+                stints_copy['DriverNumber'] = stints_copy['DriverNumber'].astype(
+                    str)
             for driver_num in leaderboard['DriverNumber'].unique():
-                driver_stints = stints_copy[stints_copy['DriverNumber'] == driver_num].sort_values('StintNumber')
+                driver_stints = stints_copy[stints_copy['DriverNumber'] == driver_num].sort_values(
+                    'StintNumber')
                 if not driver_stints.empty:
                     current_stint = None
                     for _, stint in driver_stints.iterrows():
@@ -1305,7 +1434,7 @@ class RaceOverviewDashboard:
                             continue
                         if stint_start <= current_lap:
                             current_stint = stint
-                    
+
                     if current_stint is not None:
                         stint_start_val = current_stint['StintStart']
                         if stint_start_val is not None and current_lap is not None:
@@ -1317,18 +1446,23 @@ class RaceOverviewDashboard:
                             'age': age,
                             'pit_stops': current_stint['StintNumber'] - 1
                         }
-        
+
         # Build summary
         summary = {
             'top_10': [],
             'focus_driver': None,
             'pit_window': []
         }
-        
-        def format_gap_to_leader(gap_value: Optional[float], position: int) -> str:
+
+        def format_gap_to_leader(
+                gap_value: Optional[float],
+                position: int) -> str:
             if position == 1:
                 return 'LEADER'
-            if gap_value is None or (isinstance(gap_value, float) and math.isnan(gap_value)):
+            if gap_value is None or (
+                isinstance(
+                    gap_value,
+                    float) and math.isnan(gap_value)):
                 return 'N/A'
             if gap_value <= 0:
                 return 'LEADER'
@@ -1337,7 +1471,9 @@ class RaceOverviewDashboard:
         # Top 10
         for idx, row in leaderboard.head(10).iterrows():
             driver_num = row['DriverNumber']
-            tire_info = tire_data.get(driver_num, {'compound': 'UNKNOWN', 'age': 0, 'pit_stops': 0})
+            tire_info = tire_data.get(
+                driver_num, {
+                    'compound': 'UNKNOWN', 'age': 0, 'pit_stops': 0})
             position = int(row['Position'])
             summary['top_10'].append({
                 'pos': position,
@@ -1347,33 +1483,35 @@ class RaceOverviewDashboard:
                 'age': tire_info['age'],
                 'stops': tire_info['pit_stops']
             })
-        
+
         # Focus driver and pit window
         if focused_driver:
-            # Extract driver number from focus string (e.g., "RUS_2025_63" -> 63)
+            # Extract driver number from focus string (e.g., "RUS_2025_63" ->
+            # 63)
             driver_num = None
             if '_' in focused_driver:
                 parts = focused_driver.split('_')
                 try:
                     driver_num = int(parts[-1])
-                except:
+                except (ValueError, TypeError):
                     pass
             else:
                 try:
                     driver_num = int(focused_driver)
-                except:
+                except (ValueError, TypeError):
                     # Try to find by abbreviation
-                    match = leaderboard[leaderboard['Abbreviation'] == focused_driver]
+                    match = leaderboard[leaderboard['Abbreviation']
+                                        == focused_driver]
                     if not match.empty:
                         driver_num = match.iloc[0]['DriverNumber']
-            
+
             if driver_num:
                 driver_num_str = str(driver_num)
-                focus_row = leaderboard[leaderboard['DriverNumber'] == driver_num_str]
+                focus_row = leaderboard[leaderboard['DriverNumber']
+                                        == driver_num_str]
                 if focus_row.empty:
-                    focus_row = leaderboard[
-                        leaderboard['DriverNumber'].astype(str) == driver_num_str
-                    ]
+                    focus_row = leaderboard[leaderboard['DriverNumber'].astype(
+                        str) == driver_num_str]
                 if not focus_row.empty:
                     focus_row = focus_row.iloc[0]
                     focus_pos = int(focus_row['Position'])
@@ -1381,20 +1519,23 @@ class RaceOverviewDashboard:
                         driver_num_str,
                         {'compound': 'UNKNOWN', 'age': 0, 'pit_stops': 0}
                     )
-                    
+
                     # Get gaps to ahead/behind
                     gap_ahead_val: Optional[float] = None
                     if focus_pos > 1:
                         gap_ahead_val = focus_row.get('Interval')
 
                     gap_behind_val: Optional[float] = None
-                    max_position = int(leaderboard['Position'].max()) if not leaderboard.empty else focus_pos
+                    max_position = int(
+                        leaderboard['Position'].max()) if not leaderboard.empty else focus_pos
                     if focus_pos < max_position:
-                        behind_row = leaderboard[leaderboard['Position'] == focus_pos + 1]
+                        behind_row = leaderboard[leaderboard['Position']
+                                                 == focus_pos + 1]
                         if not behind_row.empty:
                             gap_behind_val = behind_row.iloc[0].get('Interval')
 
-                    focus_driver_code = focus_row.get('Abbreviation', str(driver_num))
+                    focus_driver_code = focus_row.get(
+                        'Abbreviation', str(driver_num))
 
                     lap_number = None
                     if current_lap is not None:
@@ -1407,12 +1548,16 @@ class RaceOverviewDashboard:
                     pit_stop_proba = None
                     if pit_proba_lookup is not None and lap_number is not None:
                         try:
-                            pit_stop_proba = pit_proba_lookup(focus_driver_code, lap_number)
+                            pit_stop_proba = pit_proba_lookup(
+                                focus_driver_code, lap_number)
                         except Exception as exc:  # pragma: no cover - defensive
                             logger.debug("pit_proba_lookup failed: %s", exc)
 
                     def format_gap_value(value: Optional[float]) -> str:
-                        if value is None or (isinstance(value, float) and math.isnan(value)):
+                        if value is None or (
+                            isinstance(
+                                value,
+                                float) and math.isnan(value)):
                             return 'N/A'
                         if value <= 0:
                             return 'CLOSED'
@@ -1436,7 +1581,7 @@ class RaceOverviewDashboard:
                         'stops': tire_info['pit_stops'],
                         'pit_stop_proba': pit_stop_proba
                     }
-                    
+
                     # Pit window (drivers within range)
                     pit_window_positions = range(
                         max(1, focus_pos - pit_window_range),
@@ -1467,5 +1612,5 @@ class RaceOverviewDashboard:
                                 'age': tire_info['age'],
                                 'stops': tire_info['pit_stops']
                             })
-        
+
         return summary

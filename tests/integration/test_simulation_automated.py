@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "http://127.0.0.1:8501"
 
+
 def wait_for_server(timeout=30):
     """Wait for Dash server to be ready."""
     start = time.time()
@@ -33,16 +34,16 @@ def test_simulation_flow():
     logger.info("=" * 80)
     logger.info("AUTOMATED SIMULATION TEST")
     logger.info("=" * 80)
-    
+
     # Wait for server
     if not wait_for_server():
         logger.error("Failed to connect to server")
         return False
-    
+
     # Give it extra time for initialization
     logger.info("Waiting 5s for full initialization...")
     time.sleep(5)
-    
+
     logger.info("\n✓ Server is running")
     logger.info("✓ Open http://127.0.0.1:8501/ in your browser")
     logger.info("\nMANUAL STEPS TO TEST:")
@@ -57,12 +58,12 @@ def test_simulation_flow():
     logger.info("- No console errors about callbacks")
     logger.info("\nKEEPING SERVER ALIVE FOR 2 MINUTES...")
     logger.info("(Press Ctrl+C to stop)")
-    
+
     try:
         time.sleep(120)
     except KeyboardInterrupt:
         logger.info("\nTest interrupted by user")
-    
+
     logger.info("\n" + "=" * 80)
     logger.info("Test monitoring completed")
     logger.info("=" * 80)

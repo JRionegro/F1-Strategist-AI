@@ -31,7 +31,9 @@ def _prepare_features(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
     required = set(FEATURE_COLUMNS) | {"lap_number", "pit_window_center_lap"}
     missing = required - set(df.columns)
     if missing:
-        raise ValueError(f"dataset missing required columns: {sorted(missing)}")
+        raise ValueError(
+            f"dataset missing required columns: {
+                sorted(missing)}")
 
     label = df["pit_window_center_lap"].notna().astype(int)
 
@@ -47,7 +49,8 @@ class PitStopBaselineModel:
     """Logistic regression baseline for pit-stop probability."""
 
     max_iter: int = 200
-    solver: Literal["lbfgs", "liblinear", "newton-cg", "newton-cholesky", "sag", "saga"] = "lbfgs"
+    solver: Literal["lbfgs", "liblinear", "newton-cg",
+                    "newton-cholesky", "sag", "saga"] = "lbfgs"
 
     def __post_init__(self) -> None:
         self.pipeline = Pipeline(
@@ -69,7 +72,8 @@ class PitStopBaselineModel:
 
         features, label = _prepare_features(df)
         if label.nunique() < 2:
-            raise ValueError("label must contain at least one positive and one negative example")
+            raise ValueError(
+                "label must contain at least one positive and one negative example")
 
         self.pipeline.fit(features, label)
         self._is_fitted = True

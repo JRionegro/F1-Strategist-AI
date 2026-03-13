@@ -5,10 +5,10 @@ Multi-dashboard F1 strategy platform with live and simulation modes.
 Migrated from Streamlit to Dash for better layout control.
 """
 
-import asyncio
 import json
 import logging
 import os
+import glob
 import sys
 import math
 import threading
@@ -37,9 +37,9 @@ except ImportError:  # pragma: no cover - fallback if package missing
             super().__init__(children=children, id=id, **kwargs)
 
 # OpenF1 data provider (replaces FastF1)
-from src.data.openf1_adapter import get_session as get_openf1_session, SessionAdapter
+from src.data.openf1_adapter import SessionAdapter
 from src.data.cache_generation import CacheGenerationService, MeetingSelector, SessionCode
-from src.data.cache_config import DEFAULT_CACHE_CONFIG, DataType
+from src.data.cache_config import DEFAULT_CACHE_CONFIG
 from src.data.openf1_data_provider import OpenF1DataProvider
 from src.data.last_race_finder import (
     get_last_completed_race,
@@ -47,22 +47,20 @@ from src.data.last_race_finder import (
 )
 
 # Core infrastructure (reused from Streamlit version)
-from src.agents.orchestrator import AgentOrchestrator
 from src.session.global_session import (
     GlobalSession,
     RaceContext,
-    SessionMode,
     SessionType,
 )
 from src.session.simulation_controller import SimulationController
 from src.session.live_detector import check_for_live_session
-from src.session.event_detector import RaceEventDetector, RaceEvent
+from src.session.event_detector import RaceEventDetector
 from src.session.tire_thresholds import load_tire_window_overrides_from_path
 
 # FORCE RELOAD: Remove modules from cache BEFORE importing
 modules_to_reload = [
     'src.dashboards_dash.weather_dashboard',
-    'src.dashboards_dash.ai_assistant_dashboard', 
+    'src.dashboards_dash.ai_assistant_dashboard',
     'src.dashboards_dash.race_overview_dashboard'
 ]
 for module_name in modules_to_reload:
@@ -73,54 +71,53 @@ for module_name in modules_to_reload:
 importlib.invalidate_caches()
 
 # Remove compiled Python files
-import os
-import glob
 project_root = os.path.dirname(os.path.abspath(__file__))
 for pattern in ['**/*.pyc', '**/__pycache__']:
-    for item in glob.glob(os.path.join(project_root, 'src', 'dashboards_dash', pattern), recursive=True):
+    for item in glob.glob(
+            os.path.join(
+                project_root, 'src', 'dashboards_dash', pattern),
+            recursive=True):
         try:
             if os.path.isfile(item):
                 os.remove(item)
             elif os.path.isdir(item):
-                import shutil
+                import shutil  # noqa: PLC0415
                 shutil.rmtree(item)
-        except:
+        except Exception:
             pass
 
 # NOW import dashboards (fresh, no cache)
-from src.dashboards_dash.ai_assistant_dashboard import AIAssistantDashboard
-from src.dashboards_dash.race_overview_dashboard import RaceOverviewDashboard
-from src.dashboards_dash.race_control_dashboard import RaceControlDashboard
-from src.dashboards_dash.telemetry_dashboard import TelemetryDashboard
-from src.dashboards_dash.track_map_dashboard import get_track_map_dashboard, TrackMapDashboard
-from src.dashboards_dash import weather_dashboard
+from src.dashboards_dash.ai_assistant_dashboard import AIAssistantDashboard  # noqa: E402
+from src.dashboards_dash.race_overview_dashboard import RaceOverviewDashboard  # noqa: E402
+from src.dashboards_dash.race_control_dashboard import RaceControlDashboard  # noqa: E402
+from src.dashboards_dash.telemetry_dashboard import TelemetryDashboard  # noqa: E402
+from src.dashboards_dash.track_map_dashboard import get_track_map_dashboard, TrackMapDashboard  # noqa: E402
+from src.dashboards_dash import weather_dashboard  # noqa: E402
 
 # Predictive pit policy bootstrap
-from src.predictive.bootstrap import bootstrap_pit_policy_context
-from src.predictive.schemas import PitPolicyContext
+from src.predictive.bootstrap import bootstrap_pit_policy_context  # noqa: E402
+from src.predictive.schemas import PitPolicyContext  # noqa: E402
 
 # RAG Manager for document loading
-from src.rag.rag_manager import get_rag_manager, reset_rag_manager
-from src.rag.template_generator import get_template_generator
-from src.rag.document_loader import DocumentLoader
+from src.rag.rag_manager import get_rag_manager  # noqa: E402
+from src.rag.template_generator import get_template_generator  # noqa: E402
+from src.rag.document_loader import DocumentLoader  # noqa: E402
 
 # LLM providers for AI responses
-from dotenv import load_dotenv
-from src.llm.hybrid_router import HybridRouter
-from src.llm.claude_provider import ClaudeProvider
-from src.llm.gemini_provider import GeminiProvider
-from src.llm.provider import LLMProvider
-from src.llm.models import LLMConfig, LLMResponse
-from src.llm.config import get_claude_config, get_gemini_config
+from dotenv import load_dotenv  # noqa: E402
+from src.llm.hybrid_router import HybridRouter  # noqa: E402
+from src.llm.claude_provider import ClaudeProvider  # noqa: E402
+from src.llm.gemini_provider import GeminiProvider  # noqa: E402
+from src.llm.provider import LLMProvider  # noqa: E402
+from src.llm.models import LLMResponse  # noqa: E402
+from src.llm.config import get_claude_config, get_gemini_config  # noqa: E402
 
 # Centralized logging configuration
-from src.utils.logging_config import (
+from src.utils.logging_config import (  # noqa: E402
     setup_logging,
     get_logger,
     LogCategory,
     enable_category,
-    disable_category,
-    apply_debug_profile,
     set_category_level,
 )
 
@@ -129,7 +126,8 @@ load_dotenv(Path(__file__).parent / "config" / ".env", override=True)
 
 # Initialize centralized logging system
 # By default: only STARTUP and critical messages are shown
-# To enable debugging, use: apply_debug_profile('telemetry') or enable_category(LogCategory.SIMULATION)
+# To enable debugging, use: apply_debug_profile('telemetry') or
+# enable_category(LogCategory.SIMULATION)
 setup_logging(console_level=logging.INFO)
 
 # Get loggers for different categories
@@ -177,7 +175,8 @@ else:
 # enable_category(LogCategory.TELEMETRY)   # See DRS/telemetry data
 # apply_debug_profile('race')              # Enable race overview + control
 
-# Initialize OpenF1 provider with SSL verification disabled for corporate proxies
+# Initialize OpenF1 provider with SSL verification disabled for corporate
+# proxies
 openf1_provider = OpenF1DataProvider(verify_ssl=False)
 
 # Initialize Race Overview Dashboard
@@ -209,7 +208,8 @@ CACHE_DEFAULT_SELECTION = [
     for artifact in _CACHE_ARTIFACT_DEFS
     if artifact.level in {"session", "fastf1"}
 ]
-CACHE_ARTIFACT_MAP = {artifact.key: artifact for artifact in _CACHE_ARTIFACT_DEFS}
+CACHE_ARTIFACT_MAP = {
+    artifact.key: artifact for artifact in _CACHE_ARTIFACT_DEFS}
 CACHE_AVAILABLE_YEARS = list(range(datetime.now().year, 2017, -1))
 
 _cache_job_lock = threading.Lock()
@@ -318,7 +318,8 @@ _SESSION_CODE_TO_LABEL: Dict[str, str] = {
 }
 
 
-def _load_cached_session_list(year: int, meeting_key: int) -> Optional[List[Dict[str, Any]]]:
+def _load_cached_session_list(
+        year: int, meeting_key: int) -> Optional[List[Dict[str, Any]]]:
     """Return cached session metadata for the meeting when available."""
     session_dir = PROCESSED_CACHE_DIR / "session_list" / str(year)
     if not session_dir.exists():
@@ -330,7 +331,10 @@ def _load_cached_session_list(year: int, meeting_key: int) -> Optional[List[Dict
     if slug:
         candidate_paths.append(session_dir / f"{slug}{CACHE_FILE_EXTENSION}")
     if not candidate_paths:
-        candidate_paths.extend(sorted(session_dir.glob(f"*{CACHE_FILE_EXTENSION}")))
+        candidate_paths.extend(
+            sorted(
+                session_dir.glob(
+                    f"*{CACHE_FILE_EXTENSION}")))
 
     for path in candidate_paths:
         cached_df = _read_cache_dataframe(path)
@@ -353,7 +357,8 @@ def _load_cached_session_list(year: int, meeting_key: int) -> Optional[List[Dict
     return None
 
 
-def _extract_session_field(payload: Dict[str, Any], field_names: Sequence[str]) -> str:
+def _extract_session_field(
+        payload: Dict[str, Any], field_names: Sequence[str]) -> str:
     """Return the first non-empty string value for the given field names."""
     for field in field_names:
         value = payload.get(field)
@@ -366,7 +371,8 @@ def _extract_session_field(payload: Dict[str, Any], field_names: Sequence[str]) 
     return ""
 
 
-def _interpret_session_payload(payload: Dict[str, Any]) -> Tuple[str, str, str]:
+def _interpret_session_payload(
+        payload: Dict[str, Any]) -> Tuple[str, str, str]:
     """Return normalized session code, label, and name for a payload."""
     session_name = _extract_session_field(payload, _SESSION_NAME_FIELDS)
     session_type_raw = _extract_session_field(payload, _SESSION_TYPE_FIELDS)
@@ -449,22 +455,28 @@ def _interpret_session_payload(payload: Dict[str, Any]) -> Tuple[str, str, str]:
     return normalized_code.upper(), label, session_name
 
 
-def _build_session_selector_options(sessions: Sequence[Dict[str, Any]]) -> List[Dict[str, str]]:
+def _build_session_selector_options(
+        sessions: Sequence[Dict[str, Any]]) -> List[Dict[str, str]]:
     """Normalize raw session payloads into selector options."""
     normalized_sessions = _normalize_record_keys(sessions)
     options: List[Dict[str, str]] = []
     seen_values: Set[str] = set()
 
-    logger.info(f"Building session options from {len(normalized_sessions)} sessions:")
+    logger.info(
+        f"Building session options from {
+            len(normalized_sessions)} sessions:")
     for payload in normalized_sessions:
         session_name = payload.get('session_name', 'Unknown')
-        normalized_code, label, _session_name = _interpret_session_payload(payload)
-        logger.info(f"  Session: '{session_name}' → code={normalized_code}, label={label}")
-        
+        normalized_code, label, _session_name = _interpret_session_payload(
+            payload)
+        logger.info(
+            f"  Session: '{session_name}' → code={normalized_code}, label={label}")
+
         if normalized_code in seen_values:
-            logger.warning(f"  ⚠️ DUPLICATE CODE {normalized_code} - skipping '{session_name}'")
+            logger.warning(
+                f"  ⚠️ DUPLICATE CODE {normalized_code} - skipping '{session_name}'")
             continue
-        
+
         seen_values.add(normalized_code)
         options.append({"label": label, "value": normalized_code})
         logger.info(f"  ✓ Added option: {label} ({normalized_code})")
@@ -484,7 +496,8 @@ def _find_session_payload(
     normalized_target = target_code.upper()
     logger.info(f"Searching for session with target_code={normalized_target}")
     for payload in _normalize_record_keys(records):
-        normalized_code, _label, session_name = _interpret_session_payload(payload)
+        normalized_code, _label, session_name = _interpret_session_payload(
+            payload)
         session_key = payload.get("session_key") or payload.get("SessionKey")
         logger.info(
             f"  Checking: {session_name} → normalized_code={normalized_code} "
@@ -493,7 +506,8 @@ def _find_session_payload(
         if normalized_code == normalized_target:
             logger.info(f"  ✓ MATCH! Returning session_key={session_key}")
             return payload
-    logger.warning(f"No session found matching target_code={normalized_target}")
+    logger.warning(
+        f"No session found matching target_code={normalized_target}")
     return None
 
 
@@ -513,7 +527,11 @@ def _resolve_session_payload(
     try:
         cached_records = _load_cached_session_list(int(year), int(meeting_key))
     except Exception as exc:  # noqa: BLE001
-        logger.debug("Failed to load cached sessions for %s/%s: %s", year, meeting_key, exc)
+        logger.debug(
+            "Failed to load cached sessions for %s/%s: %s",
+            year,
+            meeting_key,
+            exc)
         cached_records = None
 
     if cached_records:
@@ -555,7 +573,8 @@ def _resolve_session_payload(
     api_candidate = _find_session_payload(api_records, normalized_code)
     if api_candidate and _get_session_key(api_candidate):
         logger.info(
-            "Session resolver using API payload from meeting/year request (meeting_key=%s session_code=%s session_key=%s)",
+            "Session resolver using API payload from meeting/year request "
+            "(meeting_key=%s session_code=%s session_key=%s)",
             meeting_key,
             normalized_code,
             _get_session_key(api_candidate),
@@ -564,7 +583,8 @@ def _resolve_session_payload(
 
     if api_candidate is None and candidate and _get_session_key(candidate):
         logger.info(
-            "Session resolver fallback to cached payload without initial API match (meeting_key=%s session_code=%s session_key=%s)",
+            "Session resolver fallback to cached payload without initial "
+            "API match (meeting_key=%s session_code=%s session_key=%s)",
             meeting_key,
             normalized_code,
             _get_session_key(candidate),
@@ -572,16 +592,18 @@ def _resolve_session_payload(
         return candidate
 
     # Targeted requests using session_code and session_name fallbacks
-    for query in (
-        {"year": year, "meeting_key": meeting_key, "session_code": normalized_code},
-        {
-            "year": year,
-            "meeting_key": meeting_key,
-            "session_name": _SESSION_CODE_TO_LABEL.get(normalized_code, normalized_code),
-        },
-    ):
+    for query in ({"year": year,
+                   "meeting_key": meeting_key,
+                   "session_code": normalized_code},
+                  {"year": year,
+                   "meeting_key": meeting_key,
+                   "session_name": _SESSION_CODE_TO_LABEL.get(normalized_code,
+                                                              normalized_code),
+                   },
+                  ):
         targeted_records = _request_sessions(query)
-        targeted_candidate = _find_session_payload(targeted_records, normalized_code)
+        targeted_candidate = _find_session_payload(
+            targeted_records, normalized_code)
         if targeted_candidate and _get_session_key(targeted_candidate):
             logger.info(
                 "Session resolver using API payload from targeted query %s (session_key=%s)",
@@ -640,16 +662,22 @@ def _run_cache_job(
             _set_cache_job_state(
                 status="completed",
                 completed=count,
-                total=max(count, 1),
+                total=max(
+                    count,
+                    1),
                 message=f"Deleted {count} cache files." if count else "No cache files deleted.",
                 error=None,
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(
+                    timezone.utc).isoformat(),
             )
             return
 
         skip_existing = action == "fill"
 
-        def progress_callback(completed: int, total: int, message: str) -> None:
+        def progress_callback(
+                completed: int,
+                total: int,
+                message: str) -> None:
             with _cache_job_lock:
                 if _cache_job_snapshot.get("job_id") != job_id:
                     return
@@ -671,7 +699,8 @@ def _run_cache_job(
             skip_existing=skip_existing,
         )
         total_requested = summary.get("total", len(selected_keys))
-        created_count = summary.get("created", total_requested if not skip_existing else 0)
+        created_count = summary.get(
+            "created", total_requested if not skip_existing else 0)
         skipped_count = summary.get("skipped", 0)
         if skip_existing:
             message = (
@@ -694,14 +723,18 @@ def _run_cache_job(
         _set_cache_job_state(
             status="error",
             completed=0,
-            total=max(len(selected_keys), 1),
+            total=max(
+                len(selected_keys),
+                1),
             message="Cache deletion failed." if action == "delete" else "Cache generation failed.",
             error=str(exc),
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(
+                timezone.utc).isoformat(),
         )
     finally:
         with _cache_job_lock:
             _cache_job_snapshot["job_id"] = None
+
 
 # Bootstrap Icons CDN for icon support
 BOOTSTRAP_ICONS = "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
@@ -717,8 +750,9 @@ app = Dash(
     serve_locally=True
 )
 
-# Ensure all @callback decorators bind to this app (avoid dangling global callbacks)
-callback = app.callback
+# Ensure all @callback decorators bind to this app (avoid dangling global
+# callbacks)
+callback = app.callback  # noqa: F811
 
 server = app.server
 server.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable Flask caching
@@ -776,7 +810,8 @@ def _extract_track_map_trace_offset(figure: Any) -> Optional[int]:
     return None
 
 
-def _parse_driver_selector_value(selector_value: Optional[str]) -> Tuple[Optional[str], Optional[int]]:
+def _parse_driver_selector_value(
+        selector_value: Optional[str]) -> Tuple[Optional[str], Optional[int]]:
     """Return driver code and car number from the selector value."""
     if not selector_value or selector_value == 'none':
         return None, None
@@ -954,7 +989,8 @@ def _default_track_map_trajectory_store() -> Dict[str, Any]:
     return {"time_offset": 0.0, "time_bounds": [0.0, 0.0], "laps": {}}
 
 
-def _resolve_track_map_total_laps(session_payload: Optional[Dict[str, Any]]) -> Optional[int]:
+def _resolve_track_map_total_laps(
+        session_payload: Optional[Dict[str, Any]]) -> Optional[int]:
     """Return the configured race distance if present in the session payload."""
     if not isinstance(session_payload, dict):
         return None
@@ -971,7 +1007,8 @@ def _resolve_track_map_total_laps(session_payload: Optional[Dict[str, Any]]) -> 
 
     circuit_meta = session_payload.get("circuit")
     if isinstance(circuit_meta, dict):
-        circuit_name = circuit_meta.get("name") or circuit_meta.get("circuit_name")
+        circuit_name = circuit_meta.get(
+            "name") or circuit_meta.get("circuit_name")
         if isinstance(circuit_name, str):
             return _get_total_laps_for_circuit(circuit_name)
 
@@ -1057,50 +1094,52 @@ CIRCUIT_TOTAL_LAPS = {
 def _get_total_laps_for_circuit(circuit_name: str) -> int:
     """
     Get total racing laps for a circuit by name.
-    
+
     Works for both LIVE and historical sessions by using
     the circuit name lookup table.
-    
+
     Args:
         circuit_name: Circuit name (e.g., 'Las Vegas', 'Silverstone')
-    
+
     Returns:
         Total racing laps for the circuit, or 57 as default
     """
     if not circuit_name:
         return 57
-    
+
     circuit_lower = circuit_name.lower().strip()
-    
+
     # Direct lookup
     if circuit_lower in CIRCUIT_TOTAL_LAPS:
         return CIRCUIT_TOTAL_LAPS[circuit_lower]
-    
+
     # Partial match (e.g., "Las Vegas Street Circuit" -> "las vegas")
     for key, laps in CIRCUIT_TOTAL_LAPS.items():
         if key in circuit_lower or circuit_lower in key:
             return laps
-    
+
     logger.warning(
         f"Unknown circuit '{circuit_name}', using default 57 laps"
     )
     return 57
 
 
-def _calculate_total_laps(session_obj, circuit_name: Optional[str] = None) -> int:
+def _calculate_total_laps(
+        session_obj,
+        circuit_name: Optional[str] = None) -> int:
     """
     Calculate total racing laps for a session.
-    
+
     Strategy:
     1. If circuit_name provided, use lookup table (best for LIVE)
     2. Try to get from session lap data (for historical/completed races)
     3. Fall back to circuit lookup from session info
     4. Default to 57
-    
+
     Args:
         session_obj: FastF1/OpenF1 session object
         circuit_name: Optional circuit name for direct lookup
-    
+
     Returns:
         Total racing laps (int)
     """
@@ -1109,7 +1148,7 @@ def _calculate_total_laps(session_obj, circuit_name: Optional[str] = None) -> in
         laps = _get_total_laps_for_circuit(circuit_name)
         if laps != 57:  # Found a match
             return laps
-    
+
     # Priority 2: Try to get circuit from session and use lookup
     try:
         if session_obj:
@@ -1120,12 +1159,12 @@ def _calculate_total_laps(session_obj, circuit_name: Optional[str] = None) -> in
                     session_circuit = session_obj.event.Location
                 elif hasattr(session_obj.event, 'CircuitName'):
                     session_circuit = session_obj.event.CircuitName
-            
+
             if session_circuit:
                 laps = _get_total_laps_for_circuit(session_circuit)
                 if laps != 57:
                     return laps
-            
+
             # Priority 3: Calculate from actual lap data (historical only)
             if hasattr(session_obj, 'laps') and not session_obj.laps.empty:
                 max_lap = session_obj.laps['LapNumber'].max()
@@ -1137,7 +1176,7 @@ def _calculate_total_laps(session_obj, circuit_name: Optional[str] = None) -> in
                     return calculated
     except Exception as e:
         logger.warning(f"Error calculating total_laps: {e}")
-    
+
     return 57  # Default fallback
 
 
@@ -1185,11 +1224,13 @@ def _extract_fastf1_lap1_seconds(
 
     candidate = pd.DataFrame()
     if "DriverNumber" in laps_df.columns:
-        driver_numbers = pd.to_numeric(laps_df["DriverNumber"], errors="coerce")
+        driver_numbers = pd.to_numeric(
+            laps_df["DriverNumber"], errors="coerce")
         candidate = laps_df.loc[driver_numbers == driver_number]
 
     if candidate.empty:
-        provider_abbr = provider.get_driver_abbreviation(driver_number) if provider else None
+        provider_abbr = provider.get_driver_abbreviation(
+            driver_number) if provider else None
         if provider_abbr:
             try:
                 candidate = session.laps.pick_drivers(provider_abbr)
@@ -1228,27 +1269,34 @@ def _normalize_lap_timing_data(
     normalized = lap_timing.copy()
 
     if "LapNumber" in normalized.columns:
-        normalized.loc[:, "LapNumber"] = pd.to_numeric(normalized["LapNumber"], errors="coerce")
+        normalized.loc[:, "LapNumber"] = pd.to_numeric(
+            normalized["LapNumber"], errors="coerce")
     else:
-        normalized.loc[:, "LapNumber"] = pd.Series(float("nan"), index=normalized.index)
+        normalized.loc[:, "LapNumber"] = pd.Series(
+            float("nan"), index=normalized.index)
 
     if "LapStartTime" in normalized.columns:
-        normalized.loc[:, "LapStartTime"] = pd.to_timedelta(normalized["LapStartTime"], errors="coerce")
+        normalized.loc[:, "LapStartTime"] = pd.to_timedelta(
+            normalized["LapStartTime"], errors="coerce")
     else:
         normalized.loc[:, "LapStartTime"] = pd.NaT
 
     if "LapEndTime" in normalized.columns:
-        normalized.loc[:, "LapEndTime"] = pd.to_timedelta(normalized["LapEndTime"], errors="coerce")
+        normalized.loc[:, "LapEndTime"] = pd.to_timedelta(
+            normalized["LapEndTime"], errors="coerce")
     else:
         normalized.loc[:, "LapEndTime"] = pd.NaT
 
     if "LapTime" in normalized.columns:
-        normalized.loc[:, "LapTime"] = pd.to_timedelta(normalized["LapTime"], errors="coerce")
+        normalized.loc[:, "LapTime"] = pd.to_timedelta(
+            normalized["LapTime"], errors="coerce")
 
     lap_two = normalized.loc[normalized["LapNumber"] == 2].head(1)
-    lap_two_start_seconds = _timedelta_to_seconds(lap_two.iloc[0]["LapStartTime"]) if not lap_two.empty else None
+    lap_two_start_seconds = _timedelta_to_seconds(
+        lap_two.iloc[0]["LapStartTime"]) if not lap_two.empty else None
 
-    fastf1_lap_one_seconds = _extract_fastf1_lap1_seconds(dashboard, driver_number)
+    fastf1_lap_one_seconds = _extract_fastf1_lap1_seconds(
+        dashboard, driver_number)
     formation_offset_seconds = None
 
     if lap_two_start_seconds is not None and fastf1_lap_one_seconds is not None:
@@ -1270,13 +1318,16 @@ def _normalize_lap_timing_data(
 
         zero_td = pd.to_timedelta(0, unit="s")
         start_series = normalized.loc[start_valid_mask, "LapStartTime"]
-        normalized.loc[start_valid_mask, "LapStartTime"] = start_series.where(start_series >= zero_td, zero_td)
+        normalized.loc[start_valid_mask, "LapStartTime"] = start_series.where(
+            start_series >= zero_td, zero_td)
 
         end_series = normalized.loc[end_valid_mask, "LapEndTime"]
-        normalized.loc[end_valid_mask, "LapEndTime"] = end_series.where(end_series >= zero_td, zero_td)
+        normalized.loc[end_valid_mask, "LapEndTime"] = end_series.where(
+            end_series >= zero_td, zero_td)
 
         if "LapTime" in normalized.columns:
-            recompute_mask = normalized["LapEndTime"].isna() & normalized["LapTime"].notna()
+            recompute_mask = normalized["LapEndTime"].isna(
+            ) & normalized["LapTime"].notna()
             if recompute_mask.any():
                 normalized.loc[recompute_mask, "LapEndTime"] = (
                     normalized.loc[recompute_mask, "LapStartTime"]
@@ -1284,14 +1335,19 @@ def _normalize_lap_timing_data(
                 )
 
     lap_one_mask = normalized["LapNumber"] == 1
-    normalized.loc[lap_one_mask, "LapStartTime"] = normalized.loc[lap_one_mask, "LapStartTime"].fillna(pd.Timedelta(seconds=0))
+    normalized.loc[lap_one_mask,
+                   "LapStartTime"] = normalized.loc[lap_one_mask,
+                                                    "LapStartTime"].fillna(pd.Timedelta(seconds=0))
     if "LapTime" in normalized.columns:
-        normalized.loc[lap_one_mask, "LapEndTime"] = (
-            normalized.loc[lap_one_mask, "LapStartTime"] + normalized.loc[lap_one_mask, "LapTime"]
-        )
+        normalized.loc[lap_one_mask,
+                       "LapEndTime"] = (normalized.loc[lap_one_mask,
+                                                       "LapStartTime"] + normalized.loc[lap_one_mask,
+                                                                                        "LapTime"])
 
-    normalized.loc[:, "LapStartTime_seconds"] = normalized["LapStartTime"].apply(_timedelta_to_seconds)
-    normalized.loc[:, "LapEndTime_seconds"] = normalized["LapEndTime"].apply(_timedelta_to_seconds)
+    normalized.loc[:, "LapStartTime_seconds"] = normalized["LapStartTime"].apply(
+        _timedelta_to_seconds)
+    normalized.loc[:, "LapEndTime_seconds"] = normalized["LapEndTime"].apply(
+        _timedelta_to_seconds)
 
     return normalized, formation_offset_seconds, fastf1_lap_one_seconds
 
@@ -1339,7 +1395,8 @@ def _is_retirement_status(status: str) -> bool:
     return any(keyword in normalized for keyword in retirement_keywords)
 
 
-def _refresh_track_map_retirements(track_dashboard: TrackMapDashboard) -> Dict[int, Dict[str, Any]]:
+def _refresh_track_map_retirements(
+        track_dashboard: TrackMapDashboard) -> Dict[int, Dict[str, Any]]:
     """Compute retirement metadata using FastF1 session results."""
     global _track_map_retirements, _track_map_retirement_order
 
@@ -1361,7 +1418,8 @@ def _refresh_track_map_retirements(track_dashboard: TrackMapDashboard) -> Dict[i
     session_start_dt: Optional[datetime] = None
     if simulation_controller is not None:
         start_candidate = getattr(simulation_controller, "start_time", None)
-        session_start_dt = start_candidate if isinstance(start_candidate, datetime) else None
+        session_start_dt = start_candidate if isinstance(
+            start_candidate, datetime) else None
 
     def _extract_seconds(raw_value: Any) -> Optional[float]:
         if raw_value is None:
@@ -1415,11 +1473,15 @@ def _refresh_track_map_retirements(track_dashboard: TrackMapDashboard) -> Dict[i
 
         retired_lap: Optional[int] = None
         retire_time: Optional[float] = None
-        if isinstance(laps_df, pd.DataFrame) and not laps_df.empty and "DriverNumber" in laps_df.columns:
-            numeric_driver_numbers = pd.to_numeric(laps_df["DriverNumber"], errors="coerce")
+        if isinstance(
+                laps_df,
+                pd.DataFrame) and not laps_df.empty and "DriverNumber" in laps_df.columns:
+            numeric_driver_numbers = pd.to_numeric(
+                laps_df["DriverNumber"], errors="coerce")
             driver_laps = laps_df.loc[numeric_driver_numbers == driver_number]
             if not driver_laps.empty and "LapNumber" in driver_laps.columns:
-                lap_values = pd.to_numeric(driver_laps["LapNumber"], errors="coerce").dropna()
+                lap_values = pd.to_numeric(
+                    driver_laps["LapNumber"], errors="coerce").dropna()
                 if not lap_values.empty:
                     retired_lap = int(lap_values.max())
             if not driver_laps.empty:
@@ -1436,13 +1498,16 @@ def _refresh_track_map_retirements(track_dashboard: TrackMapDashboard) -> Dict[i
             if isinstance(cached_lap, int) and cached_lap >= 1:
                 retired_lap = cached_lap
 
-        if retire_time is None and isinstance(positions_df, pd.DataFrame) and not positions_df.empty:
+        if retire_time is None and isinstance(
+                positions_df, pd.DataFrame) and not positions_df.empty:
             try:
-                driver_slice = positions_df[positions_df["driver_number"] == str(driver_number)]
+                driver_slice = positions_df[positions_df["driver_number"] == str(
+                    driver_number)]
             except Exception:  # noqa: BLE001
                 driver_slice = pd.DataFrame()
             if not driver_slice.empty and "time" in driver_slice.columns:
-                time_series = pd.to_numeric(driver_slice["time"], errors="coerce").dropna()
+                time_series = pd.to_numeric(
+                    driver_slice["time"], errors="coerce").dropna()
                 if not time_series.empty:
                     retire_time = float(time_series.max())
 
@@ -1492,7 +1557,9 @@ def _build_track_map_driver_data(
                 raw_driver_number = row.get("DriverNumber")
                 if raw_driver_number is None:
                     continue
-                if isinstance(raw_driver_number, float) and math.isnan(raw_driver_number):
+                if isinstance(
+                        raw_driver_number,
+                        float) and math.isnan(raw_driver_number):
                     continue
 
                 try:
@@ -1553,7 +1620,8 @@ def _build_track_map_driver_data(
             retired_time = retirement_info.get("time")
 
             should_flag = False
-            if isinstance(retired_time, Real) and math.isfinite(retired_time) and elapsed_time_seconds is not None:
+            if isinstance(retired_time, Real) and math.isfinite(
+                    retired_time) and elapsed_time_seconds is not None:
                 should_flag = elapsed_time_seconds >= float(retired_time)
             elif retired_lap is None:
                 should_flag = True
@@ -1567,10 +1635,13 @@ def _build_track_map_driver_data(
 
             if should_flag:
                 entry["retired"] = True
-                entry["retired_lap"] = int(retired_lap) if isinstance(retired_lap, int) else None
+                entry["retired_lap"] = int(retired_lap) if isinstance(
+                    retired_lap, int) else None
                 entry["retired_status"] = retired_status
-                entry["retired_order"] = int(retired_order) if isinstance(retired_order, int) else 0
-                if entry["lap_fallback"] is None and isinstance(retired_lap, int):
+                entry["retired_order"] = int(retired_order) if isinstance(
+                    retired_order, int) else 0
+                if entry["lap_fallback"] is None and isinstance(
+                        retired_lap, int):
                     entry["lap_fallback"] = retired_lap
 
     return driver_entries
@@ -1579,7 +1650,7 @@ def _build_track_map_driver_data(
 def get_llm_provider() -> Optional[LLMProvider]:
     """
     Get or initialize the LLM provider (singleton).
-    
+
     Logic:
     - If both keys configured: Use HybridRouter (balances by complexity)
     - If only Claude key: Use ClaudeProvider only
@@ -1587,14 +1658,14 @@ def get_llm_provider() -> Optional[LLMProvider]:
     - If no keys: Return None (will show error in chatbot)
     """
     global _llm_provider, _llm_provider_type
-    
+
     if _llm_provider is not None:
         return _llm_provider
-    
+
     # Get API keys from environment
     claude_api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
     gemini_api_key = os.getenv("GOOGLE_API_KEY", "").strip()
-    
+
     # No keys configured
     if not claude_api_key and not gemini_api_key:
         logger.warning(
@@ -1602,7 +1673,7 @@ def get_llm_provider() -> Optional[LLMProvider]:
             "Set ANTHROPIC_API_KEY or GOOGLE_API_KEY in Configuration."
         )
         return None
-    
+
     try:
         # Case 1: Both keys - use HybridRouter for smart routing
         if claude_api_key and gemini_api_key:
@@ -1623,7 +1694,7 @@ def get_llm_provider() -> Optional[LLMProvider]:
                 "LLM initialized: HybridRouter (Claude + Gemini, "
                 "routes by complexity)"
             )
-        
+
         # Case 2: Only Claude key
         elif claude_api_key:
             claude_config = get_claude_config()
@@ -1632,7 +1703,7 @@ def get_llm_provider() -> Optional[LLMProvider]:
             _llm_provider = ClaudeProvider(claude_config)
             _llm_provider_type = 'claude'
             logger.info("LLM initialized: Claude only")
-        
+
         # Case 3: Only Gemini key
         elif gemini_api_key:
             gemini_config = get_gemini_config()
@@ -1642,9 +1713,9 @@ def get_llm_provider() -> Optional[LLMProvider]:
             _llm_provider = GeminiProvider(gemini_config)
             _llm_provider_type = 'gemini'
             logger.info("LLM initialized: Gemini only")
-        
+
         return _llm_provider
-        
+
     except Exception as e:
         logger.error(f"Failed to initialize LLM provider: {e}")
         return None
@@ -1697,10 +1768,12 @@ def load_f1_calendar(year: int) -> pd.DataFrame:
         return _CALENDAR_CACHE[year]
 
     if year < 2023:
-        logger.warning(f"OpenF1 data not available for year {year}. Use 2023-2025.")
+        logger.warning(
+            f"OpenF1 data not available for year {year}. Use 2023 or later.")
         return pd.DataFrame()
 
-    calendar_cache_path = PROCESSED_CACHE_DIR / "calendar" / f"{year}_calendar{CACHE_FILE_EXTENSION}"
+    calendar_cache_path = PROCESSED_CACHE_DIR / \
+        "calendar" / f"{year}_calendar{CACHE_FILE_EXTENSION}"
     meetings_df = _read_cache_dataframe(calendar_cache_path)
     if meetings_df is not None and not meetings_df.empty:
         logger.info(
@@ -1738,17 +1811,20 @@ def load_f1_calendar(year: int) -> pd.DataFrame:
     meetings_df = meetings_df.rename(columns=rename_map)
 
     if "EventDate" in meetings_df.columns:
-        meetings_df["EventDate"] = pd.to_datetime(meetings_df["EventDate"], errors="coerce")
+        meetings_df["EventDate"] = pd.to_datetime(
+            meetings_df["EventDate"], errors="coerce")
     else:
         meetings_df["EventDate"] = pd.NaT
 
     if "EventName" not in meetings_df.columns:
-        if "MeetingName" in meetings_df.columns and meetings_df["MeetingName"].notna().any():
+        if "MeetingName" in meetings_df.columns and meetings_df["MeetingName"].notna(
+        ).any():
             meetings_df["EventName"] = meetings_df["MeetingName"].fillna("")
         else:
             country_series = meetings_df.get("Country")
             if isinstance(country_series, pd.Series):
-                meetings_df["EventName"] = country_series.fillna("").astype(str) + " Grand Prix"
+                meetings_df["EventName"] = country_series.fillna(
+                    "").astype(str) + " Grand Prix"
             else:
                 meetings_df["EventName"] = "Grand Prix"
 
@@ -1767,7 +1843,8 @@ def load_f1_calendar(year: int) -> pd.DataFrame:
                 continue
             cached_records = _normalize_record_keys(cached_records_raw)
             sample = cached_records[0]
-            meeting_key_val = sample.get("meeting_key") or sample.get("MeetingKey")
+            meeting_key_val = sample.get(
+                "meeting_key") or sample.get("MeetingKey")
             if meeting_key_val is None:
                 continue
             try:
@@ -1788,7 +1865,8 @@ def load_f1_calendar(year: int) -> pd.DataFrame:
             continue
         meeting_keys.append(meeting_key_int)
 
-    missing_session_keys = [key for key in meeting_keys if key not in sessions_by_meeting]
+    missing_session_keys = [
+        key for key in meeting_keys if key not in sessions_by_meeting]
 
     session_payloads_by_meeting: Dict[int, List[Dict[str, Any]]] = {
         key: value for key, value in sessions_by_meeting.items()
@@ -1796,15 +1874,19 @@ def load_f1_calendar(year: int) -> pd.DataFrame:
 
     if missing_session_keys:
         try:
-            session_payloads = openf1_provider._request("sessions", {"year": year})
+            session_payloads = openf1_provider._request(
+                "sessions", {"year": year})
         except Exception as exc:  # noqa: BLE001
             logger.error("Failed to load sessions for %s: %s", year, exc)
             session_payloads = []
 
         grouped_sessions: Dict[int, List[Dict[str, Any]]] = {}
         for payload in session_payloads:
-            normalized_payload = {str(key): value for key, value in payload.items()}
-            key_val = normalized_payload.get("meeting_key") or normalized_payload.get("MeetingKey")
+            normalized_payload = {
+                str(key): value for key,
+                value in payload.items()}
+            key_val = normalized_payload.get(
+                "meeting_key") or normalized_payload.get("MeetingKey")
             if key_val is None:
                 continue
             try:
@@ -1842,7 +1924,9 @@ def load_f1_calendar(year: int) -> pd.DataFrame:
         try:
             meeting_key = int(meeting_key_val)
         except (TypeError, ValueError):
-            logger.warning("Skipping meeting with invalid key: %s", meeting_key_val)
+            logger.warning(
+                "Skipping meeting with invalid key: %s",
+                meeting_key_val)
             continue
 
         session_payloads = session_payloads_by_meeting.get(meeting_key, [])
@@ -1856,7 +1940,8 @@ def load_f1_calendar(year: int) -> pd.DataFrame:
                 text_value = str(raw_value).strip()
                 if text_value:
                     raw_texts.add(text_value.lower())
-                code = CacheGenerationService._canonical_session_code(raw_value)
+                code = CacheGenerationService._canonical_session_code(
+                    raw_value)
                 if code:
                     codes_seen.add(code)
 
@@ -1879,7 +1964,8 @@ def load_f1_calendar(year: int) -> pd.DataFrame:
         event_year = record.get("Year") or year
         circuit_short_name = record.get("CircuitShortName")
         event_date_val = record.get("EventDate")
-        event_name = record.get("EventName") or (f"{country} Grand Prix" if country else "Grand Prix")
+        event_name = record.get("EventName") or (
+            f"{country} Grand Prix" if country else "Grand Prix")
 
         if is_race_weekend:
             round_number: Optional[int] = race_counter
@@ -1940,17 +2026,17 @@ def get_available_sessions(
 ) -> list[tuple[str, SessionType]]:
     """Get available sessions for a specific race."""
     event = schedule[schedule['RoundNumber'] == round_number].iloc[0]
-    
+
     sessions = []
-    
+
     # Check each session column in the event
     for i in range(1, 6):
         col = f'Session{i}'
         session_value = event.get(col)
-        
+
         if pd.notna(session_value):
             session_str = str(session_value)
-            
+
             # Determine session name and type based on content
             if 'Practice 1' in session_str or session_str == 'Practice 1':
                 sessions.append(('FP1', SessionType.FP1))
@@ -1959,14 +2045,15 @@ def get_available_sessions(
             elif 'Practice 3' in session_str or session_str == 'Practice 3':
                 sessions.append(('FP3', SessionType.FP3))
             elif 'Sprint Shootout' in session_str or 'Sprint Qualifying' in session_str:
-                sessions.append(('Sprint Qualifying', SessionType.SPRINT_QUALIFYING))
+                sessions.append(
+                    ('Sprint Qualifying', SessionType.SPRINT_QUALIFYING))
             elif 'Sprint' in session_str and 'Qualifying' not in session_str and 'Shootout' not in session_str:
                 sessions.append(('Sprint', SessionType.SPRINT))
             elif 'Qualifying' in session_str:
                 sessions.append(('Qualifying', SessionType.QUALIFYING))
             elif 'Race' in session_str:
                 sessions.append(('Race', SessionType.RACE))
-    
+
     return sessions
 
 
@@ -1982,9 +2069,9 @@ def create_sidebar():
                 html.Span("🏎️", style={'fontSize': '3rem'}),
                 " F1 Strategist"
             ], className="text-center mb-1"),
-            
+
             html.Hr(),
-            
+
             # Mode selector (collapsed)
             dbc.Accordion([
                 dbc.AccordionItem([
@@ -2007,9 +2094,9 @@ def create_sidebar():
                     ),
                 ], title="🎮 Mode", className="mb-1")
             ], start_collapsed=True),
-            
+
             html.Hr(),
-            
+
             # Context selector (expanded by default)
             dbc.Accordion([
                 dbc.AccordionItem([
@@ -2017,14 +2104,14 @@ def create_sidebar():
                     dcc.Dropdown(
                         id='year-selector',
                         options=[
-                            {'label': str(y), 'value': y} 
-                            for y in range(2025, 2017, -1)
+                            {'label': str(y), 'value': y}
+                            for y in range(datetime.now().year, 2017, -1)
                         ],
-                        value=2025,
+                        value=datetime.now().year,
                         className="mb-1",
                         clearable=False
                     ),
-                    
+
                     dbc.Label("Circuit", className="fw-bold"),
                     dcc.Dropdown(
                         id='circuit-selector',
@@ -2033,7 +2120,7 @@ def create_sidebar():
                         className="mb-1",
                         clearable=False
                     ),
-                    
+
                     dbc.Label("Session", className="fw-bold"),
                     dcc.Dropdown(
                         id='session-selector',
@@ -2042,7 +2129,7 @@ def create_sidebar():
                         className="mb-1",
                         clearable=False
                     ),
-                    
+
                     dbc.Label("Driver", className="fw-bold"),
                     html.Div(id='driver-dropdown-container', children=[
                         dcc.Loading(
@@ -2060,9 +2147,9 @@ def create_sidebar():
                     ])
                 ], title="🗺️ Context", className="mb-1")
             ], start_collapsed=False),
-            
+
             html.Hr(),
-            
+
             # Dashboard selector (collapsed)
             dbc.Accordion([
                 dbc.AccordionItem([
@@ -2088,14 +2175,20 @@ def create_sidebar():
                             # {"label": " Lap Analysis", "value": "laps"},
                             # {"label": " Qualifying", "value": "qualifying"},
                         ],
-                        value=["ai", "race_overview", "track_map", "race_control", "weather", "telemetry"],
+                        value=[
+                            "ai",
+                            "race_overview",
+                            "track_map",
+                            "race_control",
+                            "weather",
+                            "telemetry"],
                         className="mb-1"
                     )
                 ], title="📊 Dashboards", className="mb-1")
             ], start_collapsed=True),
-            
+
             html.Hr(),
-            
+
             # Simulation controls (collapsed)
             dbc.Accordion([
                 dbc.AccordionItem([
@@ -2121,10 +2214,13 @@ def create_sidebar():
                                 color="secondary",
                                 className="w-100 mb-1"
                             ),
-                            dbc.Tooltip("Restart simulation", target="restart-btn", placement="top")
+                            dbc.Tooltip(
+                                "Restart simulation",
+                                target="restart-btn",
+                                placement="top")
                         ], width=6)
                     ]),
-                    
+
                     dbc.Label("Speed", className="mt-1"),
                     dcc.Slider(
                         id='speed-slider',
@@ -2142,7 +2238,7 @@ def create_sidebar():
                         },
                         className="mb-1"
                     ),
-                    
+
                     dbc.Row([
                         dbc.Col([
                             dbc.Button(
@@ -2151,7 +2247,8 @@ def create_sidebar():
                                 color="secondary",
                                 className="w-100"
                             ),
-                            dbc.Tooltip("Previous lap", target="back-btn", placement="bottom")
+                            dbc.Tooltip(
+                                "Previous lap", target="back-btn", placement="bottom")
                         ], width=6),
                         dbc.Col([
                             dbc.Button(
@@ -2160,18 +2257,20 @@ def create_sidebar():
                                 color="secondary",
                                 className="w-100"
                             ),
-                            dbc.Tooltip("Next lap", target="forward-btn", placement="bottom")
+                            dbc.Tooltip(
+                                "Next lap", target="forward-btn", placement="bottom")
                         ], width=6)
                     ]),
-                    
+
                     html.Div(
                         id="simulation-progress",
                         children="⏱️ Not started",
                         className="text-center mt-1 small text-muted"
                     ),
-                    
+
                     # Interval for updating simulation progress
-                    # Base interval is 1.5 seconds, adjusted dynamically by speed
+                    # Base interval is 1.5 seconds, adjusted dynamically by
+                    # speed
                     dcc.Interval(
                         id='simulation-interval',
                         interval=1500,  # milliseconds (1.5 seconds base)
@@ -2180,18 +2279,22 @@ def create_sidebar():
                     )
                 ], title="⏯️ Playback", className="mb-1", id="playback-accordion-item")
             ], start_collapsed=True, id="playback-accordion"),
-            
+
             html.Hr(),
-            
-            # Hidden dummy components for removed FIA Manager (to keep callbacks working)
+
+            # Hidden dummy components for removed FIA Manager (to keep
+            # callbacks working)
             html.Div([
-                dcc.Dropdown(id='fia-year-selector', style={'display': 'none'}),
+                dcc.Dropdown(
+                    id='fia-year-selector',
+                    style={
+                        'display': 'none'}),
                 html.Div(id='fia-reg-status', style={'display': 'none'}),
                 html.Div(id='fia-existing-regs', style={'display': 'none'}),
                 dcc.Upload(id='fia-reg-upload', style={'display': 'none'}),
                 html.Div(id='fia-upload-preview', style={'display': 'none'}),
             ], style={'display': 'none'}),
-            
+
             # RAG Documents Section
             dbc.Accordion([
                 dbc.AccordionItem([
@@ -2203,7 +2306,7 @@ def create_sidebar():
                             className="text-muted ms-2"
                         )
                     ], className="mb-1"),
-                    
+
                     # Document list by category
                     html.Div([
                         # Global Documents
@@ -2216,10 +2319,14 @@ def create_sidebar():
                                 ),
                                 html.Button(
                                     "+",
-                                    id={'type': 'rag-upload-btn', 'category': 'global'},
+                                    id={'type': 'rag-upload-btn',
+                                        'category': 'global'},
                                     n_clicks=0,
                                     className="btn btn-sm btn-outline-info ms-2",
-                                    style={'fontSize': '0.7rem', 'padding': '0px 6px', 'lineHeight': '1.2'}
+                                    style={
+                                        'fontSize': '0.7rem',
+                                        'padding': '0px 6px',
+                                        'lineHeight': '1.2'}
                                 )
                             ], className="d-flex align-items-center"),
                             html.Div(
@@ -2227,7 +2334,7 @@ def create_sidebar():
                                 className="ps-2 small text-muted"
                             )
                         ], className="mb-1"),
-                        
+
                         # Strategy Documents
                         html.Div([
                             html.Div([
@@ -2238,10 +2345,14 @@ def create_sidebar():
                                 ),
                                 html.Button(
                                     "+",
-                                    id={'type': 'rag-upload-btn', 'category': 'strategy'},
+                                    id={'type': 'rag-upload-btn',
+                                        'category': 'strategy'},
                                     n_clicks=0,
                                     className="btn btn-sm btn-outline-info ms-2",
-                                    style={'fontSize': '0.7rem', 'padding': '0px 6px', 'lineHeight': '1.2'}
+                                    style={
+                                        'fontSize': '0.7rem',
+                                        'padding': '0px 6px',
+                                        'lineHeight': '1.2'}
                                 )
                             ], className="d-flex align-items-center"),
                             html.Div(
@@ -2249,7 +2360,7 @@ def create_sidebar():
                                 className="ps-2 small text-muted"
                             )
                         ], className="mb-1"),
-                        
+
                         # Weather Documents
                         html.Div([
                             html.Div([
@@ -2260,10 +2371,14 @@ def create_sidebar():
                                 ),
                                 html.Button(
                                     "+",
-                                    id={'type': 'rag-upload-btn', 'category': 'weather'},
+                                    id={'type': 'rag-upload-btn',
+                                        'category': 'weather'},
                                     n_clicks=0,
                                     className="btn btn-sm btn-outline-info ms-2",
-                                    style={'fontSize': '0.7rem', 'padding': '0px 6px', 'lineHeight': '1.2'}
+                                    style={
+                                        'fontSize': '0.7rem',
+                                        'padding': '0px 6px',
+                                        'lineHeight': '1.2'}
                                 )
                             ], className="d-flex align-items-center"),
                             html.Div(
@@ -2271,7 +2386,7 @@ def create_sidebar():
                                 className="ps-2 small text-muted"
                             )
                         ], className="mb-1"),
-                        
+
                         # Performance Documents
                         html.Div([
                             html.Div([
@@ -2282,10 +2397,14 @@ def create_sidebar():
                                 ),
                                 html.Button(
                                     "+",
-                                    id={'type': 'rag-upload-btn', 'category': 'performance'},
+                                    id={'type': 'rag-upload-btn',
+                                        'category': 'performance'},
                                     n_clicks=0,
                                     className="btn btn-sm btn-outline-info ms-2",
-                                    style={'fontSize': '0.7rem', 'padding': '0px 6px', 'lineHeight': '1.2'}
+                                    style={
+                                        'fontSize': '0.7rem',
+                                        'padding': '0px 6px',
+                                        'lineHeight': '1.2'}
                                 )
                             ], className="d-flex align-items-center"),
                             html.Div(
@@ -2293,7 +2412,7 @@ def create_sidebar():
                                 className="ps-2 small text-muted"
                             )
                         ], className="mb-1"),
-                        
+
                         # Race Control Documents
                         html.Div([
                             html.Div([
@@ -2304,10 +2423,14 @@ def create_sidebar():
                                 ),
                                 html.Button(
                                     "+",
-                                    id={'type': 'rag-upload-btn', 'category': 'race_control'},
+                                    id={'type': 'rag-upload-btn',
+                                        'category': 'race_control'},
                                     n_clicks=0,
                                     className="btn btn-sm btn-outline-info ms-2",
-                                    style={'fontSize': '0.7rem', 'padding': '0px 6px', 'lineHeight': '1.2'}
+                                    style={
+                                        'fontSize': '0.7rem',
+                                        'padding': '0px 6px',
+                                        'lineHeight': '1.2'}
                                 )
                             ], className="d-flex align-items-center"),
                             html.Div(
@@ -2315,7 +2438,7 @@ def create_sidebar():
                                 className="ps-2 small text-muted"
                             )
                         ], className="mb-1"),
-                        
+
                         # Race Position Documents
                         html.Div([
                             html.Div([
@@ -2326,10 +2449,14 @@ def create_sidebar():
                                 ),
                                 html.Button(
                                     "+",
-                                    id={'type': 'rag-upload-btn', 'category': 'race_position'},
+                                    id={'type': 'rag-upload-btn',
+                                        'category': 'race_position'},
                                     n_clicks=0,
                                     className="btn btn-sm btn-outline-info ms-2",
-                                    style={'fontSize': '0.7rem', 'padding': '0px 6px', 'lineHeight': '1.2'}
+                                    style={
+                                        'fontSize': '0.7rem',
+                                        'padding': '0px 6px',
+                                        'lineHeight': '1.2'}
                                 )
                             ], className="d-flex align-items-center"),
                             html.Div(
@@ -2337,7 +2464,7 @@ def create_sidebar():
                                 className="ps-2 small text-muted"
                             )
                         ], className="mb-1"),
-                        
+
                         # FIA Regulations Documents
                         html.Div([
                             html.Div([
@@ -2348,10 +2475,14 @@ def create_sidebar():
                                 ),
                                 html.Button(
                                     "+",
-                                    id={'type': 'rag-upload-btn', 'category': 'fia'},
+                                    id={'type': 'rag-upload-btn',
+                                        'category': 'fia'},
                                     n_clicks=0,
                                     className="btn btn-sm btn-outline-info ms-2",
-                                    style={'fontSize': '0.7rem', 'padding': '0px 6px', 'lineHeight': '1.2'}
+                                    style={
+                                        'fontSize': '0.7rem',
+                                        'padding': '0px 6px',
+                                        'lineHeight': '1.2'}
                                 )
                             ], className="d-flex align-items-center"),
                             html.Div(
@@ -2360,17 +2491,21 @@ def create_sidebar():
                             )
                         ], className="mb-1"),
                     ]),
-                    
+
                     # Hidden Upload Components (one per category)
                     html.Div([
                         dcc.Upload(
                             id={'type': 'rag-upload-input', 'category': cat},
                             accept='.pdf,.docx,.md',
-                            max_size=10*1024*1024,  # 10MB
+                            max_size=10 * 1024 * 1024,  # 10MB
                             style={'display': 'none'}
-                        ) for cat in ['global', 'strategy', 'weather', 'performance', 'race_control', 'race_position', 'fia']
+                        ) for cat in [
+                            'global', 'strategy', 'weather',
+                            'performance', 'race_control',
+                            'race_position', 'fia'
+                        ]
                     ]),
-                    
+
                     # Action buttons
                     html.Div([
                         dbc.Button(
@@ -2390,7 +2525,7 @@ def create_sidebar():
                             title="Generate circuit templates from historical data"
                         ),
                     ], className="mt-1 d-flex"),
-                    
+
                     # RAG reload status message
                     html.Div(
                         id="rag-reload-status",
@@ -2398,9 +2533,9 @@ def create_sidebar():
                     )
                 ], title="📚 RAG Documents", className="mb-1")
             ], start_collapsed=True, id="rag-accordion"),
-            
+
             html.Hr(),
-            
+
             # Menu (collapsed)
             dbc.Accordion([
                 dbc.AccordionItem([
@@ -2443,9 +2578,11 @@ def create_sidebar():
                                 size="sm",
                                 className="w-100 mb-1"
                             ),
-                            html.Div(id="api-keys-save-status", className="small text-muted")
+                            html.Div(
+                                id="api-keys-save-status",
+                                className="small text-muted")
                         ], className="mb-1"),
-                        
+
                         # LLM Settings
                         html.Div([
                             html.P("🤖 LLM Settings", className="fw-bold mb-1"),
@@ -2453,7 +2590,8 @@ def create_sidebar():
                             dcc.Dropdown(
                                 id='llm-provider-selector',
                                 options=[
-                                    {'label': 'Hybrid (Auto)', 'value': 'hybrid'},
+                                    {'label': 'Hybrid (Auto)',
+                                     'value': 'hybrid'},
                                     {'label': 'Claude Only', 'value': 'claude'},
                                     {'label': 'Gemini Only', 'value': 'gemini'}
                                 ],
@@ -2463,17 +2601,20 @@ def create_sidebar():
                                 style={'fontSize': '0.85rem'}
                             )
                         ], className="mb-1"),
-                        
+
                         # Data Sources
                         html.Div([
                             html.P("📂 Data Sources", className="fw-bold mb-1"),
-                            html.Small(f"Cache: ./cache", className="text-muted d-block"),
-                            html.Small(f"Vector Store: ChromaDB", className="text-muted d-block")
+                            html.Small(
+                                "Cache: ./cache", className="text-muted d-block"),
+                            html.Small(
+                                "Vector Store: ChromaDB",
+                                className="text-muted d-block")
                         ])
                     ])
                 ], title="⚙️ Configuration", className="mb-1")
             ], start_collapsed=True),
-            
+
             # Help button
             dbc.Button(
                 [html.I(className="bi bi-question-circle me-1"), "Help"],
@@ -2483,7 +2624,7 @@ def create_sidebar():
                 size="sm",
                 className="w-100"
             )
-            
+
         ], className="p-3", style={
             'height': '100vh',
             'overflow-y': 'auto',
@@ -2507,7 +2648,14 @@ def create_main_content():
                 color="dark",
                 size="sm",
                 className="mb-2",
-                style={'position': 'fixed', 'top': '10px', 'left': '10px', 'zIndex': '1000', 'fontSize': '0.7rem', 'fontWeight': 'bold', 'padding': '2px 6px'}
+                style={
+                    'position': 'fixed',
+                    'top': '10px',
+                    'left': '10px',
+                    'zIndex': '1000',
+                    'fontSize': '0.7rem',
+                    'fontWeight': 'bold',
+                    'padding': '2px 6px'}
             ),
             dbc.Tooltip(
                 "Hide sidebar",
@@ -2516,7 +2664,8 @@ def create_main_content():
             )
         ]),
         html.Div([
-            # Dashboard container - populated dynamically but seeded with listener
+            # Dashboard container - populated dynamically but seeded with
+            # listener
             html.Div(
                 id='dashboard-container',
                 children=[
@@ -2536,7 +2685,8 @@ def create_main_content():
                             className="dashboard-grid-container",
                             id="dashboard-grid-inner"
                         ),
-                        events=[{"event": "dashboardorder", "props": ["detail"]}],
+                        events=[
+                            {"event": "dashboardorder", "props": ["detail"]}],
                         id="dashboard-order-listener"
                     )
                 ]
@@ -2549,7 +2699,8 @@ def create_main_content():
 # APP LAYOUT
 # ============================================================================
 
-# Responsive CSS is loaded from assets/responsive_grid.css automatically by Dash
+# Responsive CSS is loaded from assets/responsive_grid.css automatically
+# by Dash
 
 app.layout = dbc.Container([
     # Store components for state management
@@ -2567,19 +2718,32 @@ app.layout = dbc.Container([
         data={'order': []}
     ),
     dcc.Store(id='simulation-time-store', data={'time': 0.0, 'timestamp': 0}),
-    dcc.Store(id='current-lap-store', data={'lap': 1, 'total': 57}),  # For fast lap updates
+    dcc.Store(
+        id='current-lap-store',
+        data={
+            'lap': 1,
+            'total': 57}),
+    # For fast lap updates
     dcc.Store(
         id='track-map-trajectory-store',
         data={'time_offset': 0.0, 'time_bounds': [0.0, 0.0], 'laps': {}},
     ),
-    dcc.Store(id='weather-last-update-store', data={'timestamp': 0, 'state': None}),
-    
+    dcc.Store(
+        id='weather-last-update-store',
+        data={
+            'timestamp': 0,
+            'state': None}),
+
     # Telemetry comparison driver store
     dcc.Store(id='telemetry-comparison-store', data={'driver': None}),
-    
+
     # AI Chat stores
     dcc.Store(id='chat-messages-store', storage_type='memory', data=[]),
-    dcc.Store(id='chat-pending-query-store', data={'query': None, 'quick': None}),
+    dcc.Store(
+        id='chat-pending-query-store',
+        data={
+            'query': None,
+            'quick': None}),
     dcc.Store(id='proactive-last-check-store', data={'last_lap': 0}),
     dcc.Store(id='cache-progress-store', data={
         'status': 'idle',
@@ -2595,15 +2759,16 @@ app.layout = dbc.Container([
         n_intervals=0,
         disabled=True,
     ),
-    
-    # Interval for proactive AI alerts (every 15 seconds when simulation running)
+
+    # Interval for proactive AI alerts (every 15 seconds when simulation
+    # running)
     dcc.Interval(
         id='proactive-check-interval',
         interval=15000,  # 15 seconds
         n_intervals=0,
         disabled=True  # Enable when simulation is playing
     ),
-    
+
     # Cache Manager Modal
     dbc.Modal([
         dbc.ModalHeader(dbc.ModalTitle("🗂️ Cache Management")),
@@ -2613,7 +2778,8 @@ app.layout = dbc.Container([
                     dbc.Label("Year", className="fw-bold"),
                     dcc.Dropdown(
                         id='cache-year-selector',
-                        options=[{"label": str(year), "value": year} for year in CACHE_AVAILABLE_YEARS],
+                        options=[{"label": str(year), "value": year}
+                                 for year in CACHE_AVAILABLE_YEARS],
                         value=CACHE_AVAILABLE_YEARS[0] if CACHE_AVAILABLE_YEARS else None,
                         clearable=False,
                         className="mb-2",
@@ -2713,39 +2879,57 @@ app.layout = dbc.Container([
         dbc.ModalBody([
             html.H5("🚀 Quick Start", className="mb-2"),
             html.Ul([
-                html.Li("Load a race via the year / event selectors and let the FastF1 cache warm up."),
-                html.Li("Choose Simulation mode to unlock the playback controls and track map dashboards."),
-                html.Li("Pick the dashboards you need from the sidebar; the layout updates immediately."),
-                html.Li("Press Play to drive the synchronized dashboards; use lap jump buttons for quick rewinds."),
+                html.Li(
+                    "Load a race via the year / event selectors and let the FastF1 cache warm up."),
+                html.Li(
+                    "Choose Simulation mode to unlock the playback controls and track map dashboards."),
+                html.Li(
+                    "Pick the dashboards you need from the sidebar; the layout updates immediately."),
+                html.Li(
+                    "Press Play to drive the synchronized dashboards; use lap jump buttons for quick rewinds."),
             ], className="mb-3"),
 
             html.H5("📊 Core Dashboards", className="mb-2"),
             html.Ul([
-                html.Li("Track Map: FastF1 telemetry with cached interpolation for smooth XY animation."),
-                html.Li("Race Overview: Leaderboard, stints, and driver focus with cached OpenF1 data."),
-                html.Li("Weather & Race Control: Real-time flags, incidents, and weather trends."),
-                html.Li("Telemetry Comparison: Overlay lap telemetry once drivers are selected."),
+                html.Li(
+                    "Track Map: FastF1 telemetry with cached interpolation for smooth XY animation."),
+                html.Li(
+                    "Race Overview: Leaderboard, stints, and driver focus with cached OpenF1 data."),
+                html.Li(
+                    "Weather & Race Control: Real-time flags, incidents, and weather trends."),
+                html.Li(
+                    "Telemetry Comparison: Overlay lap telemetry once drivers are selected."),
             ], className="mb-3"),
 
             html.H5("🤖 AI Toolkit", className="mb-2"),
             html.Ul([
-                html.Li("Hybrid router automatically chooses Claude or Gemini based on availability."),
-                html.Li("Strategy prompts read the same simulation state used by dashboards."),
-                html.Li("RAG answers come from indexed PDFs and session reports stored in ChromaDB."),
+                html.Li(
+                    "Hybrid router automatically chooses Claude or Gemini based on availability."),
+                html.Li(
+                    "Strategy prompts read the same simulation state used by dashboards."),
+                html.Li(
+                    "RAG answers come from indexed PDFs and session reports stored in ChromaDB."),
             ], className="mb-3"),
 
             html.H5("🧰 Troubleshooting", className="mb-2"),
             html.Ul([
-                html.Li("Use Cache Manager to regenerate FastF1 or OpenF1 artifacts before race weekends."),
-                html.Li("If telemetry freezes, restart playback and check the track map cache status badge."),
-                html.Li("Verify API keys under Configuration when AI responses fail."),
+                html.Li(
+                    "Use Cache Manager to regenerate FastF1 or OpenF1 artifacts before race weekends."),
+                html.Li(
+                    "If telemetry freezes, restart playback and check the track map cache status badge."),
+                html.Li(
+                    "Verify API keys under Configuration when AI responses fail."),
             ], className="mb-0"),
         ]),
         dbc.ModalFooter(
-            dbc.Button("Close", id="close-help-modal", className="ms-auto", n_clicks=0)
+            dbc.Button(
+                "Close",
+                id="close-help-modal",
+                className="ms-auto",
+                n_clicks=0)
         )
     ], id="help-modal", is_open=False, size="lg"),
-    
+
     # Document Editor Modal (for RAG documents)
     dbc.Modal([
         dbc.ModalHeader([
@@ -2793,10 +2977,14 @@ app.layout = dbc.Container([
             ])
         ])
     ], id="doc-editor-modal", is_open=False, size="xl", centered=True),
-    
+
     # Hidden store for current document being edited
-    dcc.Store(id="doc-editor-store", data={"filepath": None, "category": None}),
-    
+    dcc.Store(
+        id="doc-editor-store",
+        data={
+            "filepath": None,
+            "category": None}),
+
     # Document Upload Confirmation Modal
     dbc.Modal([
         dbc.ModalHeader(dbc.ModalTitle("📤 Confirm Document Upload")),
@@ -2806,7 +2994,7 @@ app.layout = dbc.Container([
                 html.H6("📄 File Information", className="text-info mb-2"),
                 html.Div(id="upload-file-info", className="mb-3")
             ]),
-            
+
             # Category selection
             html.Div([
                 html.H6("📂 Category", className="text-info mb-2"),
@@ -2825,7 +3013,7 @@ app.layout = dbc.Container([
                     className="mb-3"
                 ),
             ]),
-            
+
             # Conversion preview (collapsible)
             html.Div([
                 dbc.Button(
@@ -2839,17 +3027,22 @@ app.layout = dbc.Container([
                     html.Pre(
                         id="upload-preview-content",
                         className="bg-dark text-light p-2",
-                        style={"maxHeight": "200px", "overflow": "auto", "fontSize": "0.75rem"}
+                        style={
+                            "maxHeight": "200px",
+                            "overflow": "auto",
+                            "fontSize": "0.75rem"}
                     )
                 ], id="upload-preview-collapse", is_open=False)
             ], className="mb-3"),
-            
+
             # Target path
             html.Div([
                 html.H6("📍 Target Path", className="text-info mb-2"),
-                html.Code(id="upload-target-path", className="d-block p-2 bg-dark text-light")
+                html.Code(
+                    id="upload-target-path",
+                    className="d-block p-2 bg-dark text-light")
             ], className="mb-3"),
-            
+
             # Filename editor
             html.Div([
                 html.H6("✏️ Filename", className="text-info mb-2"),
@@ -2859,28 +3052,35 @@ app.layout = dbc.Container([
                     placeholder="Enter filename (without extension)...",
                     className="mb-2"
                 ),
-                html.Small("Extension .md will be added automatically", className="text-muted")
+                html.Small(
+                    "Extension .md will be added automatically",
+                    className="text-muted")
             ], className="mb-3"),
-            
+
             # Duplicate warning
             html.Div(id="upload-duplicate-warning", className="mb-2"),
-            
+
             # Processing status/spinner - This will show the loading overlay
             html.Div(id="upload-processing-status", className="text-center"),
-            
+
             # Loading overlay (hidden by default, shown during processing)
             html.Div(
                 id="upload-loading-overlay",
                 children=[
                     html.Div([
                         dbc.Spinner(color="primary", size="lg"),
-                        html.H5("🔄 Processing...", className="mt-3 text-primary"),
-                        html.P("Converting PDF to markdown and indexing...", className="text-muted"),
-                        html.P("This may take 10-30 seconds for large PDFs", className="text-muted small"),
+                        html.H5(
+                            "🔄 Processing...",
+                            className="mt-3 text-primary"),
+                        html.P(
+                            "Converting PDF to markdown and indexing...",
+                            className="text-muted"),
+                        html.P(
+                            "This may take 10-30 seconds for large PDFs",
+                            className="text-muted small"),
                     ], className="text-center")
                 ],
                 style={
-                    "display": "none",  # Hidden by default
                     "position": "absolute",
                     "top": 0,
                     "left": 0,
@@ -2894,7 +3094,8 @@ app.layout = dbc.Container([
                     "borderRadius": "0.3rem"
                 }
             )
-        ], style={"position": "relative"}),  # Make ModalBody relative for overlay positioning
+            # Make ModalBody relative for overlay positioning
+        ], style={"position": "relative"}),
         dbc.ModalFooter([
             dbc.Button(
                 "✅ Upload & Index",
@@ -2910,17 +3111,19 @@ app.layout = dbc.Container([
             )
         ])
     ], id="upload-modal", is_open=False, size="lg", centered=True, backdrop="static"),
-    
+
     # Hidden stores for upload state
     dcc.Store(id="upload-file-store", data=None),
     dcc.Store(id="upload-metadata-store", data=None),
-    
+
     # Template Generation Confirmation Modal
     dbc.Modal([
         dbc.ModalHeader(dbc.ModalTitle("⚠️ Confirm Template Generation")),
         dbc.ModalBody([
             html.P(id="rag-generate-confirm-message"),
-            html.Div(id="rag-generate-existing-files", className="small text-warning")
+            html.Div(
+                id="rag-generate-existing-files",
+                className="small text-warning")
         ]),
         dbc.ModalFooter([
             dbc.Button(
@@ -2936,10 +3139,10 @@ app.layout = dbc.Container([
             ),
         ])
     ], id="rag-generate-confirm-modal", is_open=False, centered=True),
-    
+
     # Store for tracking template generation state
     dcc.Store(id="rag-generate-store", data={"year": None, "circuit": None}),
-    
+
     # Main layout
     dbc.Row([
         create_sidebar(),
@@ -2968,7 +3171,7 @@ app.layout = dbc.Container([
 def update_live_mode_availability(_):
     """Check if live session is available and enable/disable Live mode."""
     live_session = check_for_live_session()
-    
+
     if live_session:
         # Live session available - enable both modes
         return [
@@ -2999,12 +3202,12 @@ def handle_mode_change(mode):
     if mode == "live":
         # Get live session information
         live_session = check_for_live_session()
-        
+
         if live_session:
             # Lock controls and set values from live session
             year = live_session.year
             circuit_key = live_session.circuit_key
-            
+
             # Map SessionType enum to dropdown value
             session_type_map = {
                 'Practice 1': 'P1',
@@ -3015,10 +3218,12 @@ def handle_mode_change(mode):
                 'Sprint Qualifying': 'SQ',
                 'Race': 'R'
             }
-            session_value = session_type_map.get(live_session.session_type.value, 'R')
-            
-            logger.info(f"Live mode activated: year={year}, circuit={circuit_key}, session={session_value}")
-            
+            session_value = session_type_map.get(
+                live_session.session_type.value, 'R')
+
+            logger.info(
+                f"Live mode activated: year={year}, circuit={circuit_key}, session={session_value}")
+
             return True, True, True, year, circuit_key, session_value
         else:
             # No live session, keep simulation mode
@@ -3042,7 +3247,13 @@ def enforce_race_overview(selected_dashboards, mode):
 
     # If the required dashboard is missing, add it back preserving order
     if mode in ('sim', 'live') and not required.issubset(selected_set):
-        base_order = ["ai", "race_overview", "race_control", "track_map", "weather", "telemetry"]
+        base_order = [
+            "ai",
+            "race_overview",
+            "race_control",
+            "track_map",
+            "weather",
+            "telemetry"]
         selected_set.update(required)
         fixed = [item for item in base_order if item in selected_set]
         return fixed
@@ -3062,7 +3273,9 @@ def sync_dashboard_options(mode, session_data, current_options):
     if not current_options:
         raise PreventUpdate
 
-    track_map_ready = bool(session_data and session_data.get('track_map', {}).get('ready'))
+    track_map_ready = bool(
+        session_data and session_data.get(
+            'track_map', {}).get('ready'))
     enable_track_map = mode == 'sim' and track_map_ready
 
     updated_options: List[Dict[str, Any]] = []
@@ -3107,11 +3320,11 @@ def update_circuits(year, current_circuit):
     """Update circuit dropdown based on selected year. Clears session when year changes."""
     if year is None:
         return [], None, [], None
-    
+
     schedule = load_f1_calendar(year)
     if schedule.empty:
         return [], None
-    
+
     circuit_options = []
     circuit_keys = []
     circuit_short_names = {
@@ -3120,7 +3333,7 @@ def update_circuits(year, current_circuit):
         'United Kingdom': 'Britain',
         'Saudi Arabia': 'Saudi',
     }
-    
+
     for _, event in schedule.iterrows():
         country = str(event.get('Country') or '')
         location = str(event.get('Location') or '')
@@ -3159,17 +3372,18 @@ def update_circuits(year, current_circuit):
             'label': f"{prefix} - {display_base}",
             'value': meeting_key
         })
-    
+
     # When year changes, always clear circuit selection to force user to choose
     # This also triggers session dropdown to clear
     from dash import ctx
     triggered_id = ctx.triggered_id if ctx.triggered else None
-    
+
     if triggered_id == 'year-selector':
         # Year changed - clear circuit and session, let user select
-        logger.info(f"Year changed to {year}, clearing circuit and session selections")
+        logger.info(
+            f"Year changed to {year}, clearing circuit and session selections")
         return circuit_options, None, [], None
-    
+
     # Keep current selection if it exists in new options
     if current_circuit and current_circuit in circuit_keys:
         default_value = current_circuit
@@ -3180,16 +3394,17 @@ def update_circuits(year, current_circuit):
         if last_meeting_key and last_meeting_key in circuit_keys:
             default_value = last_meeting_key
             logger.info(
-                f"Auto-selected last completed race: meeting_key={last_meeting_key}"
-            )
+                f"Auto-selected last completed race: meeting_key={last_meeting_key}")
         elif circuit_options:
-            # Fallback: select last race in list for current year, first otherwise
+            # Fallback: select last race in list for current year, first
+            # otherwise
             default_value = circuit_options[-1]['value']
             logger.info("Using last circuit in calendar as default")
         else:
             default_value = None
 
-    # Return empty session options - will be populated by update_sessions callback
+    # Return empty session options - will be populated by update_sessions
+    # callback
     return circuit_options, default_value, [], None
 
 
@@ -3204,20 +3419,21 @@ def update_circuits(year, current_circuit):
 def update_sessions(circuit_key, year, current_session):
     """Update session dropdown based on selected circuit (meeting_key from OpenF1)."""
     from dash import ctx
-    
+
     if not circuit_key or not year:
         return [], None
-    
+
     # When circuit changes, always clear session selection
     triggered_id = ctx.triggered_id if ctx.triggered else None
     force_clear = triggered_id == 'circuit-selector'
-    
+
     try:
         meeting_key = circuit_key
 
         cached_sessions: Optional[List[Dict[str, Any]]] = None
         try:
-            cached_sessions = _load_cached_session_list(int(year), int(meeting_key))
+            cached_sessions = _load_cached_session_list(
+                int(year), int(meeting_key))
         except (TypeError, ValueError):
             cached_sessions = None
 
@@ -3238,7 +3454,7 @@ def update_sessions(circuit_key, year, current_session):
                     year,
                 )
                 return [], None
-            
+
             # DEBUG: Log raw sessions from API
             logger.info(
                 "Received %s sessions from OpenF1 API for meeting_key=%s:",
@@ -3279,7 +3495,7 @@ def update_sessions(circuit_key, year, current_session):
         return [], None
 
 
-import time
+import time  # noqa: E402
 
 
 def _format_size(size_bytes: int) -> str:
@@ -3416,7 +3632,10 @@ def update_cache_sessions(meeting_key, year):
     if meeting_key is None or year is None:
         return [], None
 
-    if isinstance(meeting_key, str) and meeting_key.strip().upper() in {'ALL', '*', 'YEAR'}:
+    if (
+        isinstance(meeting_key, str)
+        and meeting_key.strip().upper() in {'ALL', '*', 'YEAR'}
+    ):
         options = [
             {'label': 'Race', 'value': 'R'},
             {'label': 'Qualifying', 'value': 'Q'},
@@ -3431,7 +3650,8 @@ def update_cache_sessions(meeting_key, year):
 
     cached_sessions: Optional[List[Dict[str, Any]]] = None
     try:
-        cached_sessions = _load_cached_session_list(int(year), int(meeting_key))
+        cached_sessions = _load_cached_session_list(
+            int(year), int(meeting_key))
     except (TypeError, ValueError):
         cached_sessions = None
 
@@ -3486,7 +3706,12 @@ def update_cache_sessions(meeting_key, year):
     Input('cache-type-checklist', 'value'),
     Input('cache-progress-store', 'data'),
 )
-def refresh_cache_status(year, meeting_key, session_code, selected_keys, progress_data):
+def refresh_cache_status(
+        year,
+        meeting_key,
+        session_code,
+        selected_keys,
+        progress_data):
     """Refresh cache status summary and table based on selection."""
     logger.debug(
         "Cache modal refresh -> year=%s meeting=%s session=%s selected=%s",
@@ -3514,7 +3739,8 @@ def refresh_cache_status(year, meeting_key, session_code, selected_keys, progres
         display_year = progress_context.get('year', year)
         display_meeting = progress_context.get('meeting', meeting_key)
         display_session = progress_context.get('session', session_code)
-        selected_keys_list = list(progress_context.get('artifacts') or selected_keys_list)
+        selected_keys_list = list(
+            progress_context.get('artifacts') or selected_keys_list)
 
     context_description = _describe_cache_job_context(progress_context)
 
@@ -3546,15 +3772,17 @@ def refresh_cache_status(year, meeting_key, session_code, selected_keys, progres
         summary_parts.append(
             dbc.Alert(
                 [
-                    dbc.Spinner(size='sm', color='warning', spinner_class_name='me-2'),
+                    dbc.Spinner(
+                        size='sm',
+                        color='warning',
+                        spinner_class_name='me-2'),
                     html.Span('Cache job in progress'),
                     html.Br(),
-                    html.Small(context_description or 'Tracking active cache request'),
+                    html.Small(
+                        context_description or 'Tracking active cache request'),
                 ],
                 color='warning',
-                className='mb-2 py-2'
-            )
-        )
+                className='mb-2 py-2'))
 
     if not selected_keys_list:
         summary_parts.append(
@@ -3581,25 +3809,42 @@ def refresh_cache_status(year, meeting_key, session_code, selected_keys, progres
             disable_inputs,
         )
 
-    artifacts = [CACHE_ARTIFACT_MAP[key] for key in selected_keys_list if key in CACHE_ARTIFACT_MAP]
-    requires_meeting = any(artifact.level in {'meeting', 'session', 'fastf1'} for artifact in artifacts)
-    requires_session = any(artifact.level in {'session', 'fastf1'} for artifact in artifacts)
+    artifacts = [CACHE_ARTIFACT_MAP[key]
+                 for key in selected_keys_list if key in CACHE_ARTIFACT_MAP]
+    requires_meeting = any(
+        artifact.level in {
+            'meeting',
+            'session',
+            'fastf1'} for artifact in artifacts)
+    requires_session = any(
+        artifact.level in {
+            'session',
+            'fastf1'} for artifact in artifacts)
 
     disable_button = False
     disable_fill = False
-    is_all_meetings = isinstance(display_meeting, str) and display_meeting.strip().upper() in {'ALL', '*', 'YEAR'}
+    is_all_meetings = isinstance(
+        display_meeting,
+        str) and display_meeting.strip().upper() in {
+        'ALL',
+        '*',
+        'YEAR'}
     missing_messages: List[str] = []
-    if requires_meeting and not is_all_meetings and display_meeting in (None, ''):
+    if requires_meeting and not is_all_meetings and display_meeting in (
+            None,
+            ''):
         disable_button = True
         disable_fill = True
         alert_open = True
-        missing_messages.append("Select a circuit to manage meeting or session caches.")
+        missing_messages.append(
+            "Select a circuit to manage meeting or session caches.")
 
     if requires_session and not display_session:
         disable_button = True
         disable_fill = True
         alert_open = True
-        missing_messages.append("Select a session to generate session-level caches.")
+        missing_messages.append(
+            "Select a session to generate session-level caches.")
 
     if missing_messages:
         alert_message = " ".join(missing_messages)
@@ -3609,9 +3854,7 @@ def refresh_cache_status(year, meeting_key, session_code, selected_keys, progres
             dbc.Alert(
                 alert_message or "Select the required filters to inspect caches.",
                 color='info',
-                className='mb-2 py-2'
-            )
-        )
+                className='mb-2 py-2'))
         return (
             summary_parts,
             [],
@@ -3651,10 +3894,12 @@ def refresh_cache_status(year, meeting_key, session_code, selected_keys, progres
 
         if status.get('multi_meeting'):
             summary_children = dbc.Alert(
-                f"Inspecting {status.get('meeting_count', 0)} meetings. Cache status preview is unavailable for season-wide selection.",
+                f"Inspecting {
+                    status.get(
+                        'meeting_count',
+                        0)} meetings. Cache status preview is unavailable for season-wide selection.",
                 color='info',
-                className='mb-2 py-2'
-            )
+                className='mb-2 py-2')
             table_children = []
             disable_button = False
         else:
@@ -3742,7 +3987,12 @@ def refresh_cache_status(year, meeting_key, session_code, selected_keys, progres
     Input('cache-type-checklist', 'value'),
     Input('cache-progress-store', 'data'),
 )
-def update_cache_delete_button(year, meeting_key, session_code, selected_keys, progress_data):
+def update_cache_delete_button(
+        year,
+        meeting_key,
+        session_code,
+        selected_keys,
+        progress_data):
     """Enable delete button only when context is valid."""
     if (progress_data or {}).get('status') == 'running':
         return True
@@ -3751,13 +4001,23 @@ def update_cache_delete_button(year, meeting_key, session_code, selected_keys, p
     if not selected_keys:
         return True
 
-    artifacts = [CACHE_ARTIFACT_MAP[key] for key in selected_keys if key in CACHE_ARTIFACT_MAP]
+    artifacts = [CACHE_ARTIFACT_MAP[key]
+                 for key in selected_keys if key in CACHE_ARTIFACT_MAP]
     if not artifacts:
         return True
 
-    requires_meeting = any(artifact.level in {'meeting', 'session', 'fastf1'} for artifact in artifacts)
-    requires_session = any(artifact.level in {'session', 'fastf1'} for artifact in artifacts)
-    is_all_meetings = isinstance(meeting_key, str) and meeting_key.strip().upper() in {'ALL', '*', 'YEAR'}
+    requires_meeting = any(
+        artifact.level in {
+            'meeting',
+            'session',
+            'fastf1'} for artifact in artifacts)
+    requires_session = any(
+        artifact.level in {
+            'session',
+            'fastf1'} for artifact in artifacts)
+    is_all_meetings = isinstance(
+        meeting_key, str) and meeting_key.strip().upper() in {
+        'ALL', '*', 'YEAR'}
 
     if requires_meeting and not is_all_meetings and meeting_key in (None, ''):
         return True
@@ -3778,10 +4038,20 @@ def update_cache_delete_button(year, meeting_key, session_code, selected_keys, p
     State('cache-type-checklist', 'value'),
     prevent_initial_call=True,
 )
-def handle_cache_actions(regen_clicks, fill_clicks, delete_clicks, year, meeting_key, session_code, selected_keys):
+def handle_cache_actions(
+        regen_clicks,
+        fill_clicks,
+        delete_clicks,
+        year,
+        meeting_key,
+        session_code,
+        selected_keys):
     """Process cache regeneration or deletion requests from the modal."""
     triggered = ctx.triggered_id
-    if triggered not in {'cache-regenerate-button', 'cache-delete-button', 'cache-fill-button'}:
+    if triggered not in {
+            'cache-regenerate-button',
+            'cache-delete-button',
+            'cache-fill-button'}:
         raise PreventUpdate
 
     selected_keys = list(selected_keys or [])
@@ -3840,7 +4110,13 @@ def handle_cache_actions(regen_clicks, fill_clicks, delete_clicks, year, meeting
 
     worker = threading.Thread(
         target=_run_cache_job,
-        args=(job_id, action, year_value, meeting_key, session_code, selected_keys),
+        args=(
+            job_id,
+            action,
+            year_value,
+            meeting_key,
+            session_code,
+            selected_keys),
         daemon=True,
     )
     worker.start()
@@ -3911,6 +4187,7 @@ def clear_driver_dropdown_immediately(year, circuit, session):
     }
     return placeholder, loading_session, bootstrap_reset
 
+
 @callback(
     Output('driver-dropdown-container', 'children', allow_duplicate=True),
     Output('session-bootstrap-store', 'data', allow_duplicate=True),
@@ -3956,7 +4233,9 @@ def update_drivers(session, circuit_key, year):
     try:
         meeting_key_int = int(meeting_key)
     except (TypeError, ValueError):
-        logger.error("Invalid meeting_key received for driver update: %s", meeting_key)
+        logger.error(
+            "Invalid meeting_key received for driver update: %s",
+            meeting_key)
         bootstrap_reset = _bootstrap_failure("Invalid meeting key")
         return placeholder_dropdown, bootstrap_reset
 
@@ -3975,24 +4254,28 @@ def update_drivers(session, circuit_key, year):
             session,
         )
 
-        session_info = _resolve_session_payload(year_int, meeting_key_int, session)
+        session_info = _resolve_session_payload(
+            year_int, meeting_key_int, session)
         if not session_info:
             logger.error(
                 "No session payload found for meeting_key=%s, session_code=%s",
                 meeting_key_int,
                 session,
             )
-            bootstrap_reset = _bootstrap_failure("Session metadata unavailable")
+            bootstrap_reset = _bootstrap_failure(
+                "Session metadata unavailable")
             return placeholder_dropdown, bootstrap_reset
 
         raw_session_key = _get_session_key(session_info)
         try:
-            session_key_int = int(raw_session_key) if raw_session_key is not None else None
+            session_key_int = int(
+                raw_session_key) if raw_session_key is not None else None
         except (TypeError, ValueError):
             session_key_int = None
 
         if isinstance(session_info, dict):
-            calendar_meta = _CALENDAR_METADATA.get(year_int, {}).get(meeting_key_int)
+            calendar_meta = _CALENDAR_METADATA.get(
+                year_int, {}).get(meeting_key_int)
             cache_slug = (calendar_meta or {}).get("cache_slug")
             if cache_slug and not session_info.get("cache_slug"):
                 session_info["cache_slug"] = cache_slug
@@ -4037,7 +4320,9 @@ def update_drivers(session, circuit_key, year):
                 driver_num = driver_data['DriverNumber']
                 abbr = driver_data['Abbreviation']
                 full_name = driver_data['FullName']
-                label = f"#{str(driver_num).rjust(2)} {abbr.ljust(3)} - {full_name}"
+                label = f"#{
+                    str(driver_num).rjust(2)} {
+                    abbr.ljust(3)} - {full_name}"
                 driver_options.append({
                     'label': label,
                     'value': f"{abbr}_{year}_{driver_num}",
@@ -4069,7 +4354,8 @@ def update_drivers(session, circuit_key, year):
             color="#e10600",
         )
 
-        session_info_serializable = json.loads(json.dumps(session_info, default=str))
+        session_info_serializable = json.loads(
+            json.dumps(session_info, default=str))
         bootstrap_payload = {
             'ready': True,
             'year': year_int,
@@ -4119,7 +4405,8 @@ def _build_session_store_payload(
     track_map_dashboard: Optional[TrackMapDashboard] = None
     try:
         track_map_dashboard = get_track_map_dashboard()
-        translation = track_map_dashboard.provider.translate_openf1_session(session_info)
+        translation = track_map_dashboard.provider.translate_openf1_session(
+            session_info)
 
         raw_year = translation.get('year', year)
         try:
@@ -4207,23 +4494,30 @@ def _build_session_store_payload(
                 formation_offset_seconds: float = 0.0
                 fastf1_lap_one_seconds: Optional[float] = None
 
-                if {'LapStartTime', 'LapNumber', 'DriverNumber'}.issubset(laps.columns):
-                    driver_numbers = pd.to_numeric(laps['DriverNumber'], errors='coerce')
+                if {
+                        'LapStartTime', 'LapNumber',
+                        'DriverNumber'}.issubset(laps.columns):
+                    driver_numbers = pd.to_numeric(
+                        laps['DriverNumber'], errors='coerce')
                     target_driver_number = 1
                     leader_mask = driver_numbers == target_driver_number
 
                     if not leader_mask.any():
                         fallback_number: Optional[int] = None
                         results_frame = getattr(session_obj, 'results', None)
-                        if isinstance(results_frame, pd.DataFrame) and not results_frame.empty:
-                            driver_numbers_series = results_frame.get('DriverNumber')
+                        if isinstance(
+                                results_frame,
+                                pd.DataFrame) and not results_frame.empty:
+                            driver_numbers_series = results_frame.get(
+                                'DriverNumber')
                             if driver_numbers_series is not None:
                                 fallback_candidates = pd.to_numeric(
                                     driver_numbers_series,
                                     errors='coerce',
                                 ).dropna()
                                 if not fallback_candidates.empty:
-                                    fallback_number = int(fallback_candidates.iloc[0])
+                                    fallback_number = int(
+                                        fallback_candidates.iloc[0])
 
                         if fallback_number is None:
                             valid_numbers = driver_numbers.dropna().astype(int)
@@ -4238,30 +4532,30 @@ def _build_session_store_payload(
                                 target_driver_number,
                             )
                         else:
-                            logger.warning("No valid lap data available for lap tracking")
+                            logger.warning(
+                                "No valid lap data available for lap tracking")
 
                     leader_laps = laps.loc[leader_mask].copy()
                     if not leader_laps.empty:
-                        leader_laps.loc[:, 'DriverNumber'] = int(target_driver_number)
+                        leader_laps.loc[:, 'DriverNumber'] = int(
+                            target_driver_number)
 
-                        select_columns = ['LapNumber', 'LapStartTime', 'LapEndTime', 'DriverNumber']
+                        select_columns = [
+                            'LapNumber', 'LapStartTime', 'LapEndTime', 'DriverNumber']
                         if 'LapTime' in leader_laps.columns:
                             select_columns.append('LapTime')
 
-                        lap_timing_candidate = leader_laps[select_columns].copy()
+                        lap_timing_candidate = leader_laps[select_columns].copy(
+                        )
                         if track_map_dashboard is not None:
                             normalized_laps, offset_seconds, lap_one_seconds = _normalize_lap_timing_data(
-                                lap_timing_candidate,
-                                track_map_dashboard,
-                                int(target_driver_number),
-                            )
+                                lap_timing_candidate, track_map_dashboard, int(target_driver_number), )
                         else:
                             normalized_laps = lap_timing_candidate
                             offset_seconds = None
                             lap_one_seconds = None
                             logger.warning(
-                                "Track map dashboard unavailable; skipping lap timing normalization",
-                            )
+                                "Track map dashboard unavailable; skipping lap timing normalization", )
 
                         if offset_seconds is not None:
                             formation_offset_seconds = offset_seconds
@@ -4281,50 +4575,67 @@ def _build_session_store_payload(
                             len(lap_timing_data) if lap_timing_data is not None else 0,
                         )
                     else:
-                        logger.warning("Unable to build lap timing data; no laps matched target driver")
+                        logger.warning(
+                            "Unable to build lap timing data; no laps matched target driver")
 
                 def _derive_boundary_seconds() -> Tuple[float, float, float]:
                     start_seconds = 0.0
-                    lap_one_end_seconds = float(first_lap_end) if pd.notna(first_lap_end) else 0.0
+                    lap_one_end_seconds = float(
+                        first_lap_end) if pd.notna(first_lap_end) else 0.0
                     session_end_seconds = float(last_lap_end)
 
                     if lap_timing_data is not None and not lap_timing_data.empty:
-                        lap_one_mask = pd.Series(False, index=lap_timing_data.index)
+                        lap_one_mask = pd.Series(
+                            False, index=lap_timing_data.index)
                         if 'LapNumber' in lap_timing_data.columns:
-                            lap_numbers = pd.to_numeric(lap_timing_data['LapNumber'], errors='coerce')
+                            lap_numbers = pd.to_numeric(
+                                lap_timing_data['LapNumber'], errors='coerce')
                             lap_numbers_clean = lap_numbers.dropna()
                             if not lap_numbers_clean.empty:
                                 first_lap_number = lap_numbers_clean.min()
                                 lap_one_mask = lap_numbers == first_lap_number
 
                         if 'LapStartTime_seconds' in lap_timing_data.columns:
-                            start_series = lap_timing_data.loc[lap_one_mask, 'LapStartTime_seconds'].dropna()
+                            start_series = lap_timing_data.loc[lap_one_mask, 'LapStartTime_seconds'].dropna(
+                            )
                             if not start_series.empty:
                                 start_seconds = float(start_series.iloc[0])
                         elif 'LapStartTime' in lap_timing_data.columns:
-                            raw_start_series = lap_timing_data.loc[lap_one_mask, 'LapStartTime'].dropna()
+                            raw_start_series = lap_timing_data.loc[lap_one_mask, 'LapStartTime'].dropna(
+                            )
                             if not raw_start_series.empty:
-                                derived_series = raw_start_series.apply(_timedelta_to_seconds).dropna()
+                                derived_series = raw_start_series.apply(
+                                    _timedelta_to_seconds).dropna()
                                 if not derived_series.empty:
-                                    start_seconds = float(derived_series.iloc[0])
+                                    start_seconds = float(
+                                        derived_series.iloc[0])
 
                         if 'LapEndTime_seconds' in lap_timing_data.columns:
-                            end_series = lap_timing_data.loc[lap_one_mask, 'LapEndTime_seconds'].dropna()
+                            end_series = lap_timing_data.loc[lap_one_mask, 'LapEndTime_seconds'].dropna(
+                            )
                             if not end_series.empty:
                                 lap_one_end_seconds = float(end_series.iloc[0])
-                            session_end_candidates = lap_timing_data['LapEndTime_seconds'].dropna()
+                            session_end_candidates = lap_timing_data['LapEndTime_seconds'].dropna(
+                            )
                             if not session_end_candidates.empty:
-                                session_end_seconds = float(session_end_candidates.max())
+                                session_end_seconds = float(
+                                    session_end_candidates.max())
                         elif 'LapEndTime' in lap_timing_data.columns:
-                            raw_end_series = lap_timing_data.loc[lap_one_mask, 'LapEndTime'].dropna()
+                            raw_end_series = lap_timing_data.loc[lap_one_mask, 'LapEndTime'].dropna(
+                            )
                             if not raw_end_series.empty:
-                                derived_end_series = raw_end_series.apply(_timedelta_to_seconds).dropna()
+                                derived_end_series = raw_end_series.apply(
+                                    _timedelta_to_seconds).dropna()
                                 if not derived_end_series.empty:
-                                    lap_one_end_seconds = float(derived_end_series.iloc[0])
-                            session_end_series = lap_timing_data['LapEndTime'].dropna()
-                            session_value_series = session_end_series.apply(_timedelta_to_seconds).dropna()
+                                    lap_one_end_seconds = float(
+                                        derived_end_series.iloc[0])
+                            session_end_series = lap_timing_data['LapEndTime'].dropna(
+                            )
+                            session_value_series = session_end_series.apply(
+                                _timedelta_to_seconds).dropna()
                             if not session_value_series.empty:
-                                session_end_seconds = float(session_value_series.max())
+                                session_end_seconds = float(
+                                    session_value_series.max())
 
                     return start_seconds, lap_one_end_seconds, session_end_seconds
 
@@ -4339,8 +4650,10 @@ def _build_session_store_payload(
 
                 offset_td = timedelta(seconds=offset_seconds)
 
-                start_time = session_date + timedelta(seconds=start_seconds) + offset_td
-                end_time = session_date + timedelta(seconds=session_end_seconds) + offset_td
+                start_time = session_date + \
+                    timedelta(seconds=start_seconds) + offset_td
+                end_time = session_date + \
+                    timedelta(seconds=session_end_seconds) + offset_td
 
                 track_map_status['formation_offset_seconds'] = offset_seconds
                 track_map_status['fastf1_lap_one_seconds'] = fastf1_lap_one_seconds
@@ -4403,7 +4716,11 @@ def finalize_session_store(bootstrap_data):
     if not bootstrap_data:
         raise PreventUpdate
 
-    drivers_map = bootstrap_data.get('drivers', {}) if isinstance(bootstrap_data, dict) else {}
+    drivers_map = bootstrap_data.get(
+        'drivers',
+        {}) if isinstance(
+        bootstrap_data,
+        dict) else {}
 
     def _empty_track_map() -> Dict[str, Any]:
         return {
@@ -4432,8 +4749,11 @@ def finalize_session_store(bootstrap_data):
     session_info = bootstrap_data.get('session_info') or {}
     driver_options = bootstrap_data.get('driver_options') or []
 
-    global current_session_obj
-    if current_session_obj is None or getattr(current_session_obj, 'session_key', None) != session_key:
+    global current_session_obj  # noqa: F824
+    if current_session_obj is None or getattr(
+            current_session_obj,
+            'session_key',
+            None) != session_key:
         logger.warning(
             "Session object missing or mismatched (expected %s)",
             session_key,
@@ -4483,7 +4803,9 @@ def finalize_session_store(bootstrap_data):
         try:
             meeting_key_int = int(meeting_value)
         except (TypeError, ValueError):  # pragma: no cover - validation guard
-            logger.error("Invalid meeting key in bootstrap payload: %s", meeting_value)
+            logger.error(
+                "Invalid meeting key in bootstrap payload: %s",
+                meeting_value)
             return {
                 'loaded': False,
                 'error': "Invalid meeting key",
@@ -4533,17 +4855,17 @@ def finalize_session_store(bootstrap_data):
 def _format_doc_list(docs: list, category: str = "unknown") -> list:
     """
     Format document list for display in sidebar with edit and delete buttons.
-    
+
     Args:
         docs: List of document dicts or strings
         category: Document category (global, strategy, weather, tire, fia)
-    
+
     Returns:
         List of html components with clickable document names
     """
     if not docs:
         return [html.Small("No documents", className="text-muted fst-italic")]
-    
+
     items = []
     for idx, doc in enumerate(docs):
         if isinstance(doc, dict):
@@ -4552,13 +4874,14 @@ def _format_doc_list(docs: list, category: str = "unknown") -> list:
         else:
             filename = str(doc)
             filepath = ""
-        
+
         # Use Button with filepath encoded in the index
         # Format: category|idx|filepath (base64 encoded to avoid special chars)
         import base64
-        encoded_path = base64.b64encode(filepath.encode()).decode() if filepath else ""
+        encoded_path = base64.b64encode(
+            filepath.encode()).decode() if filepath else ""
         btn_index = f"{category}|{idx}|{encoded_path}"
-        
+
         items.append(
             html.Div(
                 [
@@ -4631,7 +4954,8 @@ def delete_rag_document(_delete_clicks):
         raise PreventUpdate
 
     try:
-        decoded_path = base64.b64decode(encoded_path.encode()).decode() if encoded_path else ""
+        decoded_path = base64.b64decode(
+            encoded_path.encode()).decode() if encoded_path else ""
         if not decoded_path:
             raise ValueError("Missing document path")
 
@@ -4645,7 +4969,9 @@ def delete_rag_document(_delete_clicks):
             try:
                 relative_source = file_path.relative_to(base_path)
             except ValueError:
-                logger.warning("Refusing to delete path outside base_path: %s", file_path)
+                logger.warning(
+                    "Refusing to delete path outside base_path: %s",
+                    file_path)
                 return (
                     "❌ Refused: invalid path",
                     dash.no_update,
@@ -4672,7 +4998,9 @@ def delete_rag_document(_delete_clicks):
             # Remove file from disk
             file_path.unlink(missing_ok=True)
 
-            status_msg = f"✅ Deleted: {file_path.name} ({len(ids_to_delete)} chunks)"
+            status_msg = f"✅ Deleted: {
+                file_path.name} ({
+                len(ids_to_delete)} chunks)"
 
         # Refresh sidebar lists from current vector store state
         stats = rag_manager.vector_store.get_collection_stats()
@@ -4728,11 +5056,11 @@ def delete_rag_document(_delete_clicks):
 def _get_circuit_name_for_rag(meeting_key: int, year: int) -> str:
     """
     Convert meeting_key to circuit name for RAG folder lookup.
-    
+
     Args:
         meeting_key: OpenF1 meeting key
         year: Season year
-        
+
     Returns:
         Circuit name in snake_case (e.g., 'abu_dhabi')
     """
@@ -4752,7 +5080,8 @@ def _get_circuit_name_for_rag(meeting_key: int, year: int) -> str:
             circuit = circuit.replace('-', '_')
             return circuit
     except Exception as e:
-        logger.warning(f"Could not get circuit name for meeting_key={meeting_key}: {e}")
+        logger.warning(
+            f"Could not get circuit name for meeting_key={meeting_key}: {e}")
     return ""
 
 
@@ -4805,7 +5134,7 @@ def _load_tire_window_overrides(
 def update_rag_on_context_change(year, meeting_key):
     """
     Load RAG documents when year/circuit context changes.
-    
+
     This callback:
     1. Loads global documents (always)
     2. Loads year-level documents
@@ -4819,32 +5148,33 @@ def update_rag_on_context_change(year, meeting_key):
             [html.Small("Select year first", className="text-muted fst-italic")],
             [], [], [], [], [], []
         )
-    
+
     try:
         rag_manager = get_rag_manager()
-        
+
         # Convert meeting_key to circuit name
         circuit = None
         if meeting_key:
             circuit = _get_circuit_name_for_rag(meeting_key, year)
-        
+
         # Load context into ChromaDB
         chunk_count = rag_manager.load_context(year=year, circuit=circuit)
-        
+
         # Get document lists by category
         docs = rag_manager.list_documents(year=year, circuit=circuit)
-        
+
         # Debug: Log what documents are found per category
-        logger.info(f"RAG docs by category: {[(k, len(v)) for k, v in docs.items()]}")
-        
+        logger.info(
+            f"RAG docs by category: {[(k, len(v)) for k, v in docs.items()]}")
+
         # Determine status icon
         if chunk_count > 0:
             status = "🟢 Loaded"
         else:
             status = "🟡 No docs"
-        
+
         doc_count_text = f"({chunk_count} chunks)"
-        
+
         # Format lists for display (with category for clickable editing)
         global_list = _format_doc_list(docs.get("global", []), "global")
         strategy_list = _format_doc_list(docs.get("strategy", []), "strategy")
@@ -4859,7 +5189,7 @@ def update_rag_on_context_change(year, meeting_key):
             docs.get("race_position", []), "race_position"
         )
         fia_list = _format_doc_list(docs.get("fia", []), "fia")
-        
+
         return (
             status,
             doc_count_text,
@@ -4871,7 +5201,7 @@ def update_rag_on_context_change(year, meeting_key):
             race_position_list,
             fia_list
         )
-        
+
     except Exception as e:
         logger.error(f"Error loading RAG context: {e}")
         return (
@@ -4895,25 +5225,24 @@ def reload_rag_documents(n_clicks, year, meeting_key):
     """Manually reload RAG documents."""
     if not n_clicks:
         raise PreventUpdate
-    
+
     try:
         rag_manager = get_rag_manager()
-        
+
         # Convert meeting_key to circuit name
-        circuit = None
         if meeting_key and year:
-            circuit = _get_circuit_name_for_rag(meeting_key, year)
-        
+            _get_circuit_name_for_rag(meeting_key, year)
+
         # Force reload
         chunk_count = rag_manager.reload()
-        
+
         status_msg = f"✅ Reloaded {chunk_count} chunks"
         return (
             status_msg,
             "🟢 Loaded" if chunk_count > 0 else "🟡 No docs",
             f"({chunk_count} chunks)"
         )
-        
+
     except Exception as e:
         logger.error(f"Error reloading RAG: {e}")
         return f"❌ Error: {str(e)[:50]}", "🔴 Error", ""
@@ -4928,21 +5257,21 @@ def reload_rag_documents(n_clicks, year, meeting_key):
 def update_fia_regulations_status(selected_year):
     """Update FIA regulations status and list existing regulations."""
     from pathlib import Path
-    
+
     if not selected_year:
         return "⚠️ No year selected", ""
-    
+
     try:
         # Check for existing regulation file
         fia_dir = Path('data/rag') / str(selected_year)
         reg_file = fia_dir / f"fia_regulations_{selected_year}.md"
-        
+
         if reg_file.exists():
             status = html.Span([
                 html.I(className="fas fa-check-circle text-success me-1"),
                 f"✅ {selected_year} regulations loaded"
             ], className="small text-success")
-            
+
             # Show file with edit button
             existing_list = html.Div([
                 html.Button(
@@ -4958,13 +5287,18 @@ def update_fia_regulations_status(selected_year):
                 html.I(className="fas fa-exclamation-circle text-warning me-1"),
                 f"⚠️ No regulations for {selected_year}"
             ], className="small text-warning")
-            existing_list = html.Small("No regulation file found. Upload one above.", className="text-muted")
-        
+            existing_list = html.Small(
+                "No regulation file found. Upload one above.",
+                className="text-muted")
+
         return status, existing_list
-        
+
     except Exception as e:
         logger.error(f"Error checking FIA regulations: {e}")
-        return html.Span(f"❌ Error: {str(e)[:30]}", className="small text-danger"), ""
+        return html.Span(
+            f"❌ Error: {
+                str(e)[
+                    :30]}", className="small text-danger"), ""
 
 
 @callback(
@@ -4977,7 +5311,7 @@ def preview_fia_upload(contents, filename):
     """Show preview of uploaded FIA regulation file."""
     if not contents or not filename:
         return ""
-    
+
     try:
         file_size = len(contents) * 3 / 4  # Approximate decoded size
         return html.Div([
@@ -4989,7 +5323,7 @@ def preview_fia_upload(contents, filename):
             html.Br(),
             html.Small("Click to open upload modal and confirm", className="text-info")
         ], className="p-2 bg-dark rounded")
-        
+
     except Exception:
         return ""
 
@@ -5012,6 +5346,7 @@ OVERLAY_VISIBLE = {
     "justifyContent": "center",
     "borderRadius": "0.3rem"
 }
+
 
 @callback(
     Output('upload-modal', 'is_open'),
@@ -5051,134 +5386,193 @@ OVERLAY_VISIBLE = {
     prevent_initial_call=True
 )
 def handle_document_upload(
-    category_upload_contents_list, fia_contents, confirm_clicks, cancel_clicks,
-    category_upload_filenames_list, fia_filename, fia_year, context_year, context_circuit,
-    category_override, edited_filename, stored_file_data
-):
+        category_upload_contents_list,
+        fia_contents,
+        confirm_clicks,
+        cancel_clicks,
+        category_upload_filenames_list,
+        fia_filename,
+        fia_year,
+        context_year,
+        context_circuit,
+        category_override,
+        edited_filename,
+        stored_file_data):
     """Handle document upload flow: file selection → preview/LLM → confirmation → save."""
-    import base64
-    import io
-    from pathlib import Path
-    
+    import base64  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
     triggered_id = ctx.triggered_id
-    
+
     # Helper for RAG no_update tuple (9 values for RAG outputs)
     rag_no_updates = (
         dash.no_update, dash.no_update,  # status, doc_count
         dash.no_update, dash.no_update, dash.no_update,  # global, strategy, weather
         dash.no_update, dash.no_update, dash.no_update, dash.no_update  # perf, rc, pos, fia
     )
-    
+
     # UI reset values (overlay hidden, button enabled, button text)
     ui_reset = (OVERLAY_HIDDEN, False, "✅ Upload & Index")
-    
+
     # Cancel button - close modal (9 original + 3 UI + 9 RAG = 21 outputs)
     if triggered_id == 'upload-cancel-btn':
-        return (False, "", "", None, "", "", "", None, "") + ui_reset + rag_no_updates
-    
+        return (False, "", "", None, "", "", "", None, "") + \
+            ui_reset + rag_no_updates
+
     # Confirm button - process and save document
     if triggered_id == 'upload-confirm-btn' and stored_file_data:
         try:
             # Decode file
-            content_type, content_string = stored_file_data['content'].split(',')
+            content_type, content_string = stored_file_data['content'].split(
+                ',')
             decoded = base64.b64decode(content_string)
             filename = stored_file_data['filename']
-            category = category_override if category_override else stored_file_data.get('default_category', 'global')
-            
+            category = category_override if category_override else stored_file_data.get(
+                'default_category', 'global')
+
             # Check if user selected FIA category OR if uploaded via FIA button
-            is_fia_category = (category == 'fia') or stored_file_data.get('is_fia')
-            
+            is_fia_category = (
+                category == 'fia') or stored_file_data.get('is_fia')
+
             # Determine target directory
             if is_fia_category:
-                # FIA documents go to year level: data/rag/2025/fia_regulations.md
+                # FIA documents go to year level:
+                # data/rag/2025/fia_regulations.md
                 year = fia_year if fia_year else context_year
                 target_dir = Path('data/rag') / str(year)
                 if edited_filename:
-                    final_filename = edited_filename if edited_filename.endswith('.md') else f"{edited_filename}.md"
+                    final_filename = edited_filename if edited_filename.endswith(
+                        '.md') else f"{edited_filename}.md"
                 else:
                     final_filename = f"fia_regulations_{year}.md"
             elif category == 'global':
                 # Global category goes to data/rag/global/
                 target_dir = Path('data/rag') / 'global'
                 if edited_filename:
-                    final_filename = edited_filename if edited_filename.endswith('.md') else f"{edited_filename}.md"
+                    final_filename = edited_filename if edited_filename.endswith(
+                        '.md') else f"{edited_filename}.md"
                 else:
-                    final_filename = filename.replace('.pdf', '.md').replace('.docx', '.md').replace('.doc', '.md')
+                    final_filename = filename.replace(
+                        '.pdf',
+                        '.md').replace(
+                        '.docx',
+                        '.md').replace(
+                        '.doc',
+                        '.md')
                     final_filename = final_filename.lower().replace(' ', '_')
             else:
-                # Circuit-specific categories: strategy, weather, performance, race_control, race_position
+                # Circuit-specific categories: strategy, weather, performance,
+                # race_control, race_position
                 if context_circuit and context_year:
-                    circuit_name = _get_circuit_name_for_rag(context_circuit, context_year)
-                    target_dir = Path('data/rag') / str(context_year) / 'circuits' / circuit_name
+                    circuit_name = _get_circuit_name_for_rag(
+                        context_circuit, context_year)
+                    target_dir = Path(
+                        'data/rag') / str(context_year) / 'circuits' / circuit_name
                     # Use category as filename: strategy.md, weather.md, etc.
-                    if category in ['strategy', 'weather', 'performance', 'race_control', 'race_position']:
+                    if category in [
+                            'strategy',
+                            'weather',
+                            'performance',
+                            'race_control',
+                            'race_position']:
                         final_filename = f"{category}.md"
                     else:
                         # Other category - use original filename
                         if edited_filename:
-                            final_filename = edited_filename if edited_filename.endswith('.md') else f"{edited_filename}.md"
+                            final_filename = edited_filename if edited_filename.endswith(
+                                '.md') else f"{edited_filename}.md"
                         else:
-                            final_filename = filename.replace('.pdf', '.md').replace('.docx', '.md').replace('.doc', '.md')
+                            final_filename = filename.replace(
+                                '.pdf',
+                                '.md').replace(
+                                '.docx',
+                                '.md').replace(
+                                '.doc',
+                                '.md')
                             final_filename = final_filename.lower().replace(' ', '_')
                 elif context_year:
                     # Year level but no circuit - save to year folder
                     target_dir = Path('data/rag') / str(context_year)
                     if edited_filename:
-                        final_filename = edited_filename if edited_filename.endswith('.md') else f"{edited_filename}.md"
+                        final_filename = edited_filename if edited_filename.endswith(
+                            '.md') else f"{edited_filename}.md"
                     else:
-                        final_filename = filename.replace('.pdf', '.md').replace('.docx', '.md').replace('.doc', '.md')
+                        final_filename = filename.replace(
+                            '.pdf',
+                            '.md').replace(
+                            '.docx',
+                            '.md').replace(
+                            '.doc',
+                            '.md')
                         final_filename = final_filename.lower().replace(' ', '_')
                 else:
                     # No context - save to global
                     target_dir = Path('data/rag') / 'global'
                     if edited_filename:
-                        final_filename = edited_filename if edited_filename.endswith('.md') else f"{edited_filename}.md"
+                        final_filename = edited_filename if edited_filename.endswith(
+                            '.md') else f"{edited_filename}.md"
                     else:
-                        final_filename = filename.replace('.pdf', '.md').replace('.docx', '.md').replace('.doc', '.md')
+                        final_filename = filename.replace(
+                            '.pdf',
+                            '.md').replace(
+                            '.docx',
+                            '.md').replace(
+                            '.doc',
+                            '.md')
                         final_filename = final_filename.lower().replace(' ', '_')
-            
+
             target_dir.mkdir(parents=True, exist_ok=True)
             target_path = target_dir / final_filename
-            
+
             # No backup - just overwrite existing file if it exists
-            
+
             # Convert to markdown
             file_ext = Path(filename).suffix.lower()
-            
+
             if file_ext == '.pdf':
                 # Convert PDF
                 import tempfile
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
                     tmp.write(decoded)
                     tmp_path = tmp.name
-                
+
                 try:
                     document_loader = DocumentLoader()
-                    markdown_content = document_loader.convert_pdf_to_markdown(tmp_path, str(target_path))
-                    
+                    markdown_content = document_loader.convert_pdf_to_markdown(
+                        tmp_path, str(target_path))
+
                 except Exception as conv_error:
                     # Conversion failed - reject upload
-                    error_msg = html.Div([
-                        html.I(className="fas fa-exclamation-triangle text-danger me-2"),
-                        html.Span(f"PDF conversion failed: {str(conv_error)[:100]}", className="text-danger"),
-                        html.Br(),
-                        html.Small("File may be corrupted, password-protected, or have unsupported formatting.", className="text-muted")
-                    ], className="alert alert-danger")
-                    
+                    error_msg = html.Div(
+                        [
+                            html.I(
+                                className="fas fa-exclamation-triangle text-danger me-2"),
+                            html.Span(
+                                f"PDF conversion failed: {
+                                    str(conv_error)[
+                                        :100]}",
+                                className="text-danger"),
+                            html.Br(),
+                            html.Small(
+                                "File may be corrupted, password-protected, or have unsupported formatting.",
+                                className="text-muted")],
+                        className="alert alert-danger")
+
                     return False, "", "", None, "", "", "", None, error_msg
                 finally:
                     Path(tmp_path).unlink(missing_ok=True)
-                    
+
             elif file_ext in ['.docx', '.doc']:
                 # Convert DOCX
                 import tempfile
                 with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp:
                     tmp.write(decoded)
                     tmp_path = tmp.name
-                
+
                 try:
                     document_loader = DocumentLoader()
-                    markdown_content = document_loader.convert_docx_to_markdown(tmp_path, str(target_path))
+                    markdown_content = document_loader.convert_docx_to_markdown(
+                        tmp_path, str(target_path))
                 except Exception as conv_error:
                     error_msg = html.Div([
                         html.I(className="fas fa-exclamation-triangle text-danger me-2"),
@@ -5187,7 +5581,7 @@ def handle_document_upload(
                     return False, "", "", None, "", "", "", None, error_msg
                 finally:
                     Path(tmp_path).unlink(missing_ok=True)
-                    
+
             elif file_ext == '.md':
                 # Already markdown - just save
                 markdown_content = decoded.decode('utf-8')
@@ -5205,7 +5599,7 @@ uploaded_at: {datetime.now().isoformat()}
                         f.write(metadata + markdown_content)
                     else:
                         f.write(markdown_content)
-            
+
             # Reload RAG with correct year from UI state (not cached context)
             rag_manager = get_rag_manager()
             # Use context_year from UI, or fia_year for FIA docs
@@ -5213,22 +5607,24 @@ uploaded_at: {datetime.now().isoformat()}
             # Convert circuit selector value to circuit name
             reload_circuit = None
             if context_circuit:
-                reload_circuit = _get_circuit_name_for_rag(context_circuit, reload_year)
+                reload_circuit = _get_circuit_name_for_rag(
+                    context_circuit, reload_year)
             chunk_count = rag_manager.load_context(
                 year=reload_year,
                 circuit=reload_circuit,
                 clear_existing=True
             )
-            
+
             # Get updated document lists for sidebar
             docs = rag_manager.list_documents(
                 year=reload_year,
                 circuit=reload_circuit,
             )
-            
+
             # Format lists for display
             global_list = _format_doc_list(docs.get("global", []), "global")
-            strategy_list = _format_doc_list(docs.get("strategy", []), "strategy")
+            strategy_list = _format_doc_list(
+                docs.get("strategy", []), "strategy")
             weather_list = _format_doc_list(docs.get("weather", []), "weather")
             performance_list = _format_doc_list(
                 docs.get("performance", []), "performance"
@@ -5240,14 +5636,19 @@ uploaded_at: {datetime.now().isoformat()}
                 docs.get("race_position", []), "race_position"
             )
             fia_list = _format_doc_list(docs.get("fia", []), "fia")
-            
+
             # Success - show toast and close modal
-            success_msg = html.Div([
-                html.I(className="fas fa-check-circle text-success me-2"),
-                html.Span(f"✅ {final_filename} uploaded successfully ({chunk_count} chunks indexed)", className="text-success")
-            ], className="alert alert-success")
-            
-            # Close modal and show success (9 original + 3 UI + 9 RAG = 21 outputs)
+            success_msg = html.Div(
+                [
+                    html.I(
+                        className="fas fa-check-circle text-success me-2"),
+                    html.Span(
+                        f"✅ {final_filename} uploaded successfully ({chunk_count} chunks indexed)",
+                        className="text-success")],
+                className="alert alert-success")
+
+            # Close modal and show success (9 original + 3 UI + 9 RAG = 21
+            # outputs)
             return (
                 False, "", "", None, "", "", "", None, success_msg,
                 # UI reset (hide overlay, enable button, reset text)
@@ -5258,80 +5659,90 @@ uploaded_at: {datetime.now().isoformat()}
                 global_list, strategy_list, weather_list,
                 performance_list, race_control_list, race_position_list, fia_list
             )
-            
+
         except Exception as e:
             logger.error(f"Upload processing error: {e}", exc_info=True)
             error_msg = html.Div([
                 html.I(className="fas fa-times-circle text-danger me-2"),
                 html.Span(f"Upload failed: {str(e)[:100]}", className="text-danger")
             ], className="alert alert-danger")
-            return (False, "", "", None, "", "", "", None, error_msg) + ui_reset + rag_no_updates
-    
+            return (False, "", "", None, "", "", "", None,
+                    error_msg) + ui_reset + rag_no_updates
+
     # File upload - open modal with preview and LLM suggestion
     file_contents = None
     filename = None
     is_fia = False
-    category_hint = None
-    
+
     # Check which upload triggered
-    if triggered_id and isinstance(triggered_id, dict) and triggered_id.get('type') == 'rag-upload-input':
+    if triggered_id and isinstance(
+            triggered_id,
+            dict) and triggered_id.get('type') == 'rag-upload-input':
         # Category upload from hidden dcc.Upload
-        category_hint = triggered_id.get('category')
-        
+        _ = triggered_id.get('category')
+
         # Find which upload has content
         for i, contents in enumerate(category_upload_contents_list):
             if contents:
                 file_contents = contents
                 filename = category_upload_filenames_list[i]
                 break
-        
+
     elif triggered_id == 'fia-reg-upload' and fia_contents:
         file_contents = fia_contents
         filename = fia_filename
         is_fia = True
-        category_hint = 'fia'
-    
+
     if not file_contents or not filename:
         raise PreventUpdate
-    
+
     try:
         # Parse file
         content_type, content_string = file_contents.split(',')
         decoded = base64.b64decode(content_string)
         file_size = len(decoded)
         file_ext = Path(filename).suffix.lower()
-        
+
         # Validate file
         if file_size > 10 * 1024 * 1024:  # 10MB limit
-            error_msg = html.Div([
-                html.I(className="fas fa-exclamation-triangle text-warning me-2"),
-                html.Span(f"File too large: {file_size / 1024 / 1024:.1f}MB (max 10MB)", className="text-warning")
-            ], className="alert alert-warning")
-            return (False, error_msg, "", None, "", "", "", None, "") + ui_reset + rag_no_updates
-        
+            error_msg = html.Div(
+                [
+                    html.I(
+                        className="fas fa-exclamation-triangle text-warning me-2"),
+                    html.Span(
+                        f"File too large: {
+                            file_size /
+                            1024 /
+                            1024:.1f}MB (max 10MB)",
+                        className="text-warning")],
+                className="alert alert-warning")
+            return (False, error_msg, "", None, "", "", "",
+                    None, "") + ui_reset + rag_no_updates
+
         if file_ext not in ['.pdf', '.docx', '.doc', '.md']:
             error_msg = html.Div([
                 html.I(className="fas fa-exclamation-triangle text-warning me-2"),
                 html.Span(f"Unsupported file type: {file_ext}", className="text-warning")
             ], className="alert alert-warning")
-            return (False, error_msg, "", None, "", "", "", None, "") + ui_reset + rag_no_updates
-        
+            return (False, error_msg, "", None, "", "", "",
+                    None, "") + ui_reset + rag_no_updates
+
         # File info display
         file_info = html.Div([
             html.P([html.Strong("Name: "), filename]),
             html.P([html.Strong("Size: "), f"{file_size / 1024:.1f} KB"]),
             html.P([html.Strong("Type: "), file_ext.upper()])
         ])
-        
+
         # Quick preview (detailed extraction happens at save time)
         preview_text = ""
         if file_ext == '.md':
             preview_text = decoded.decode('utf-8', errors='ignore')[:500]
         elif file_ext == '.pdf':
-            preview_text = f"📄 PDF file ready to upload. Content will be extracted during save."
+            preview_text = "📄 PDF file ready to upload. Content will be extracted during save."
         elif file_ext in ['.docx', '.doc']:
-            preview_text = f"📝 Word document ready to upload. Content will be extracted during save."
-        
+            preview_text = "📝 Word document ready to upload. Content will be extracted during save."
+
         # Determine default category based on button source
         if is_fia:
             default_category = 'fia'
@@ -5352,10 +5763,10 @@ uploaded_at: {datetime.now().isoformat()}
                 default_category = 'race_position'
             else:
                 default_category = None  # User must select
-        
+
         # Determine initial target path based on default category
         is_fia_category = (default_category == 'fia')
-        
+
         if default_category:
             if is_fia_category:
                 # FIA documents go to year level
@@ -5364,39 +5775,50 @@ uploaded_at: {datetime.now().isoformat()}
                 suggested_filename = f"fia_regulations_{year}"
             elif default_category == 'global':
                 # Global category
-                target_path_str = f"data/rag/global/{filename.replace(file_ext, '.md')}"
+                target_path_str = f"data/rag/global/{
+                    filename.replace(
+                        file_ext, '.md')}"
                 suggested_filename = filename.replace(file_ext, '')
             elif default_category in ['strategy', 'weather', 'performance', 'race_control', 'race_position']:
                 # Circuit-specific categories
                 if context_circuit and context_year:
-                    circuit = _get_circuit_name_for_rag(context_circuit, context_year)
+                    circuit = _get_circuit_name_for_rag(
+                        context_circuit, context_year)
                     target_path_str = f"data/rag/{context_year}/circuits/{circuit}/{default_category}.md"
                     suggested_filename = default_category
                 elif context_year:
                     target_path_str = f"data/rag/{context_year}/{default_category}.md"
                     suggested_filename = default_category
                 else:
-                    target_path_str = f"data/rag/global/{filename.replace(file_ext, '.md')}"
+                    target_path_str = f"data/rag/global/{
+                        filename.replace(
+                            file_ext, '.md')}"
                     suggested_filename = filename.replace(file_ext, '')
             else:
                 # Fallback
-                target_path_str = f"data/rag/global/{filename.replace(file_ext, '.md')}"
+                target_path_str = f"data/rag/global/{
+                    filename.replace(
+                        file_ext, '.md')}"
                 suggested_filename = filename.replace(file_ext, '')
         else:
             # No default - show placeholder until user selects
             target_path_str = "⚠️ Select a category first"
             suggested_filename = filename.replace(file_ext, '')
-        
+
         # Check for duplicates
         target_path_obj = Path(target_path_str)
         if target_path_obj.exists():
-            duplicate_warning = html.Div([
-                html.I(className="fas fa-exclamation-triangle text-warning me-2"),
-                html.Span("⚠️ File exists! Uploading will create a backup of the old version.", className="text-warning fw-bold")
-            ], className="alert alert-warning")
+            duplicate_warning = html.Div(
+                [
+                    html.I(
+                        className="fas fa-exclamation-triangle text-warning me-2"),
+                    html.Span(
+                        "⚠️ File exists! Uploading will create a backup of the old version.",
+                        className="text-warning fw-bold")],
+                className="alert alert-warning")
         else:
             duplicate_warning = ""
-        
+
         # Store file data for confirmation
         stored_data = {
             'content': file_contents,
@@ -5404,8 +5826,9 @@ uploaded_at: {datetime.now().isoformat()}
             'default_category': default_category,
             'is_fia': is_fia
         }
-        
-        # Return modal opened with all info (9 original + 3 UI + 9 RAG no_update)
+
+        # Return modal opened with all info (9 original + 3 UI + 9 RAG
+        # no_update)
         return (
             True,  # is_open
             file_info,
@@ -5417,14 +5840,15 @@ uploaded_at: {datetime.now().isoformat()}
             stored_data,
             ""  # No processing status yet
         ) + ui_reset + rag_no_updates
-        
+
     except Exception as e:
         logger.error(f"Error preparing upload: {e}", exc_info=True)
         error_msg = html.Div([
             html.I(className="fas fa-times-circle text-danger me-2"),
             html.Span(f"Error: {str(e)[:100]}", className="text-danger")
         ], className="alert alert-danger")
-        return (False, error_msg, "", None, "", "", "", None, "") + ui_reset + rag_no_updates
+        return (False, error_msg, "", None, "", "", "",
+                None, "") + ui_reset + rag_no_updates
 
 
 @callback(
@@ -5438,55 +5862,70 @@ uploaded_at: {datetime.now().isoformat()}
     prevent_initial_call=True
 )
 def update_target_path_on_category_change(
-    selected_category, stored_file_data, context_year, context_circuit, fia_year
-):
+        selected_category,
+        stored_file_data,
+        context_year,
+        context_circuit,
+        fia_year):
     """Update target path display when user changes category in dropdown."""
     if not stored_file_data or not selected_category:
         raise PreventUpdate
-    
+
     try:
         from pathlib import Path
-        
+
         filename = stored_file_data['filename']
         file_ext = Path(filename).suffix.lower()
         is_fia_from_button = stored_file_data.get('is_fia', False)
-        
+
         # User selected category takes priority
         is_fia_category = (selected_category == 'fia') or is_fia_from_button
-        
+
         # Calculate new target path based on selected category
         if is_fia_category:
             year = fia_year if fia_year else context_year
             target_path_str = f"data/rag/{year}/fia_regulations_{year}.md"
             suggested_filename = f"fia_regulations_{year}"
         elif selected_category == 'global':
-            target_path_str = f"data/rag/global/{filename.replace(file_ext, '.md')}"
+            target_path_str = f"data/rag/global/{
+                filename.replace(
+                    file_ext, '.md')}"
             suggested_filename = filename.replace(file_ext, '')
         elif selected_category in ['strategy', 'weather', 'performance', 'race_control', 'race_position']:
             if context_circuit and context_year:
-                circuit = _get_circuit_name_for_rag(context_circuit, context_year)
+                circuit = _get_circuit_name_for_rag(
+                    context_circuit, context_year)
                 target_path_str = f"data/rag/{context_year}/circuits/{circuit}/{selected_category}.md"
                 suggested_filename = selected_category
             elif context_year:
                 target_path_str = f"data/rag/{context_year}/{selected_category}.md"
                 suggested_filename = selected_category
             else:
-                target_path_str = f"data/rag/global/{filename.replace(file_ext, '.md')}"
+                target_path_str = f"data/rag/global/{
+                    filename.replace(
+                        file_ext, '.md')}"
                 suggested_filename = filename.replace(file_ext, '')
         else:
             # Other/unknown category
             if context_circuit and context_year:
-                circuit = _get_circuit_name_for_rag(context_circuit, context_year)
-                target_path_str = f"data/rag/{context_year}/circuits/{circuit}/{filename.replace(file_ext, '.md')}"
+                circuit = _get_circuit_name_for_rag(
+                    context_circuit, context_year)
+                target_path_str = f"data/rag/{context_year}/circuits/{circuit}/{
+                    filename.replace(
+                        file_ext, '.md')}"
             elif context_year:
-                target_path_str = f"data/rag/{context_year}/{filename.replace(file_ext, '.md')}"
+                target_path_str = f"data/rag/{context_year}/{
+                    filename.replace(
+                        file_ext, '.md')}"
             else:
-                target_path_str = f"data/rag/global/{filename.replace(file_ext, '.md')}"
-            
+                target_path_str = f"data/rag/global/{
+                    filename.replace(
+                        file_ext, '.md')}"
+
             suggested_filename = filename.replace(file_ext, '')
-        
+
         return target_path_str, suggested_filename
-        
+
     except Exception as e:
         logger.error(f"Error updating target path: {e}", exc_info=True)
         raise PreventUpdate
@@ -5537,15 +5976,15 @@ def handle_template_generation(
     """Handle template generation with confirmation for overwrites."""
     from pathlib import Path
     from dash.exceptions import PreventUpdate
-    
+
     triggered_id = ctx.triggered_id
-    
+
     # Default empty doc lists for early returns (7 categories)
     no_update_lists = (
         dash.no_update, dash.no_update, dash.no_update, dash.no_update,
         dash.no_update, dash.no_update, dash.no_update
     )
-    
+
     # Cancel button - close modal
     if triggered_id == 'rag-generate-cancel-btn':
         return (
@@ -5553,7 +5992,7 @@ def handle_template_generation(
             dash.no_update, dash.no_update,
             *no_update_lists
         )
-    
+
     # Generate button clicked - check for existing files
     if triggered_id == 'rag-generate-btn':
         if not year or not meeting_key:
@@ -5562,7 +6001,7 @@ def handle_template_generation(
                 dash.no_update, dash.no_update,
                 *no_update_lists
             )
-        
+
         # Get circuit name
         circuit = _get_circuit_name_for_rag(meeting_key, year)
         if not circuit:
@@ -5571,15 +6010,15 @@ def handle_template_generation(
                 dash.no_update, dash.no_update,
                 *no_update_lists
             )
-        
+
         # Check for existing files
         rag_path = Path("data/rag") / str(year) / "circuits" / circuit
         existing_files = []
         if rag_path.exists():
             existing_files = [f.name for f in rag_path.glob("*.md")]
-        
+
         circuit_display = circuit.replace('_', ' ').title()
-        
+
         if existing_files:
             # Show confirmation modal
             message = f"Generate templates for {circuit_display} ({year})?"
@@ -5596,7 +6035,7 @@ def handle_template_generation(
         else:
             # No existing files - generate directly
             return _do_generate_templates(year, circuit, circuit_display)
-    
+
     # Confirm button - actually generate
     if triggered_id == 'rag-generate-confirm-btn':
         if store_data and store_data.get('year') and store_data.get('circuit'):
@@ -5606,25 +6045,25 @@ def handle_template_generation(
                 store_data['circuit'],
                 circuit_display
             )
-    
+
     raise PreventUpdate
 
 
 def _do_generate_templates(year: int, circuit: str, circuit_display: str):
     """
     Execute template generation and return callback outputs.
-    
+
     Args:
         year: Target year
         circuit: Circuit name in snake_case
         circuit_display: Circuit name for display
-    
+
     Returns:
         Tuple of callback outputs (15 values for new category structure)
     """
     try:
         generator = get_template_generator()
-        
+
         # Generate with save_to_disk=True
         logger.info(f"Generating templates for {circuit} ({year})...")
         docs = generator.generate_for_circuit(
@@ -5633,7 +6072,7 @@ def _do_generate_templates(year: int, circuit: str, circuit_display: str):
             use_historical=True,
             save_to_disk=True
         )
-        
+
         # Reload RAG context with correct year/circuit (not cached context)
         rag_manager = get_rag_manager()
         chunk_count = rag_manager.load_context(
@@ -5641,10 +6080,10 @@ def _do_generate_templates(year: int, circuit: str, circuit_display: str):
             circuit=circuit,
             clear_existing=True
         )
-        
+
         # Get updated document lists
         all_docs = rag_manager.list_documents(year=year, circuit=circuit)
-        
+
         # Format lists for display
         global_list = _format_doc_list(all_docs.get("global", []), "global")
         strategy_list = _format_doc_list(
@@ -5661,14 +6100,14 @@ def _do_generate_templates(year: int, circuit: str, circuit_display: str):
             all_docs.get("race_position", []), "race_position"
         )
         fia_list = _format_doc_list(all_docs.get("fia", []), "fia")
-        
+
         files_generated = list(docs.keys())
         status_msg = (
             f"✅ Generated {len(files_generated)} templates for "
             f"{circuit_display}: {', '.join(files_generated)}"
         )
         logger.info(status_msg)
-        
+
         return (
             False,  # Close modal
             "",
@@ -5685,7 +6124,7 @@ def _do_generate_templates(year: int, circuit: str, circuit_display: str):
             race_position_list,
             fia_list
         )
-        
+
     except Exception as e:
         logger.error(f"Error generating templates: {e}")
         return (
@@ -5713,14 +6152,14 @@ app.clientside_callback(
         if (!triggered || triggered.length === 0) {
             return window.dash_clientside.no_update;
         }
-        
+
         const triggeredId = triggered[0].prop_id;
-        
+
         // Extract category from the triggered button
         const match = triggeredId.match(/"category":"([^"]+)"/);
         if (match && match[1]) {
             const category = match[1];
-            
+
             // Find and click the corresponding hidden upload input
             const uploadInputs = document.querySelectorAll('[id*="rag-upload-input"]');
             for (let input of uploadInputs) {
@@ -5735,7 +6174,7 @@ app.clientside_callback(
                 }
             }
         }
-        
+
         return window.dash_clientside.no_update;
     }
     """,
@@ -5799,7 +6238,7 @@ def handle_document_editor(
 ):
     """
     Handle document editor modal: open, save, cancel.
-    
+
     This callback manages:
     - Opening modal when a document is clicked
     - Loading document content into textarea
@@ -5809,22 +6248,22 @@ def handle_document_editor(
     import base64
     import json
     from pathlib import Path
-    
+
     # Debug: log what triggered the callback
     triggered = ctx.triggered
     triggered_id = ctx.triggered_id
     logger.debug(f"DOC EDITOR - triggered: {triggered}")
     logger.debug(f"DOC EDITOR - triggered_id: {triggered_id}")
     logger.debug(f"DOC EDITOR - btn_clicks: {btn_clicks}")
-    
+
     # If no trigger info, prevent update
     if not triggered or triggered[0]['value'] is None:
         raise PreventUpdate
-    
+
     # Cancel button - close modal
     if triggered_id == 'doc-editor-cancel-btn':
         return False, "", "", "", {"filepath": None}, ""
-    
+
     # Save button - save content and close
     if triggered_id == 'doc-editor-save-btn':
         if store_data and store_data.get('filepath'):
@@ -5858,36 +6297,40 @@ def handle_document_editor(
                     f"❌ Error saving: {str(e)[:50]}"
                 )
         raise PreventUpdate
-    
+
     # Document button click - check if any button was actually clicked
     # With ALL pattern, btn_clicks is a list, check if any is not None
     if btn_clicks and any(c is not None for c in btn_clicks):
         # Find which button was clicked from ctx.triggered
         triggered_prop = triggered[0].get('prop_id', '')
         logger.debug(f"DOC EDITOR - prop_id: {triggered_prop}")
-        
-        # prop_id format: {"type":"doc-edit-btn","index":"cat|idx|b64"}.n_clicks
+
+        # prop_id format:
+        # {"type":"doc-edit-btn","index":"cat|idx|b64"}.n_clicks
         if 'doc-edit-btn' in triggered_prop:
             try:
                 # Extract the JSON part before .n_clicks
                 json_part = triggered_prop.rsplit('.', 1)[0]
                 btn_info = json.loads(json_part)
                 click_index = btn_info.get('index', '')
-                
+
                 logger.debug(f"DOC EDITOR - click_index: {click_index}")
-                
+
                 parts = click_index.split('|')
                 if len(parts) >= 3:
                     encoded_path = parts[2]
-                    
+
                     if encoded_path:
-                        filepath = base64.b64decode(encoded_path.encode()).decode()
-                        filename = Path(filepath).name if filepath else "Document"
-                        
+                        filepath = base64.b64decode(
+                            encoded_path.encode()).decode()
+                        filename = Path(
+                            filepath).name if filepath else "Document"
+
                         file_path = Path(filepath)
                         if file_path.exists():
                             content = file_path.read_text(encoding='utf-8')
-                            logger.info(f"Opening document for edit: {filepath}")
+                            logger.info(
+                                f"Opening document for edit: {filepath}")
                             return (
                                 True,
                                 f"📝 {filename}",
@@ -5919,7 +6362,7 @@ def handle_document_editor(
                     {"filepath": None},
                     f"❌ Error: {str(e)[:50]}"
                 )
-    
+
     raise PreventUpdate
 
 
@@ -5948,20 +6391,21 @@ def update_dashboards(
     circuit_options,
 ):
     """Update visible dashboards based on selection."""
-    global current_session_obj
-    global _cached_weather_component, _cached_weather_lap, _cached_weather_session_key
-    global _cached_telemetry_component, _cached_telemetry_key
-    global _cached_race_control_component, _cached_race_control_sig
+    global current_session_obj  # noqa: F824
+    global _cached_weather_component, _cached_weather_lap, _cached_weather_session_key  # noqa: F824
+    global _cached_telemetry_component, _cached_telemetry_key  # noqa: F824
+    global _cached_race_control_component, _cached_race_control_sig  # noqa: F824
     global _track_map_trace_offset, _track_map_driver_order
 
     driver_code = None
     if focused_driver and focused_driver != 'none':
         parts = focused_driver.split('_')
         driver_code = parts[0] if parts else focused_driver
-    
+
     selected_dashboard_ids: List[str] = []
     if isinstance(selected_dashboards, (list, tuple)):
-        selected_dashboard_ids = [str(item) for item in selected_dashboards if item]
+        selected_dashboard_ids = [str(item)
+                                  for item in selected_dashboards if item]
     elif isinstance(selected_dashboards, str) and selected_dashboards:
         selected_dashboard_ids = [selected_dashboards]
 
@@ -5986,10 +6430,17 @@ def update_dashboards(
 
     if stored_order and selected_dashboard_ids:
         position_map = {item: idx for idx, item in enumerate(stored_order)}
-        fallback_map = {item: idx for idx, item in enumerate(selected_dashboard_ids)}
+        fallback_map = {
+            item: idx for idx,
+            item in enumerate(selected_dashboard_ids)}
 
         def sort_key(dash_id: str) -> tuple[int, int]:
-            base = position_map.get(dash_id, len(position_map) + fallback_map.get(dash_id, 0))
+            base = position_map.get(
+                dash_id,
+                len(position_map) +
+                fallback_map.get(
+                    dash_id,
+                    0))
             return base, fallback_map.get(dash_id, 0)
 
         selected_dashboard_ids = sorted(selected_dashboard_ids, key=sort_key)
@@ -6004,7 +6455,7 @@ def update_dashboards(
                 className="text-center text-muted"
             )
         ])
-    
+
     # Check if session is loaded (for dashboards that require it)
     session_loaded = session_data and session_data.get('loaded', False)
     mode_is_simulation = mode_value == 'sim'
@@ -6019,13 +6470,14 @@ def update_dashboards(
             track_map_status = maybe_track_map
 
     track_map_ready = bool(track_map_status.get('ready'))
-    
+
     # Create dashboards based on selection
     dashboards = []
-    
+
     for dashboard_id in selected_dashboards:
         if dashboard_id == "ai":
-            # Placeholder; real rendering happens in dedicated callback to avoid re-mounts
+            # Placeholder; real rendering happens in dedicated callback to
+            # avoid re-mounts
             dashboards.append(html.Div(id='ai-dashboard-slot'))
         elif dashboard_id == "race_overview":
             # Race Overview Dashboard (Leaderboard + Circuit Map)
@@ -6044,7 +6496,7 @@ def update_dashboards(
                                     dcc.Loading(
                                         html.Div([
                                             html.P("Loading session data...", className="text-center p-5 text-muted"),
-                                            html.P("Please wait while we load the race information.", 
+                                            html.P("Please wait while we load the race information.",
                                                    className="text-center text-muted small")
                                         ]),
                                         type="circle",
@@ -6072,53 +6524,53 @@ def update_dashboards(
                     )
                 )
                 continue
-                
+
             try:
                 if current_session_obj is None:
-                    logger.warning("Race overview requested but no session loaded")
+                    logger.warning(
+                        "Race overview requested but no session loaded")
                     dashboards.append(
                         dbc.Card(
                             [
                                 dbc.CardHeader(
-                                    html.H5("🏁 Race Overview", className="mb-0", style={"fontSize": "1.2rem"}),
+                                    html.H5(
+                                        "🏁 Race Overview",
+                                        className="mb-0",
+                                        style={
+                                            "fontSize": "1.2rem"}),
                                     className="py-1",
-                                    style={"backgroundColor": "#1e1e1e"}
-                                ),
+                                    style={
+                                        "backgroundColor": "#1e1e1e"}),
                                 dbc.CardBody(
                                     [
                                         html.P(
-                                            "No session loaded. Please select a race session from the sidebar.", 
-                                            className="text-muted text-center p-5")
-                                    ],
+                                            "No session loaded. Please select a race session from the sidebar.",
+                                            className="text-muted text-center p-5")],
                                     className="p-2",
                                     style={
-                                        "backgroundColor": "#121212",
-                                        "display": "flex",
-                                        "flexDirection": "column",
-                                        "flex": "1 1 auto",
-                                        "minHeight": "0"
-                                    }
-                                )
-                            ],
+                                            "backgroundColor": "#121212",
+                                            "display": "flex",
+                                            "flexDirection": "column",
+                                            "flex": "1 1 auto",
+                                            "minHeight": "0"})],
                             className="border border-secondary mb-3 h-100",
                             style={
-                                "backgroundColor": "#121212",
-                                "display": "flex",
-                                "flexDirection": "column",
-                                "height": "100%",
-                                "minHeight": "0"
-                            }
-                        )
-                    )
+                                                "backgroundColor": "#121212",
+                                                "display": "flex",
+                                                "flexDirection": "column",
+                                                "height": "100%",
+                                "minHeight": "0"}))  # noqa: E131
                 else:
-                    overview_logger.info("Rendering race overview dashboard...")
+                    overview_logger.info(
+                        "Rendering race overview dashboard...")
                     openf1_provider.reset_api_call_counts()
                     overview_logger.debug("Race overview API counters reset")
                     # Get session_key from loaded session
                     session_key = None
                     simulation_time = None
-                    
-                    if current_session_obj and hasattr(current_session_obj, 'session_key'):
+
+                    if current_session_obj and hasattr(
+                            current_session_obj, 'session_key'):
                         session_key = current_session_obj.session_key
 
                     if simulation_controller is not None:
@@ -6129,16 +6581,18 @@ def update_dashboards(
                                 simulation_time
                             )
                         except Exception as exc:
-                            logger.warning("Could not get simulation time: %s", exc)
+                            logger.warning(
+                                "Could not get simulation time: %s", exc)
                             simulation_time = 0.0
                     else:
                         simulation_time = 0.0
-                    
+
                     # Get session start time from controller
                     session_start_time = None
                     if simulation_controller is not None:
-                        session_start_time = pd.Timestamp(simulation_controller.start_time)
-                    
+                        session_start_time = pd.Timestamp(
+                            simulation_controller.start_time)
+
                     # Get current lap from simulation controller
                     # This is the GLOBAL lap (OpenF1 format) from the leader
                     overview_current_lap = None
@@ -6146,16 +6600,18 @@ def update_dashboards(
                         try:
                             overview_current_lap = simulation_controller.get_current_lap()
                             sim_logger.debug(
-                                f"Passing current_lap to overview: {overview_current_lap}"
-                            )
+                                f"Passing current_lap to overview: {overview_current_lap}")
                         except Exception as e:
-                            logger.warning(f"Could not get lap for overview: {e}")
-                    
+                            logger.warning(
+                                f"Could not get lap for overview: {e}")
+
                     formation_offset_seconds = None
                     if isinstance(track_map_status, dict):
-                        formation_offset_value = track_map_status.get('formation_offset_seconds')
+                        formation_offset_value = track_map_status.get(
+                            'formation_offset_seconds')
                         if isinstance(formation_offset_value, (int, float)):
-                            formation_offset_seconds = float(formation_offset_value)
+                            formation_offset_seconds = float(
+                                formation_offset_value)
                     overview_logger.debug(
                         "Race overview (initial) formation offset: %s",
                         formation_offset_seconds,
@@ -6175,15 +6631,16 @@ def update_dashboards(
                         reset=True,
                         level=logging.INFO,
                     )
-                    
+
                     # Build lap info for header
-                    total_laps = session_data.get('total_laps', 57) if session_data else 57
+                    total_laps = session_data.get(
+                        'total_laps', 57) if session_data else 57
                     display_lap = overview_current_lap if overview_current_lap and overview_current_lap > 0 else 1
                     lap_info_text = (
                         f"Lap 1 (untimed)/{total_laps}" if display_lap == 1
                         else f"Lap {display_lap}/{total_laps}"
                     )
-                    
+
                     dashboards.append(
                         dbc.Card(
                             [
@@ -6231,10 +6688,13 @@ def update_dashboards(
                             }
                         )
                     )
-                    overview_logger.info("Race overview dashboard rendered successfully")
-                    
+                    overview_logger.info(
+                        "Race overview dashboard rendered successfully")
+
             except Exception as e:
-                logger.error(f"Error creating race overview dashboard: {e}", exc_info=True)
+                logger.error(
+                    f"Error creating race overview dashboard: {e}",
+                    exc_info=True)
                 dashboards.append(
                     dbc.Card(
                         [
@@ -6265,75 +6725,94 @@ def update_dashboards(
                         }
                     )
                 )
-        
+
         elif dashboard_id == "race_control":
             # Race Control Dashboard (Flags, SC/VSC, Penalties)
             if not session_loaded:
                 dash_logger.debug("Race control: session not yet loaded")
                 dashboards.append(
                     html.Div(
-                        dbc.Card([
-                            dbc.CardHeader(html.H5(" Race Control", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
-                            dbc.CardBody([
-                                dcc.Loading(
-                                    html.Div([
-                                        html.P("Loading session data...", className="text-center p-5 text-muted"),
-                                        html.P("Please wait while we load the race control information.",
-                                               className="text-center text-muted small")
-                                    ]),
-                                    type="circle",
-                                    color="#e10600"
-                                )
-                            ], className="p-2", style={
-                                "backgroundColor": "#121212",
-                                "display": "flex",
-                                "flexDirection": "column",
-                                "flex": "1 1 auto",
-                                "minHeight": "0"
-                            })
-                        ], className="border border-secondary mb-3 h-100", style={
-                            "backgroundColor": "#121212",
-                            "display": "flex",
-                            "flexDirection": "column",
-                            "height": "100%",
-                            "minHeight": "0"
-                        }),
-                        id="race-control-wrapper",
-                        style={"height": "100%"}
-                    )
-                )
-                continue
-
-            try:
-                if current_session_obj is None:
-                    logger.warning("Race control requested but no session loaded")
-                    dashboards.append(
-                        html.Div(
-                            dbc.Card([
-                                dbc.CardHeader(html.H5(" Race Control", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
-                                dbc.CardBody([
-                                    html.P("No session loaded. Please select a race session from the sidebar.",
-                                           className="text-muted text-center p-5")
-                                ], className="p-2", style={
-                                    "backgroundColor": "#121212",
-                                    "display": "flex",
-                                    "flexDirection": "column",
-                                    "flex": "1 1 auto",
-                                    "minHeight": "0"
-                                })
-                            ], className="border border-secondary mb-3 h-100", style={
+                        dbc.Card(
+                            [
+                                dbc.CardHeader(
+                                    html.H5(
+                                        " Race Control",
+                                        className="mb-0",
+                                        style={
+                                            "fontSize": "1.2rem"}),
+                                    className="py-1"),
+                                dbc.CardBody(
+                                    [
+                                        dcc.Loading(
+                                            html.Div(
+                                                [
+                                                    html.P(
+                                                        "Loading session data...",
+                                                        className="text-center p-5 text-muted"),
+                                                    html.P(
+                                                        "Please wait while we load the race control information.",
+                                                        className="text-center text-muted small")]),
+                                            type="circle",
+                                            color="#e10600")],
+                                    className="p-2",
+                                    style={
+                                        "backgroundColor": "#121212",
+                                        "display": "flex",
+                                        "flexDirection": "column",
+                                        "flex": "1 1 auto",
+                                        "minHeight": "0"})],
+                            className="border border-secondary mb-3 h-100",
+                            style={
                                 "backgroundColor": "#121212",
                                 "display": "flex",
                                 "flexDirection": "column",
                                 "height": "100%",
-                                "minHeight": "0"
-                            }),
+                                "minHeight": "0"}),
+                        id="race-control-wrapper",
+                        style={
+                            "height": "100%"}))
+                continue
+
+            try:
+                if current_session_obj is None:
+                    logger.warning(
+                        "Race control requested but no session loaded")
+                    dashboards.append(
+                        html.Div(
+                            dbc.Card(
+                                [
+                                    dbc.CardHeader(
+                                        html.H5(
+                                            " Race Control",
+                                            className="mb-0",
+                                            style={
+                                                "fontSize": "1.2rem"}),
+                                        className="py-1"),
+                                    dbc.CardBody(
+                                        [
+                                            html.P(
+                                                "No session loaded. Please select a race session from the sidebar.",
+                                                className="text-muted text-center p-5")],
+                                        className="p-2",
+                                        style={
+                                            "backgroundColor": "#121212",
+                                            "display": "flex",
+                                            "flexDirection": "column",
+                                            "flex": "1 1 auto",
+                                            "minHeight": "0"})],
+                                className="border border-secondary mb-3 h-100",
+                                style={
+                                    "backgroundColor": "#121212",
+                                    "display": "flex",
+                                    "flexDirection": "column",
+                                    "height": "100%",
+                                    "minHeight": "0"}),
                             id="race-control-wrapper",
-                            style={"height": "100%"}
-                        )
-                    )
+                            style={
+                                "height": "100%"}))
                 else:
-                    control_logger.info("Rendering race control dashboard (static mount)...")
+                    control_logger.info(
+                        "Rendering race control dashboard (static mount)...")
                     race_control_component = _render_race_control(
                         focused_driver=focused_driver,
                         use_store_time=False,
@@ -6346,36 +6825,49 @@ def update_dashboards(
                     control_logger.info("Race control dashboard mounted")
 
             except Exception as e:
-                logger.error(f"Error creating race control dashboard: {e}", exc_info=True)
+                logger.error(
+                    f"Error creating race control dashboard: {e}",
+                    exc_info=True)
                 dashboards.append(
                     html.Div(
-                        dbc.Card([
-                            dbc.CardHeader(html.H5(" Race Control", className="mb-0", style={"fontSize": "1.2rem"}), className="py-1"),
-                            dbc.CardBody([
-                                html.P(f"Error loading race control: {str(e)}", className="text-danger")
-                            ], className="p-2", style={
+                        dbc.Card(
+                            [
+                                dbc.CardHeader(
+                                    html.H5(
+                                        " Race Control",
+                                        className="mb-0",
+                                        style={
+                                            "fontSize": "1.2rem"}),
+                                    className="py-1"),
+                                dbc.CardBody(
+                                    [
+                                        html.P(
+                                            f"Error loading race control: {
+                                                str(e)}",
+                                            className="text-danger")],
+                                    className="p-2",
+                                    style={
+                                        "backgroundColor": "#121212",
+                                        "display": "flex",
+                                        "flexDirection": "column",
+                                        "flex": "1 1 auto",
+                                                "minHeight": "0"})],
+                            className="border border-secondary mb-3 h-100",
+                            style={
                                 "backgroundColor": "#121212",
                                 "display": "flex",
                                 "flexDirection": "column",
-                                "flex": "1 1 auto",
-                                "minHeight": "0"
-                            })
-                        ], className="border border-secondary mb-3 h-100", style={
-                            "backgroundColor": "#121212",
-                            "display": "flex",
-                            "flexDirection": "column",
-                            "height": "100%",
-                            "minHeight": "0"
-                        }),
+                                "height": "100%",
+                                "minHeight": "0"}),
                         id="race-control-wrapper",
-                        style={"height": "100%"}
-                    )
-                )
+                        style={
+                            "height": "100%"}))
 
         elif dashboard_id == "weather":
             # Weather Dashboard (Phase 1 MVP) - Compact 33% width
             if not session_loaded:
-                dash_logger.info("Weather dashboard requested but session not yet loaded")
+                dash_logger.info(
+                    "Weather dashboard requested but session not yet loaded")
                 dashboards.append(
                     html.Div(
                         dbc.Card([
@@ -6383,7 +6875,11 @@ def update_dashboards(
                             dbc.CardBody([
                                 dcc.Loading(
                                     html.Div([
-                                        html.P("Loading...", className="text-center p-3 text-muted", style={"fontSize": "0.8rem"}),
+                                        html.P(
+                                            "Loading...",
+                                            className="text-center p-3 text-muted",
+                                            style={"fontSize": "0.8rem"}
+                                        ),
                                     ]),
                                     type="circle",
                                     color="#e10600"
@@ -6394,12 +6890,18 @@ def update_dashboards(
                     )
                 )
             else:
-                dash_logger.info("Rendering weather dashboard (static mount)...")
+                dash_logger.info(
+                    "Rendering weather dashboard (static mount)...")
                 try:
                     weather_component = _render_weather()
-                    dashboards.append(html.Div(weather_component, id="weather-wrapper"))
+                    dashboards.append(
+                        html.Div(
+                            weather_component,
+                            id="weather-wrapper"))
                 except Exception as e:
-                    logger.error(f"Error rendering weather dashboard: {e}", exc_info=True)
+                    logger.error(
+                        f"Error rendering weather dashboard: {e}",
+                        exc_info=True)
                     dashboards.append(
                         html.Div(
                             dbc.Card([
@@ -6414,7 +6916,10 @@ def update_dashboards(
 
         elif dashboard_id == "track_map":
             card_id = "track-map-wrapper"
-            base_style = {"minHeight": "480px", "height": "100%", "overflow": "hidden"}
+            base_style = {
+                "minHeight": "480px",
+                "height": "100%",
+                "overflow": "hidden"}
 
             if not mode_is_simulation:
                 dashboards.append(
@@ -6447,7 +6952,10 @@ def update_dashboards(
                             dbc.CardBody([
                                 dcc.Loading(
                                     html.Div([
-                                        html.P("Preparing simulation session...", className="text-center text-muted mt-4"),
+                                        html.P(
+                                            "Preparing simulation session...",
+                                            className="text-center text-muted mt-4"
+                                        ),
                                     ]),
                                     type="circle",
                                     color="#e10600"
@@ -6483,14 +6991,16 @@ def update_dashboards(
                 )
                 continue
 
-            formation_offset_value = track_map_status.get('formation_offset_seconds')
+            formation_offset_value = track_map_status.get(
+                'formation_offset_seconds')
             formation_offset_seconds = (
                 float(formation_offset_value)
                 if isinstance(formation_offset_value, (int, float))
                 else 0.0
             )
             total_laps = _resolve_track_map_total_laps(session_data)
-            _, focus_driver_number = _parse_driver_selector_value(focused_driver)
+            _, focus_driver_number = _parse_driver_selector_value(
+                focused_driver)
             global _track_map_focus_driver
             _track_map_focus_driver = focus_driver_number
 
@@ -6500,12 +7010,14 @@ def update_dashboards(
                 try:
                     initial_elapsed = simulation_controller.get_elapsed_seconds()
                 except Exception as exc:  # noqa: BLE001
-                    dash_logger.debug("Unable to read simulation time for initial track map: %s", exc)
+                    dash_logger.debug(
+                        "Unable to read simulation time for initial track map: %s", exc)
                     initial_elapsed = 0.0
                 try:
                     initial_lap = simulation_controller.get_current_lap() or 1
                 except Exception as exc:  # noqa: BLE001
-                    dash_logger.debug("Unable to read lap for initial track map: %s", exc)
+                    dash_logger.debug(
+                        "Unable to read lap for initial track map: %s", exc)
                     initial_lap = 1
 
             track_map_dashboard = get_track_map_dashboard()
@@ -6521,11 +7033,10 @@ def update_dashboards(
             if simulation_controller is not None:
                 try:
                     effective_initial_elapsed = simulation_controller.clamp_elapsed_to_lap(
-                        initial_elapsed,
-                        max(initial_lap, 1),
-                    )
+                        initial_elapsed, max(initial_lap, 1), )
                 except Exception as exc:  # noqa: BLE001
-                    dash_logger.debug("Unable to clamp elapsed time for track map: %s", exc)
+                    dash_logger.debug(
+                        "Unable to clamp elapsed time for track map: %s", exc)
                     effective_initial_elapsed = initial_elapsed
 
             if driver_entries:
@@ -6544,12 +7055,14 @@ def update_dashboards(
                     offset = _extract_track_map_trace_offset(base_figure)
                     if offset is not None:
                         _track_map_trace_offset = offset
-                        _track_map_driver_order = sorted(entry["driver_number"] for entry in driver_entries)
+                        _track_map_driver_order = sorted(
+                            entry["driver_number"] for entry in driver_entries)
                     else:
                         _track_map_trace_offset = None
                         _track_map_driver_order = []
                 except Exception as exc:  # noqa: BLE001
-                    dash_logger.error("Failed to build initial track map figure: %s", exc, exc_info=True)
+                    dash_logger.error(
+                        "Failed to build initial track map figure: %s", exc, exc_info=True)
                     base_figure = track_map_dashboard.get_circuit_figure()
                     _track_map_trace_offset = None
                     _track_map_driver_order = []
@@ -6656,9 +7169,11 @@ def update_dashboards(
                 )
             )
         elif dashboard_id == "telemetry":
-            # Telemetry Dashboard - Speed, Throttle, Brake, Gear for focus driver
+            # Telemetry Dashboard - Speed, Throttle, Brake, Gear for focus
+            # driver
             try:
-                telem_logger.info("Rendering telemetry dashboard (static mount)...")
+                telem_logger.info(
+                    "Rendering telemetry dashboard (static mount)...")
 
                 telemetry_component = _render_telemetry(
                     focused_driver=focused_driver,
@@ -6666,11 +7181,16 @@ def update_dashboards(
                     session_data=session_data,
                     use_store_time=False,
                 )
-                dashboards.append(html.Div(telemetry_component, id="telemetry-wrapper"))
+                dashboards.append(
+                    html.Div(
+                        telemetry_component,
+                        id="telemetry-wrapper"))
                 telem_logger.info("Telemetry dashboard mounted")
 
             except Exception as e:
-                logger.error(f"Error creating telemetry dashboard: {e}", exc_info=True)
+                logger.error(
+                    f"Error creating telemetry dashboard: {e}",
+                    exc_info=True)
                 dashboards.append(
                     html.Div(
                         dbc.Card([
@@ -6701,7 +7221,7 @@ def update_dashboards(
                         id="telemetry-wrapper"
                     )
                 )
-        
+
         else:
             # Generic placeholder for other dashboards
             dashboards.append(
@@ -6716,21 +7236,25 @@ def update_dashboards(
                     ])
                 ], className="mb-3")
             )
-    
+
     # Layout dashboards:
     # Grid layout: 2 rows x 3 columns (33% width each, 50vh height each row)
     # No vertical scroll - all dashboards fit in viewport
     if len(dashboards) == 0:
-        return html.Div("No dashboards selected", className="text-center text-muted p-5")
-    
+        return html.Div(
+            "No dashboards selected",
+            className="text-center text-muted p-5")
+
     # Wrap all dashboards in responsive columns
-    # CSS handles the layout switching between landscape (3 cols) and portrait (2 cols)
+    # CSS handles the layout switching between landscape (3 cols) and portrait
+    # (2 cols)
     wrapped_dashboards = []
     for idx, dash_component in enumerate(dashboards):
-        dash_id = selected_dashboards[idx] if idx < len(selected_dashboards) else f"dashboard-{idx}"
+        dash_id = selected_dashboards[idx] if idx < len(
+            selected_dashboards) else f"dashboard-{idx}"
         # Border style for visual separation
         border_style = {"borderRight": "1px solid #333"}
-        
+
         tile_id = f"dashboard-tile-{dash_id}"
         data_attrs = cast(dict[str, Any], {"data-dashboard-id": dash_id})
 
@@ -6756,7 +7280,7 @@ def update_dashboards(
                     style={**border_style}
                 )
             )
-    
+
     # Return flex container - CSS handles responsive layout
     # Landscape: wraps at 3 items per row (33% each)
     # Portrait: wraps at 2 items per row (50% each)
@@ -6820,7 +7344,8 @@ def sync_dashboard_order(
     if triggered_id == 'dashboard-order-listener':
         if not order_event:
             raise PreventUpdate
-        detail = order_event.get('detail') if isinstance(order_event, dict) else None
+        detail = order_event.get('detail') if isinstance(
+            order_event, dict) else None
         detail_list = normalize_items(detail)
         if not detail_list:
             raise PreventUpdate
@@ -6873,7 +7398,8 @@ def render_ai_dashboard(
         for opt in circuit_options:
             if opt.get('value') == selected_circuit:
                 label = opt.get('label', '')
-                circuit_name = label.split(' - ', 1)[1] if ' - ' in label else label
+                circuit_name = label.split(
+                    ' - ', 1)[1] if ' - ' in label else label
                 break
 
     session_type = selected_session if selected_session else 'Race'
@@ -6883,7 +7409,8 @@ def render_ai_dashboard(
         parts = focused_driver.split('_')
         driver_code = parts[0] if parts else focused_driver
 
-    # Prefer sanitized incoming store; fall back to last known messages to avoid empties
+    # Prefer sanitized incoming store; fall back to last known messages to
+    # avoid empties
     effective_chat = _ensure_json_safe_messages(chat_messages)
     if not effective_chat and _last_chat_messages:
         try:
@@ -6899,9 +7426,13 @@ def render_ai_dashboard(
         "session_type": session_type,
         "session_loaded": session_loaded,
     }
-    ai_signature = json.dumps(ai_signature_payload, sort_keys=True, default=str)
+    ai_signature = json.dumps(
+        ai_signature_payload,
+        sort_keys=True,
+        default=str)
 
-    # If layout was remounted (e.g., other dashboards refresh) re-serve cached AI
+    # If layout was remounted (e.g., other dashboards refresh) re-serve cached
+    # AI
     if _cached_ai_component is not None and _cached_ai_sig == ai_signature:
         return _cached_ai_component
 
@@ -6928,7 +7459,8 @@ def render_ai_dashboard(
     return component
 
 
-# Callback: Refresh race overview body using simulation time without re-rendering other dashboards
+# Callback: Refresh race overview body using simulation time without
+# re-rendering other dashboards
 @callback(
     Output('race-overview-body', 'children'),
     Input('simulation-time-store', 'data'),
@@ -6944,7 +7476,7 @@ def refresh_race_overview_body(
     session_data: dict[str, Any] | None,
 ):
     """Refresh the race overview content frequently without rebuilding all dashboards."""
-    global current_session_obj, simulation_controller
+    global current_session_obj, simulation_controller  # noqa: F824
 
     if not selected_dashboards or 'race_overview' not in selected_dashboards:
         raise PreventUpdate
@@ -6976,13 +7508,15 @@ def refresh_race_overview_body(
             try:
                 overview_current_lap = simulation_controller.get_current_lap()
             except Exception as exc:  # noqa: BLE001
-                logger.warning("Could not read lap for overview refresh: %s", exc)
+                logger.warning(
+                    "Could not read lap for overview refresh: %s", exc)
 
         formation_offset_seconds = None
         if isinstance(session_data, dict):
             track_map_status = session_data.get('track_map', {})
             if isinstance(track_map_status, dict):
-                formation_offset_value = track_map_status.get('formation_offset_seconds')
+                formation_offset_value = track_map_status.get(
+                    'formation_offset_seconds')
                 if isinstance(formation_offset_value, (int, float)):
                     formation_offset_seconds = float(formation_offset_value)
         overview_logger.debug(
@@ -7000,7 +7534,10 @@ def refresh_race_overview_body(
         )
         return overview_content
     except Exception as exc:  # noqa: BLE001
-        logger.error("Error refreshing race overview body: %s", exc, exc_info=True)
+        logger.error(
+            "Error refreshing race overview body: %s",
+            exc,
+            exc_info=True)
         raise PreventUpdate
 
 
@@ -7024,13 +7561,19 @@ def cache_track_map_trajectories(
     default_store = _default_track_map_trajectory_store()
 
     if not session_data or not session_data.get('loaded'):
-        if isinstance(existing_store, dict) and existing_store == default_store:
+        if isinstance(
+                existing_store,
+                dict) and existing_store == default_store:
             raise PreventUpdate
         return default_store
 
-    track_map_status = session_data.get('track_map', {}) if isinstance(session_data, dict) else {}
+    track_map_status = session_data.get(
+        'track_map', {}) if isinstance(
+        session_data, dict) else {}
     if not track_map_status.get('ready'):
-        if isinstance(existing_store, dict) and existing_store == default_store:
+        if isinstance(
+                existing_store,
+                dict) and existing_store == default_store:
             raise PreventUpdate
         return default_store
 
@@ -7048,14 +7591,16 @@ def cache_track_map_trajectories(
         try:
             elapsed_time = simulation_controller.get_elapsed_seconds()
         except Exception as exc:  # noqa: BLE001
-            dash_logger.debug("Unable to read simulation time for trajectory cache: %s", exc)
+            dash_logger.debug(
+                "Unable to read simulation time for trajectory cache: %s", exc)
 
     current_lap = 1
     if simulation_controller is not None:
         try:
             current_lap = simulation_controller.get_current_lap() or 1
         except Exception as exc:  # noqa: BLE001
-            dash_logger.debug("Unable to read lap for trajectory cache: %s", exc)
+            dash_logger.debug(
+                "Unable to read lap for trajectory cache: %s", exc)
 
     if current_lap < 1 and isinstance(existing_store, dict):
         laps_section = existing_store.get('laps')
@@ -7102,23 +7647,32 @@ def cache_track_map_trajectories(
             previous_offset = float(existing_store.get('time_offset', 0.0))
             maybe_bounds = existing_store.get('time_bounds')
             if isinstance(maybe_bounds, list) and len(maybe_bounds) == 2:
-                previous_bounds = [float(maybe_bounds[0]), float(maybe_bounds[1])]
+                previous_bounds = [
+                    float(
+                        maybe_bounds[0]), float(
+                        maybe_bounds[1])]
 
         if (
-            math.isclose(store_payload['time_offset'], previous_offset, rel_tol=1e-6, abs_tol=1e-6)
-            and store_payload['time_bounds'] == previous_bounds
-        ):
+            math.isclose(
+                store_payload['time_offset'],
+                previous_offset,
+                rel_tol=1e-6,
+                abs_tol=1e-6) and store_payload['time_bounds'] == previous_bounds):
             raise PreventUpdate
 
-    trajectories = provider.get_lap_trajectories(current_lap, driver_numbers=driver_numbers)
+    trajectories = provider.get_lap_trajectories(
+        current_lap, driver_numbers=driver_numbers)
     if not trajectories:
-        track_map_logger.debug("No lap trajectories available for lap %s", lap_key)
+        track_map_logger.debug(
+            "No lap trajectories available for lap %s", lap_key)
         raise PreventUpdate
 
     store_payload['laps'][lap_key] = trajectories
 
     try:
-        lap_keys_sorted = sorted(store_payload['laps'].keys(), key=lambda key: int(key))
+        lap_keys_sorted = sorted(
+            store_payload['laps'].keys(),
+            key=lambda key: int(key))
     except ValueError:
         lap_keys_sorted = list(store_payload['laps'].keys())
 
@@ -7196,11 +7750,13 @@ def refresh_track_map_figure(
         try:
             elapsed_time = simulation_controller.get_elapsed_seconds()
         except Exception as exc:  # noqa: BLE001
-            dash_logger.debug("Falling back to store time for track map: %s", exc)
+            dash_logger.debug(
+                "Falling back to store time for track map: %s", exc)
         try:
             current_lap = simulation_controller.get_current_lap() or 1
         except Exception as exc:  # noqa: BLE001
-            dash_logger.debug("Unable to determine current lap for track map: %s", exc)
+            dash_logger.debug(
+                "Unable to determine current lap for track map: %s", exc)
 
     current_lap = max(current_lap, 1)
     effective_elapsed_time = max(elapsed_time, 0.0)
@@ -7226,7 +7782,8 @@ def refresh_track_map_figure(
     )
 
     if not driver_data:
-        dash_logger.debug("Track map driver data unavailable; returning base circuit figure")
+        dash_logger.debug(
+            "Track map driver data unavailable; returning base circuit figure")
         empty_figure = track_dashboard.get_circuit_figure()
         empty_figure.update_layout(title=dict(text=""))
         return empty_figure, lap_label_text
@@ -7261,7 +7818,8 @@ def refresh_track_map_figure(
             )
             offset = _extract_track_map_trace_offset(full_figure)
             if offset is None:
-                dash_logger.warning("Track map figure missing driver traces; returning full figure")
+                dash_logger.warning(
+                    "Track map figure missing driver traces; returning full figure")
                 _track_map_trace_offset = None
                 _track_map_driver_order = []
                 full_figure.update_layout(title=dict(text=""))
@@ -7349,11 +7907,9 @@ def refresh_track_map_figure(
                         sample_time_value = float(sample_time_raw)
 
                 track_map_logger.debug(
-                    (
-                        "[TrackMap] driver=%s source=%s sim_elapsed_store=%.3f sim_elapsed_ctrl=%.3f "
-                        "sim_elapsed_clamped=%.3f sim_lap=%s cache_lap=%s prev_time=%.3f next_time=%.3f "
-                        "query_time=%.3f sample_time=%.3f"
-                    ),
+                    ("[TrackMap] driver=%s source=%s sim_elapsed_store=%.3f sim_elapsed_ctrl=%.3f "
+                     "sim_elapsed_clamped=%.3f sim_lap=%s cache_lap=%s prev_time=%.3f next_time=%.3f "
+                     "query_time=%.3f sample_time=%.3f"),
                     debug_driver,
                     source_text,
                     store_elapsed_time,
@@ -7367,14 +7923,18 @@ def refresh_track_map_figure(
                     sample_time_value,
                 )
     except Exception as exc:  # noqa: BLE001
-        dash_logger.error("Error updating track map positions: %s", exc, exc_info=True)
+        dash_logger.error(
+            "Error updating track map positions: %s",
+            exc,
+            exc_info=True)
         fallback_figure = track_dashboard.get_circuit_figure()
         fallback_figure.update_layout(title=dict(text=""))
         return fallback_figure, lap_label_text
 
     patch = Patch()
 
-    has_retired_drivers = any(entry.get('retired') for entry in driver_metadata_lookup.values())
+    has_retired_drivers = any(entry.get('retired')
+                              for entry in driver_metadata_lookup.values())
     if not positions and not has_retired_drivers:
         patch['layout']['annotations'] = [{
             'text': "No position data available",
@@ -7400,7 +7960,8 @@ def refresh_track_map_figure(
         position_payload = position.copy() if isinstance(position, dict) else {}
         team_name = entry.get('team_name', 'Unknown')
 
-        lap_hint = entry.get('lap_fallback') if isinstance(entry.get('lap_fallback'), int) else None
+        lap_hint = entry.get('lap_fallback') if isinstance(
+            entry.get('lap_fallback'), int) else None
         if not isinstance(lap_hint, int) or lap_hint < 1:
             lap_hint = _track_map_driver_laps.get(driver_number)
         if not isinstance(lap_hint, int) or lap_hint < 1:
@@ -7408,7 +7969,8 @@ def refresh_track_map_figure(
 
         if is_retired:
             order_index = int(entry.get('retired_order') or 0)
-            anchor_x, anchor_y = track_dashboard.get_retirement_marker_position(order_index)
+            anchor_x, anchor_y = track_dashboard.get_retirement_marker_position(
+                order_index)
             retired_lap = entry.get('retired_lap')
             if isinstance(retired_lap, int) and retired_lap >= 1:
                 lap_hint = retired_lap
@@ -7439,7 +8001,8 @@ def refresh_track_map_figure(
             fallback_lap=lap_hint,
         )
         patch['data'][trace_idx]['customdata'] = customdata
-        patch['data'][trace_idx]['hovertemplate'] = track_dashboard.build_hovertemplate(entry, team_name)
+        patch['data'][trace_idx]['hovertemplate'] = track_dashboard.build_hovertemplate(
+            entry, team_name)
 
         styles = driver_style_lookup.get(driver_number)
         if styles:
@@ -7531,21 +8094,21 @@ def save_api_keys(n_clicks, claude_key, gemini_key, openf1_key):
     """Save API keys to .env file."""
     if not n_clicks:
         raise PreventUpdate
-    
+
     try:
         env_path = Path(__file__).parent / 'config' / '.env'
         lines = []
-        
+
         # Read existing .env file if it exists
         if os.path.exists(env_path):
             with open(env_path, 'r') as f:
                 lines = f.readlines()
-        
+
         # Update or add keys
         claude_found = False
         gemini_found = False
         openf1_found = False
-        
+
         for i, line in enumerate(lines):
             if line.startswith('ANTHROPIC_API_KEY='):
                 lines[i] = f'ANTHROPIC_API_KEY={claude_key}\n'
@@ -7556,7 +8119,7 @@ def save_api_keys(n_clicks, claude_key, gemini_key, openf1_key):
             elif line.startswith('OPENF1_API_KEY='):
                 lines[i] = f'OPENF1_API_KEY={openf1_key}\n'
                 openf1_found = True
-        
+
         # Add keys if not found
         if not claude_found:
             lines.append(f'ANTHROPIC_API_KEY={claude_key}\n')
@@ -7564,25 +8127,25 @@ def save_api_keys(n_clicks, claude_key, gemini_key, openf1_key):
             lines.append(f'GOOGLE_API_KEY={gemini_key}\n')
         if not openf1_found:
             lines.append(f'OPENF1_API_KEY={openf1_key}\n')
-        
+
         # Write back to .env
         with open(env_path, 'w') as f:
             f.writelines(lines)
-        
+
         # Update environment variables in current session
         os.environ['ANTHROPIC_API_KEY'] = claude_key or ''
         os.environ['GOOGLE_API_KEY'] = gemini_key or ''
         os.environ['OPENF1_API_KEY'] = openf1_key or ''
-        
+
         # Reset LLM provider to use new keys
         global _llm_provider, _llm_provider_type
         _llm_provider = None
         _llm_provider_type = None
-        
+
         # Determine which provider will be used
         has_claude = bool(claude_key and claude_key.strip())
         has_gemini = bool(gemini_key and gemini_key.strip())
-        
+
         if has_claude and has_gemini:
             provider_msg = "HybridRouter (Claude + Gemini)"
         elif has_claude:
@@ -7595,16 +8158,22 @@ def save_api_keys(n_clicks, claude_key, gemini_key, openf1_key):
                 color="warning", dismissable=True, duration=5000,
                 className="small py-1 mb-0 mt-2"
             )
-        
+
         return dbc.Alert(
             f"✅ Keys saved! Using: {provider_msg}",
             color="success", dismissable=True, duration=5000,
             className="small py-1 mb-0 mt-2"
         )
-    
+
     except Exception as e:
         logger.error(f"Error saving API keys: {e}")
-        return dbc.Alert(f"❌ Error: {str(e)}", color="danger", dismissable=True, duration=3000, className="small py-1 mb-0 mt-2")
+        return dbc.Alert(
+            f"❌ Error: {
+                str(e)}",
+            color="danger",
+            dismissable=True,
+            duration=3000,
+            className="small py-1 mb-0 mt-2")
 
 
 # Callback: Play/Pause simulation
@@ -7618,8 +8187,8 @@ def save_api_keys(n_clicks, claude_key, gemini_key, openf1_key):
 )
 def toggle_play_pause(n_clicks):
     """Toggle play/pause for simulation."""
-    global simulation_controller, current_session_obj, _pit_policy_context, event_detector
-    
+    global simulation_controller, current_session_obj, _pit_policy_context, event_detector  # noqa: F824
+
     if simulation_controller is None:
         return "▶️", "success", True, "Play simulation"
 
@@ -7644,15 +8213,15 @@ def toggle_play_pause(n_clicks):
             openf1_provider,
             tire_windows=tire_window_overrides,
         )
-    
+
     # If simulation ended, restart from the beginning before playing
     if simulation_controller.is_at_end():
         simulation_controller.restart()
-    
+
     # Toggle play/pause state (simulation always starts from 0)
     is_playing = simulation_controller.toggle_play_pause()
     sim_logger.info(f"Play/Pause toggled: is_playing={is_playing}")
-    
+
     if is_playing:
         return "⏸️", "warning", False, "Pause simulation"
     else:
@@ -7667,11 +8236,11 @@ def toggle_play_pause(n_clicks):
 )
 def restart_simulation(n_clicks):
     """Restart simulation from beginning."""
-    global simulation_controller
-    
+    global simulation_controller  # noqa: F824
+
     if simulation_controller:
         simulation_controller.restart()
-    
+
     raise PreventUpdate  # Don't update anything, just execute the action
 
 
@@ -7684,8 +8253,8 @@ def restart_simulation(n_clicks):
 )
 def change_speed(speed):
     """Change simulation playback speed and adjust update interval."""
-    global simulation_controller
-    
+    global simulation_controller  # noqa: F824
+
     # Calculate optimal interval based on speed
     # At high speeds, we need faster updates to keep UI in sync
     # Base interval: 1500ms at 1x, decreasing at higher speeds
@@ -7694,7 +8263,7 @@ def change_speed(speed):
     base_interval = 1500
     # Minimum 500ms to avoid overwhelming the browser
     optimal_interval = max(500, int(base_interval / math.sqrt(float(speed))))
-    
+
     if simulation_controller:
         try:
             simulation_controller.set_speed(float(speed))
@@ -7705,7 +8274,7 @@ def change_speed(speed):
         except ValueError as e:
             logger.error(f"Invalid speed value: {e}")
             return 1.0, base_interval
-    
+
     return speed, optimal_interval
 
 
@@ -7720,14 +8289,14 @@ def change_speed(speed):
 )
 def handle_lap_jumps(back_clicks, forward_clicks, current_time_data):
     """Handle lap jump buttons and update simulation time store."""
-    global simulation_controller
-    
+    global simulation_controller  # noqa: F824
+
     if simulation_controller is None:
         raise PreventUpdate
-    
+
     triggered = ctx.triggered_id
     old_lap = simulation_controller.get_current_lap()
-    
+
     if triggered == 'back-btn':
         simulation_controller.jump_backward(90)  # ~90 seconds per lap
         sim_logger.debug("Jumped to previous lap")
@@ -7736,13 +8305,14 @@ def handle_lap_jumps(back_clicks, forward_clicks, current_time_data):
         sim_logger.debug("Jumped to next lap")
     else:
         raise PreventUpdate
-    
+
     # Return updated time to trigger dashboard refresh
     new_time = simulation_controller.get_elapsed_seconds()
     new_lap = simulation_controller.get_current_lap()
-    
-    sim_logger.debug(f"Lap jump: {old_lap} -> {new_lap} (time={new_time:.1f}s)")
-    
+
+    sim_logger.debug(
+        f"Lap jump: {old_lap} -> {new_lap} (time={new_time:.1f}s)")
+
     return {
         'time': new_time,
         'timestamp': datetime.now().timestamp()
@@ -7758,48 +8328,53 @@ def handle_lap_jumps(back_clicks, forward_clicks, current_time_data):
 )
 def update_simulation_progress(n_intervals, session_data):
     """Update the simulation progress display in real-time."""
-    global simulation_controller
-    
+    global simulation_controller  # noqa: F824
+
     sim_logger.debug(f"update_simulation_progress: n_intervals={n_intervals}")
-    
+
     if simulation_controller is None:
         return "⏱️ Not started"
-    
+
     try:
         # Update simulation time
         simulation_controller.update()
-        
+
         # Get progress information
         remaining = simulation_controller.get_remaining_time()
-        
+
         # Get EXACT current lap from simulation controller (no estimation)
         current_lap = simulation_controller.get_current_lap()
 
-        # Keep raw lap count; if first lap has no timing (NaT), display as untimed
+        # Keep raw lap count; if first lap has no timing (NaT), display as
+        # untimed
         display_lap = current_lap if current_lap and current_lap > 0 else 1
         is_untimed_lap = display_lap == 1
 
         # Get total_laps from session_data (calculated from actual race data)
         total_laps = session_data.get('total_laps', 57) if session_data else 57
 
-        sim_logger.debug(f"Lap {display_lap}/{total_laps}, remaining: {remaining}")
-        
+        sim_logger.debug(
+            f"Lap {display_lap}/{total_laps}, remaining: {remaining}")
+
         # Format remaining time
         remaining_minutes = int(remaining.total_seconds() // 60)
         remaining_seconds = int(remaining.total_seconds() % 60)
-        
+
         # Get current speed multiplier
         speed = simulation_controller.speed_multiplier
-        
-        lap_label = f"Lap {int(display_lap)}" if not is_untimed_lap else "Lap 1 (untimed)"
+
+        lap_label = f"Lap {
+            int(display_lap)}" if not is_untimed_lap else "Lap 1 (untimed)"
         progress_text = (
             f"⏱️ {lap_label}/{int(total_laps)} | "
             f"⏳ {remaining_minutes}m {remaining_seconds}s left | 🚀 {speed}x"
         )
-        
+
         return progress_text
     except Exception as e:
-        logger.error(f"Error in update_simulation_progress: {e}", exc_info=True)
+        logger.error(
+            f"Error in update_simulation_progress: {e}",
+            exc_info=True)
         return f"⏱️ Error: {str(e)}"
 
 
@@ -7814,7 +8389,7 @@ def update_simulation_progress(n_intervals, session_data):
 )
 def sync_play_button_on_finish(n_intervals):
     """Show Play when the run finishes without clearing lap/time data."""
-    global simulation_controller
+    global simulation_controller  # noqa: F824
 
     if simulation_controller is None:
         raise PreventUpdate
@@ -7834,8 +8409,9 @@ def sync_play_button_on_finish(n_intervals):
 # Previous attempts:
 # 1. Full figure regeneration every second -> UI blocking
 # 2. Patch() with 3-second updates -> Still causes blocking
-# 
-# The static display is functional and doesn't interfere with simulation playback
+#
+# The static display is functional and doesn't interfere with simulation
+# playback
 
 
 # Track last dashboard update time (real-world time) to throttle updates
@@ -7848,13 +8424,15 @@ _cached_weather_lap = None
 _cached_weather_session_key = None
 
 _cached_telemetry_component = None
-_cached_telemetry_key = None  # (session_key, focused_driver, comparison_driver, lap)
+# (session_key, focused_driver, comparison_driver, lap)
+_cached_telemetry_key = None
 
 _cached_ai_component = None
 _cached_ai_sig = None  # hash over messages + context
 
 _cached_race_control_component = None
-_cached_race_control_sig = None  # (session_key, message_count, latest_time, focused_driver, lap)
+# (session_key, message_count, latest_time, focused_driver, lap)
+_cached_race_control_sig = None
 
 
 def _render_race_control(
@@ -7863,7 +8441,7 @@ def _render_race_control(
     simulation_time_data: dict | None = None,
 ):
     """Build Race Control dashboard content with optional store-based time."""
-    global current_session_obj, simulation_controller
+    global current_session_obj, simulation_controller  # noqa: F824
     global _cached_race_control_component, _cached_race_control_sig
 
     if current_session_obj is None:
@@ -7877,11 +8455,15 @@ def _render_race_control(
 
     if use_store_time and simulation_time_data and 'time' in simulation_time_data:
         simulation_time = simulation_time_data.get('time', 0.0)
-        sim_logger.debug("Race control using simulation time from store: %.1fs", simulation_time)
+        sim_logger.debug(
+            "Race control using simulation time from store: %.1fs",
+            simulation_time)
     elif simulation_controller is not None:
         try:
             simulation_time = simulation_controller.get_elapsed_seconds()
-            sim_logger.debug("Race control using controller time: %.1fs", simulation_time)
+            sim_logger.debug(
+                "Race control using controller time: %.1fs",
+                simulation_time)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Could not get simulation time: %s", exc)
             simulation_time = 0.0
@@ -7895,7 +8477,9 @@ def _render_race_control(
         try:
             openf1_lap = simulation_controller.get_current_lap()
             current_lap = openf1_lap if openf1_lap and openf1_lap > 0 else 1
-            sim_logger.debug("Current lap from controller: OpenF1 %s", openf1_lap)
+            sim_logger.debug(
+                "Current lap from controller: OpenF1 %s",
+                openf1_lap)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Could not get lap from controller: %s", exc)
             current_lap = None
@@ -7930,7 +8514,7 @@ def _render_race_control(
 
 def _render_weather(simulation_time_data: dict | None = None):
     """Build Weather dashboard content with lap-aware caching."""
-    global current_session_obj, simulation_controller
+    global current_session_obj, simulation_controller  # noqa: F824
     global _cached_weather_component, _cached_weather_lap, _cached_weather_session_key
 
     weather_session_key = current_session_obj.session_key if current_session_obj else None
@@ -7991,7 +8575,7 @@ def _render_telemetry(
     simulation_time_data: dict | None = None,
 ):
     """Build Telemetry dashboard content with caching."""
-    global current_session_obj, simulation_controller
+    global current_session_obj, simulation_controller  # noqa: F824
     global _cached_telemetry_component, _cached_telemetry_key
 
     session_key = None
@@ -8002,11 +8586,15 @@ def _render_telemetry(
 
     if use_store_time and simulation_time_data and 'time' in simulation_time_data:
         simulation_time = simulation_time_data.get('time', 0.0)
-        sim_logger.debug("Telemetry using simulation time from store: %.1fs", simulation_time)
+        sim_logger.debug(
+            "Telemetry using simulation time from store: %.1fs",
+            simulation_time)
     elif simulation_controller is not None:
         try:
             simulation_time = simulation_controller.get_elapsed_seconds()
-            sim_logger.debug("Telemetry using controller time: %.1fs", simulation_time)
+            sim_logger.debug(
+                "Telemetry using controller time: %.1fs",
+                simulation_time)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Could not get simulation time: %s", exc)
             simulation_time = 0.0
@@ -8077,7 +8665,7 @@ def refresh_race_control_content(
     session_data: dict[str, Any] | None,
 ):
     """Refresh Race Control content (messages and penalties) without destroying the Store or Card structure.
-    
+
     This updates only the scrollable content divs, preserving:
     - dcc.Store (toggle state)
     - Card structure
@@ -8089,13 +8677,13 @@ def refresh_race_control_content(
     if not session_data or not session_data.get('loaded'):
         raise PreventUpdate
 
-    global current_session_obj, simulation_controller, race_control_dashboard
+    global current_session_obj, simulation_controller, race_control_dashboard  # noqa: F824
 
     if current_session_obj is None:
         raise PreventUpdate
 
     session_key = getattr(current_session_obj, 'session_key', None)
-    
+
     # Get simulation time
     simulation_time = 0.0
     if simulation_time_data and 'time' in simulation_time_data:
@@ -8119,49 +8707,48 @@ def refresh_race_control_content(
     try:
         if session_key is None:
             raise PreventUpdate
-            
-        # Get fresh messages DataFrame  
-        messages_df, drivers_df = race_control_dashboard._get_messages_and_drivers(session_key)
-        
+
+        # Get fresh messages DataFrame
+        messages_df, drivers_df = race_control_dashboard._get_messages_and_drivers(
+            session_key)
+
         if messages_df is None or messages_df.empty:
             raise PreventUpdate
-        
+
         # Filter messages by simulation time
         filtered_messages = race_control_dashboard._filter_messages_by_time(
             messages_df,
             simulation_time,
             session_start_time
         )
-        
+
         if filtered_messages.empty:
             filtered_messages = messages_df.tail(50)
-        
+
         # Build complete Cards with proper flex styling
         timeline_card = race_control_dashboard._create_messages_timeline(
             messages=filtered_messages,
             focused_driver=focused_driver if focused_driver != 'none' else None,
-            drivers=drivers_df
-        )
-        
+            drivers=drivers_df)
+
         # Get penalties summary and status
         if session_key is not None and simulation_time is not None and session_start_time is not None:
             # Calculate display lap
             display_lap = current_lap if current_lap and current_lap > 0 else 1
-            
+
             summary_data = race_control_dashboard.get_status_summary(
                 session_key=session_key,
                 simulation_time=simulation_time,
                 session_start_time=session_start_time,
                 current_lap=display_lap
             )
-            summary_card = race_control_dashboard._create_summary_panel(summary_data)
-            
+            summary_card = race_control_dashboard._create_summary_panel(
+                summary_data)
+
             # Build status card
             flag_state, sc_detail = race_control_dashboard._extract_current_status(
-                filtered_messages,
-                current_lap=display_lap
-            )
-            
+                filtered_messages, current_lap=display_lap)
+
             flag_color = {
                 "GREEN": "success",
                 "YELLOW": "warning",
@@ -8185,7 +8772,7 @@ def refresh_race_control_content(
                 "VSC": "VIRTUAL SC",
                 "CHEQUERED": "SESSION ENDED",
             }.get(flag_state, flag_state)
-            
+
             status_content = dbc.CardBody([
                 html.Div([
                     dbc.Badge(
@@ -8207,18 +8794,26 @@ def refresh_race_control_content(
                 ], style={"display": "flex", "alignItems": "center"})
             ], className="p-2")
         else:
-            summary_card = dbc.Card([
-                dbc.CardHeader("⚖️ Investigations & Penalties", className="text-white py-1"),
-                dbc.CardBody(html.Div("Waiting for timing data...", className="text-muted text-center p-3"))
-            ])
+            summary_card = dbc.Card(
+                [
+                    dbc.CardHeader(
+                        "⚖️ Investigations & Penalties",
+                        className="text-white py-1"),
+                    dbc.CardBody(
+                        html.Div(
+                            "Waiting for timing data...",
+                            className="text-muted text-center p-3"))])
             status_content = dbc.CardBody([
                 html.Div("Waiting for data...", className="text-muted", style={"fontSize": "0.85rem"})
             ], className="p-2")
-        
+
         return status_content, timeline_card, summary_card
-        
+
     except Exception as exc:  # noqa: BLE001
-        logger.error("Error refreshing race control content: %s", exc, exc_info=True)
+        logger.error(
+            "Error refreshing race control content: %s",
+            exc,
+            exc_info=True)
         raise PreventUpdate
 
 
@@ -8233,29 +8828,49 @@ app.clientside_callback(
             if (current_state === 'penalties') {
                 return [
                     {'display': 'none'},
-                    {'display': 'flex', 'flex': '1 1 auto', 'minHeight': '0', 'flexDirection': 'column', 'overflow': 'hidden'},
+                    {
+                        'display': 'flex', 'flex': '1 1 auto',
+                        'minHeight': '0', 'flexDirection': 'column',
+                        'overflow': 'hidden'
+                    },
                     'secondary',
                     'primary',
                     'penalties'
                 ];
             }
-            return [window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update];
+            return [
+                window.dash_clientside.no_update,
+                window.dash_clientside.no_update,
+                window.dash_clientside.no_update,
+                window.dash_clientside.no_update,
+                window.dash_clientside.no_update
+            ];
         }
-        
+
         const triggeredId = triggered[0].prop_id.split('.')[0];
         let view = current_state || 'messages';  // default
-        
+
         try {
             const idObj = JSON.parse(triggeredId);
             view = idObj.view;
         } catch (e) {
-            return [window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update, window.dash_clientside.no_update];
+            return [
+                window.dash_clientside.no_update,
+                window.dash_clientside.no_update,
+                window.dash_clientside.no_update,
+                window.dash_clientside.no_update,
+                window.dash_clientside.no_update
+            ];
         }
-        
+
         if (view === 'messages') {
             // Show messages, hide penalties
             return [
-                {'display': 'flex', 'flex': '1 1 auto', 'minHeight': '0', 'flexDirection': 'column', 'overflow': 'hidden'},
+                {
+                    'display': 'flex', 'flex': '1 1 auto',
+                    'minHeight': '0', 'flexDirection': 'column',
+                    'overflow': 'hidden'
+                },
                 {'display': 'none'},
                 'primary',
                 'secondary',
@@ -8265,7 +8880,11 @@ app.clientside_callback(
             // Show penalties, hide messages
             return [
                 {'display': 'none'},
-                {'display': 'flex', 'flex': '1 1 auto', 'minHeight': '0', 'flexDirection': 'column', 'overflow': 'hidden'},
+                {
+                    'display': 'flex', 'flex': '1 1 auto',
+                    'minHeight': '0', 'flexDirection': 'column',
+                    'overflow': 'hidden'
+                },
                 'secondary',
                 'primary',
                 'penalties'
@@ -8345,52 +8964,55 @@ def refresh_telemetry_wrapper(
     State('simulation-time-store', 'data'),
     prevent_initial_call=True
 )
-def update_simulation_time_store(n_intervals, selected_dashboards, current_store):
+def update_simulation_time_store(
+        n_intervals,
+        selected_dashboards,
+        current_store):
     """Update simulation time store for dashboard updates.
-    
+
     This triggers the full dashboard refresh including gaps/intervals.
     Throttled to update every 2 real seconds to prevent UI freezing.
     """
-    global simulation_controller, _last_dashboard_update_time
-    
+    global simulation_controller, _last_dashboard_update_time  # noqa: F824
+
     # Only update if race_overview dashboard is selected
     if not selected_dashboards or 'race_overview' not in selected_dashboards:
         raise PreventUpdate
-    
+
     # Check if simulation is running
     if simulation_controller is None:
         raise PreventUpdate
-    
+
     # NOTE: Removed is_playing check here.
     # The interval is disabled when paused (via toggle_play_pause),
     # so this callback won't run anyway when paused.
     # The previous is_playing check was causing race conditions.
-    
+
     try:
         # Throttle: only update dashboard every N real seconds
         current_real_time = time.time()
         time_since_last_update = current_real_time - _last_dashboard_update_time
-        
+
         if time_since_last_update < _DASHBOARD_UPDATE_INTERVAL:
             # Not enough real time has passed, skip this update
             raise PreventUpdate
-        
+
         # Update timestamp for throttling
         _last_dashboard_update_time = current_real_time
-        
+
         # Get current simulation time
         simulation_time = simulation_controller.get_elapsed_seconds()
-        
+
         logger.debug(
             f"Dashboard update triggered: sim_time={simulation_time:.1f}s, "
             f"real_interval={time_since_last_update:.1f}s"
         )
-        
+
         return {
             'time': simulation_time,
             'timestamp': n_intervals  # Force update even if time is same
         }
-        
+
     except PreventUpdate:
         raise
     except Exception as e:
@@ -8411,11 +9033,11 @@ def update_simulation_time_store(n_intervals, selected_dashboards, current_store
 )
 def update_current_lap_store(n_intervals, session_data):
     """Update current lap store for fast badge updates."""
-    global simulation_controller
-    
+    global simulation_controller  # noqa: F824
+
     if simulation_controller is None or not simulation_controller.is_playing:
         raise PreventUpdate
-    
+
     try:
         # Get current lap from controller (raw count)
         current_lap = simulation_controller.get_current_lap()
@@ -8445,7 +9067,7 @@ def update_lap_badge(lap_data):
     """Update lap badge text quickly without regenerating dashboard."""
     if not lap_data:
         raise PreventUpdate
-    
+
     lap = lap_data.get('lap', 1)
     total = lap_data.get('total', 57)
     untimed = lap_data.get('untimed', False)
@@ -8463,40 +9085,44 @@ def update_lap_badge(lap_data):
     State('circuit-map-graph', 'figure'),
     prevent_initial_call=True
 )
-def update_circuit_map_realtime(n_intervals, selected_dashboards, current_figure):
+def update_circuit_map_realtime(
+        n_intervals,
+        selected_dashboards,
+        current_figure):
     """Update driver positions on circuit map using Patch for efficiency."""
-    global simulation_controller, current_session_obj
-    
+    global simulation_controller, current_session_obj  # noqa: F824
+
     # Only update if race_overview dashboard is selected
     if not selected_dashboards or 'race_overview' not in selected_dashboards:
         raise PreventUpdate
-    
+
     # Check if simulation is running and session loaded
     if simulation_controller is None or current_session_obj is None:
         raise PreventUpdate
-    
+
     try:
         # Get current simulation time
         current_time = simulation_controller.current_time
-        
+
         # Get session data
         laps = current_session_obj.laps
         results = current_session_obj.results
         drivers = current_session_obj.drivers
-        
+
         # Use Patch to update only driver positions (Traces 2+)
         patched_figure = Patch()
-        
+
         driver_idx = 0
         for driver_num in drivers:
             try:
-                driver_info = results[results['DriverNumber'] == str(driver_num)].iloc[0]
-                
+                driver_info = results[results['DriverNumber'] == str(  # noqa: F841
+                    driver_num)].iloc[0]
+
                 # Get driver's laps
                 driver_laps = laps[laps['DriverNumber'] == driver_num]
                 if driver_laps.empty:
                     continue
-                
+
                 # Find appropriate lap based on current_time
                 if 'Time' in driver_laps.columns:
                     valid_laps = driver_laps[
@@ -8509,15 +9135,16 @@ def update_circuit_map_realtime(n_intervals, selected_dashboards, current_figure
                         current_lap = driver_laps.iloc[0]
                 else:
                     current_lap = driver_laps.iloc[0]
-                
+
                 telemetry = current_lap.get_telemetry()
-                
+
                 if not telemetry.empty and 'X' in telemetry.columns and 'Y' in telemetry.columns:
                     if 'Time' in telemetry.columns:
                         valid_telem = telemetry[pd.notna(telemetry['Time'])]
                         if not valid_telem.empty:
                             # Find closest telemetry point by time
-                            time_diffs = (valid_telem['Time'] - current_time).abs()
+                            time_diffs = (
+                                valid_telem['Time'] - current_time).abs()
                             closest_idx = time_diffs.idxmin()
                             x_pos = telemetry.loc[closest_idx, 'X']
                             y_pos = telemetry.loc[closest_idx, 'Y']
@@ -8527,21 +9154,23 @@ def update_circuit_map_realtime(n_intervals, selected_dashboards, current_figure
                     else:
                         x_pos = telemetry['X'].iloc[0]
                         y_pos = telemetry['Y'].iloc[0]
-                    
+
                     # Update driver position (trace index = 2 + driver_idx)
-                    # Trace 0 = circuit outline, Trace 1 = START marker, Traces 2+ = drivers
+                    # Trace 0 = circuit outline, Trace 1 = START marker, Traces
+                    # 2+ = drivers
                     trace_idx = 2 + driver_idx
                     patched_figure['data'][trace_idx]['x'] = [x_pos]
                     patched_figure['data'][trace_idx]['y'] = [y_pos]
-                    
+
                     driver_idx += 1
-                    
+
             except Exception as e:
-                logger.debug(f"Error updating position for driver {driver_num}: {e}")
+                logger.debug(
+                    f"Error updating position for driver {driver_num}: {e}")
                 continue
-        
+
         return patched_figure
-        
+
     except Exception as e:
         logger.error(f"Error updating circuit map: {e}")
         raise PreventUpdate
@@ -8577,10 +9206,10 @@ def toggle_sidebar(n_clicks, is_visible):
     """Toggle sidebar visibility."""
     if n_clicks is None:
         raise PreventUpdate
-    
+
     # Toggle visibility
     new_visibility = not is_visible
-    
+
     if new_visibility:
         # Show sidebar
         return {'display': 'block'}, 10, True, '<<', 'Hide sidebar'
@@ -8607,7 +9236,8 @@ def _ensure_json_safe_messages(raw_messages: Any) -> list[dict]:
 
     # Normalize dict payloads (dcc.Store can send a dict when hydrated)
     if isinstance(raw_messages, dict):
-        candidate_messages = [v for v in raw_messages.values() if v is not None]
+        candidate_messages = [
+            v for v in raw_messages.values() if v is not None]
     elif isinstance(raw_messages, list):
         candidate_messages = raw_messages
     else:
@@ -8638,7 +9268,10 @@ def _ensure_json_safe_messages(raw_messages: Any) -> list[dict]:
 
         safe_msg['type'] = str(msg.get('type', 'assistant'))
         safe_msg['content'] = str(msg.get('content', ''))
-        safe_msg['timestamp'] = str(msg.get('timestamp', datetime.now().isoformat()))
+        safe_msg['timestamp'] = str(
+            msg.get(
+                'timestamp',
+                datetime.now().isoformat()))
 
         metadata = msg.get('metadata', {})
         if isinstance(metadata, dict):
@@ -8692,40 +9325,41 @@ def handle_chat_send(
     global _last_chat_request_time, _last_chat_messages
 
     from src.dashboards_dash.ai_assistant_dashboard import AIAssistantDashboard
-    
+
     if not ctx.triggered:
         raise PreventUpdate
-    
+
     triggered_id = ctx.triggered_id
-    
+
     # Ignore chat-input triggers unless they have actual content
     # This prevents the callback firing on every keystroke/focus change
     if triggered_id == 'chat-input':
         if not user_input or not user_input.strip():
             raise PreventUpdate
         # Only log actual submissions
-        chat_logger.info(f"[CHAT] Text submitted via Enter: {user_input[:30]}...")
+        chat_logger.info(
+            f"[CHAT] Text submitted via Enter: {user_input[:30]}...")
     else:
         chat_logger.info(f"[CHAT] Callback triggered by: {triggered_id}")
-    
+
     # Normalize and JSON-sanitize incoming store data before appending
     messages = _ensure_json_safe_messages(current_messages)
     if not messages and _last_chat_messages:
         # Restore history if store was unexpectedly empty
         messages = json.loads(json.dumps(_last_chat_messages))
-    
+
     # Simple rate limiting - only block very rapid clicks (< 0.5s)
     current_time = time.time()
     time_since_last = current_time - _last_chat_request_time
-    
+
     chat_logger.info(f"[CHAT] Time since last: {time_since_last:.2f}s")
-    
+
     if time_since_last < 0.5 and _last_chat_request_time > 0:
         chat_logger.info("[CHAT] Rate limited - ignoring rapid click")
         raise PreventUpdate  # Silently ignore rapid double-clicks
-    
+
     _last_chat_request_time = current_time
-    
+
     # Determine the query based on what was triggered
     if triggered_id in ['chat-send-btn', 'chat-input']:
         if not user_input or not user_input.strip():
@@ -8739,63 +9373,69 @@ def handle_chat_send(
         if not session_data or not session_data.get('loaded'):
             chat_logger.info("[CHAT] Ignoring quick pit: no session loaded")
             raise PreventUpdate
-        driver = focused_driver if focused_driver not in (None, 'none', '') else 'our driver'
+        driver = focused_driver if focused_driver not in (
+            None, 'none', '') else 'our driver'
         query = f"Should {driver} pit now? What's the optimal tire strategy?"
     elif triggered_id == 'quick-weather-btn':
         if not weather_clicks or weather_clicks <= 0:
-            chat_logger.debug("[CHAT] Ignoring weather trigger with zero clicks")
+            chat_logger.debug(
+                "[CHAT] Ignoring weather trigger with zero clicks")
             raise PreventUpdate
         query = "What's the current weather situation? Any rain expected?"
     elif triggered_id == 'quick-gap-btn':
         if not gap_clicks or gap_clicks <= 0:
             chat_logger.debug("[CHAT] Ignoring gap trigger with zero clicks")
             raise PreventUpdate
-        driver = focused_driver if focused_driver not in (None, 'none', '') else 'our driver'
+        driver = focused_driver if focused_driver not in (
+            None, 'none', '') else 'our driver'
         query = f"What are the gaps around {driver}? Any overtake opportunities?"
     elif triggered_id == 'quick-predict-btn':
         if not predict_clicks or predict_clicks <= 0:
-            chat_logger.debug("[CHAT] Ignoring predict trigger with zero clicks")
+            chat_logger.debug(
+                "[CHAT] Ignoring predict trigger with zero clicks")
             raise PreventUpdate
         if not session_data or not session_data.get('loaded'):
-            chat_logger.info("[CHAT] Ignoring quick predict: no session loaded")
+            chat_logger.info(
+                "[CHAT] Ignoring quick predict: no session loaded")
             raise PreventUpdate
-        driver = focused_driver if focused_driver not in (None, 'none', '') else 'our driver'
-        
+        driver = focused_driver if focused_driver not in (
+            None, 'none', '') else 'our driver'
+
         # Generate prediction using overtake predictor
         try:
             from src.predictive.overtake_predictor import predict_overtake_window
-            
+
             # Get race state snapshot for prediction
             snapshot = get_race_state_snapshot(
                 session_data=session_data,
                 sim_time_data=sim_time_data,
                 focused_driver=focused_driver
             )
-            
+
             if snapshot and 'error' not in snapshot:
                 leaderboard = snapshot.get('leaderboard', {})
                 focus = leaderboard.get('focus_driver')
-                
+
                 if focus:
                     # Parse gaps
                     ahead_gap_str = focus.get('gap_ahead', 'N/A')
                     behind_gap_str = focus.get('gap_behind', 'N/A')
-                    
+
                     ahead_gap = None
                     behind_gap = None
-                    
+
                     if ahead_gap_str not in ('N/A', 'CLOSED', 'LEADER'):
                         try:
                             ahead_gap = float(ahead_gap_str.replace('s', ''))
                         except (ValueError, AttributeError):
                             pass
-                    
+
                     if behind_gap_str not in ('N/A', 'CLOSED'):
                         try:
                             behind_gap = float(behind_gap_str.replace('s', ''))
                         except (ValueError, AttributeError):
                             pass
-                    
+
                     # Generate prediction
                     prediction = predict_overtake_window(
                         driver=driver,
@@ -8804,7 +9444,7 @@ def handle_chat_send(
                         tire_age=focus.get('age', 0),
                         track_position=focus.get('pos', 0)
                     )
-                    
+
                     # Format query with prediction
                     query = (
                         f"🔮 Overtake Prediction for {driver}:\n"
@@ -8820,7 +9460,7 @@ def handle_chat_send(
                     query = f"Cannot predict overtakes for {driver} - no position data available."
             else:
                 query = f"Cannot predict overtakes for {driver} - race snapshot unavailable."
-                
+
         except ImportError:
             chat_logger.warning("[CHAT] Predictive module not available")
             query = "🔮 Predictive AI module is not available. This feature requires the predictive package."
@@ -8843,7 +9483,7 @@ def handle_chat_send(
         m for m in messages[-8:]
         if not m.get('metadata', {}).get('thinking')
     ]
-    
+
     # Add "thinking" message immediately for visual feedback
     thinking_msg = {
         'type': 'assistant',
@@ -8852,7 +9492,7 @@ def handle_chat_send(
         'metadata': {'thinking': True}
     }
     messages.append(thinking_msg)
-    
+
     # Generate AI response
     chat_logger.info("[CHAT] Calling generate_ai_response...")
     try:
@@ -8863,11 +9503,14 @@ def handle_chat_send(
             sim_time_data=sim_time_data,
             message_history=history_for_ai
         )
-        
+
         chat_logger.info("[CHAT] Response received successfully")
-        
+
         # Remove the "thinking" message and add real response
-        messages = [m for m in messages if not m.get('metadata', {}).get('thinking')]
+        messages = [
+            m for m in messages if not m.get(
+                'metadata',
+                {}).get('thinking')]
         messages.append({
             'type': 'assistant',
             'content': response['content'],
@@ -8878,7 +9521,10 @@ def handle_chat_send(
         chat_logger.error(f"[CHAT] AI response failed: {e}")
         logger.error(f"AI response generation failed: {e}", exc_info=True)
         # Remove thinking message and add error
-        messages = [m for m in messages if not m.get('metadata', {}).get('thinking')]
+        messages = [
+            m for m in messages if not m.get(
+                'metadata',
+                {}).get('thinking')]
         messages.append({
             'type': 'assistant',
             'content': (
@@ -8888,7 +9534,7 @@ def handle_chat_send(
             'timestamp': datetime.now().isoformat(),
             'metadata': {'error': str(e)}
         })
-    
+
     # Return updated messages to store ONLY
     # The sync_store_to_container callback will update the UI
     # Ensure outgoing payload is JSON-safe to avoid silent client-side drops
@@ -8898,13 +9544,15 @@ def handle_chat_send(
             safe_messages = json.loads(json.dumps(messages, default=str))
             chat_logger.warning(
                 "[CHAT] Sanitizer produced empty list; using JSON-coerced fallback with %d messages",
-                len(safe_messages)
-            )
+                len(safe_messages))
         except Exception as fallback_exc:
-            chat_logger.error(f"[CHAT] Fallback serialization failed: {fallback_exc}")
+            chat_logger.error(
+                f"[CHAT] Fallback serialization failed: {fallback_exc}")
             safe_messages = []
     _last_chat_messages = safe_messages
-    chat_logger.info(f"[CHAT] Returning {len(safe_messages)} messages to store")
+    chat_logger.info(
+        f"[CHAT] Returning {
+            len(safe_messages)} messages to store")
     rendered = AIAssistantDashboard.render_messages(safe_messages)
     return safe_messages, rendered
 
@@ -8919,20 +9567,25 @@ def handle_chat_send(
 def sync_store_to_container(messages):
     """
     Sync chat-messages-store to chat-messages-container.
-    
+
     This callback fires whenever the store changes (new message added).
     It's the ONLY callback that writes to chat-messages-container.
     """
     from src.dashboards_dash.ai_assistant_dashboard import AIAssistantDashboard
     global _last_chat_messages, _last_render_signature
-    
-    chat_logger.info(f"[SYNC] Called with messages type={type(messages)}, count={len(messages) if messages else 0}")
+
+    chat_logger.info(
+        f"[SYNC] Called with messages type={
+            type(messages)}, count={
+            len(messages) if messages else 0}")
 
     def _signature(payload: Any) -> Optional[str]:
         try:
             return hashlib.sha1(
-                json.dumps(payload, sort_keys=True, default=str).encode('utf-8')
-            ).hexdigest()
+                json.dumps(
+                    payload,
+                    sort_keys=True,
+                    default=str).encode('utf-8')).hexdigest()
         except Exception as exc:
             chat_logger.debug(f"[SYNC] Signature generation failed: {exc}")
             return None
@@ -8941,12 +9594,14 @@ def sync_store_to_container(messages):
     if isinstance(messages, str):
         try:
             decoded = json.loads(messages)
-            chat_logger.warning("[SYNC] Decoded messages from JSON string payload")
+            chat_logger.warning(
+                "[SYNC] Decoded messages from JSON string payload")
             messages = decoded
         except Exception as decode_exc:
-            chat_logger.error(f"[SYNC] Failed to decode string payload: {decode_exc}")
+            chat_logger.error(
+                f"[SYNC] Failed to decode string payload: {decode_exc}")
             messages = []
-    
+
     # Handle None or empty with fallback to last known messages
     if not messages:
         if _last_chat_messages:
@@ -8955,7 +9610,9 @@ def sync_store_to_container(messages):
                 chat_logger.debug("[SYNC] No content change; skipping render")
                 return no_update
             _last_render_signature = sig
-            chat_logger.warning("[SYNC] Store empty; rendering last known chat messages (%d)", len(_last_chat_messages))
+            chat_logger.warning(
+                "[SYNC] Store empty; rendering last known chat messages (%d)",
+                len(_last_chat_messages))
             return AIAssistantDashboard.render_messages(_last_chat_messages)
         chat_logger.info("[SYNC] Rendering empty placeholder (no messages)")
         placeholder = [
@@ -8971,11 +9628,11 @@ def sync_store_to_container(messages):
             _last_render_signature = 'EMPTY_PLACEHOLDER'
             return placeholder
         return no_update
-    
+
     # Handle dict (dcc.Store serialization quirk)
     if isinstance(messages, dict):
         messages = [v for v in messages.values() if v is not None]
-    
+
     # Filter valid messages
     messages = [m for m in messages if m is not None and isinstance(m, dict)]
 
@@ -8986,7 +9643,7 @@ def sync_store_to_container(messages):
             return no_update
         _last_render_signature = sig
         _last_chat_messages = messages
-    
+
     chat_logger.debug(f"[SYNC] Rendering {len(messages)} messages")
     return AIAssistantDashboard.render_messages(messages)
 
@@ -9017,14 +9674,18 @@ _last_chat_context = {'year': None, 'circuit': None, 'session': None}
     State('chat-messages-store', 'data'),
     prevent_initial_call=True
 )
-def clear_chat_on_context_change(year, circuit, session_type, current_messages):
+def clear_chat_on_context_change(
+        year,
+        circuit,
+        session_type,
+        current_messages):
     """Clear chat history when year, circuit or session changes.
-    
+
     Only clears when there's a REAL context change, not on every trigger.
     Driver changes don't clear chat (user may be comparing drivers).
     """
     global _last_chat_context
-    
+
     # Check if this is a real context change
     context_changed = (
         _last_chat_context['year'] is not None and (
@@ -9033,14 +9694,14 @@ def clear_chat_on_context_change(year, circuit, session_type, current_messages):
             session_type != _last_chat_context['session']
         )
     )
-    
+
     # Update stored context
     _last_chat_context = {
         'year': year,
         'circuit': circuit,
         'session': session_type
     }
-    
+
     # Only clear if there was a real change AND we had previous context
     if context_changed:
         chat_logger.info(
@@ -9050,7 +9711,7 @@ def clear_chat_on_context_change(year, circuit, session_type, current_messages):
         global _last_chat_messages
         _last_chat_messages = []
         return []
-    
+
     # No change - keep existing messages
     raise PreventUpdate
 
@@ -9087,58 +9748,61 @@ def check_proactive_alerts(
 ):
     """
     Periodically check for race events and generate proactive alerts.
-    
+
     CRITICAL: Only uses data up to current simulation time (NO FUTURE DATA).
     """
     proactive_logger.debug(
         f"[PROACTIVE] check_proactive_alerts triggered, "
         f"interval={n_intervals}, focused_driver={focused_driver}"
     )
-    
+
     if not session_data or not session_data.get('loaded'):
         proactive_logger.debug("[PROACTIVE] No session loaded, skipping")
         raise PreventUpdate
-    
+
     # Check if driver is selected - required for most alerts
     if not focused_driver or focused_driver == 'none':
-        proactive_logger.debug("[PROACTIVE] No driver selected, skipping (select a driver to enable alerts)")
+        proactive_logger.debug(
+            "[PROACTIVE] No driver selected, skipping (select a driver to enable alerts)")
         raise PreventUpdate
-    
+
     global _last_chat_messages
 
     messages = _ensure_json_safe_messages(current_messages)
     if not messages and _last_chat_messages:
         messages = json.loads(json.dumps(_last_chat_messages))
     last_lap = last_check_data.get('last_lap', 0) if last_check_data else 0
-    
+
     try:
         # Get current simulation state
         session_key = session_data.get('session_key')
         if not session_key:
             proactive_logger.debug("[PROACTIVE] No session_key, skipping")
             raise PreventUpdate
-        
+
         # Parse simulation time
-        sim_time = sim_time_data.get('time', 0) if sim_time_data else 0
-        
+        _ = sim_time_data.get('time', 0) if sim_time_data else 0
+
         # Get current lap from simulation controller
         current_lap = 1
         if simulation_controller:
             current_lap = simulation_controller.get_current_lap()
-        
-        proactive_logger.debug(f"[PROACTIVE] current_lap={current_lap}, last_lap={last_lap}")
-        
+
+        proactive_logger.debug(
+            f"[PROACTIVE] current_lap={current_lap}, last_lap={last_lap}")
+
         # Get current time from simulation
         current_time = None
         if simulation_controller:
             current_time = simulation_controller.current_time
-        
+
         if not current_time:
             proactive_logger.debug("[PROACTIVE] No current_time, skipping")
             raise PreventUpdate
-        
-        proactive_logger.info(f"[PROACTIVE] Checking events at lap {current_lap}, time={current_time}")
-        
+
+        proactive_logger.info(
+            f"[PROACTIVE] Checking events at lap {current_lap}, time={current_time}")
+
         # Get focused driver number from the value format "VER_2025_1"
         driver_number = None
         if focused_driver and focused_driver != 'none':
@@ -9146,17 +9810,18 @@ def check_proactive_alerts(
                 # focused_driver format: "CODE_YEAR_NUMBER" e.g. "VER_2025_1"
                 parts = focused_driver.split('_')
                 if len(parts) >= 3:
-                    driver_number = int(parts[-1])  # Last part is driver number
+                    # Last part is driver number
+                    driver_number = int(parts[-1])
                     proactive_logger.info(
                         f"[PROACTIVE] Tracking driver #{driver_number} ({parts[0]})"
                     )
             except (ValueError, IndexError) as e:
                 proactive_logger.warning(
-                    f"[PROACTIVE] Could not parse driver from {focused_driver}: {e}"
-                )
-        
-        proactive_logger.debug(f"[PROACTIVE] focused_driver={focused_driver}, driver_number={driver_number}")
-        
+                    f"[PROACTIVE] Could not parse driver from {focused_driver}: {e}")
+
+        proactive_logger.debug(
+            f"[PROACTIVE] focused_driver={focused_driver}, driver_number={driver_number}")
+
         # Detect events
         events = event_detector.detect_events(
             session_key=session_key,
@@ -9165,15 +9830,19 @@ def check_proactive_alerts(
             focused_driver=driver_number,
             total_laps=session_data.get('total_laps', 57)
         )
-        
+
         if events:
-            proactive_logger.info(f"[PROACTIVE] ✓ Detected {len(events)} events!")
+            proactive_logger.info(
+                f"[PROACTIVE] ✓ Detected {
+                    len(events)} events!")
         else:
-            proactive_logger.info(f"[PROACTIVE] No events (driver={driver_number}, lap={current_lap})")
-        
+            proactive_logger.info(
+                f"[PROACTIVE] No events (driver={driver_number}, lap={current_lap})")
+
         # Add alerts for detected events
         for event in events:
-            proactive_logger.info(f"[PROACTIVE] EVENT: {event.event_type} - {event.message[:50]}...")
+            proactive_logger.info(
+                f"[PROACTIVE] EVENT: {event.event_type} - {event.message[:50]}...")
             messages.append({
                 'type': 'alert',
                 'content': event.message,
@@ -9184,7 +9853,7 @@ def check_proactive_alerts(
                     'data': event.data
                 }
             })
-        
+
         # CRITICAL: Only update store if we actually added new events
         # This prevents overwriting chat messages added by other callbacks
         if events:
@@ -9194,13 +9863,15 @@ def check_proactive_alerts(
         else:
             # No events - don't touch the store, just update last_lap tracking
             return no_update, {'last_lap': current_lap}
-        
+
     except PreventUpdate:
         raise  # Re-raise PreventUpdate without logging
     except Exception as e:
         import traceback
         proactive_logger.warning(f"[PROACTIVE] Alert check failed: {e}")
-        proactive_logger.debug(f"[PROACTIVE] Traceback: {traceback.format_exc()}")
+        proactive_logger.debug(
+            f"[PROACTIVE] Traceback: {
+                traceback.format_exc()}")
         raise PreventUpdate
 
 
@@ -9213,18 +9884,21 @@ def toggle_proactive_interval(n_clicks):
     """Enable/disable proactive checking when simulation plays/pauses."""
     if not n_clicks:
         raise PreventUpdate
-    
+
     # Check actual simulation state
     if simulation_controller is None:
-        proactive_logger.debug("[PROACTIVE] No simulation controller, interval stays disabled")
+        proactive_logger.debug(
+            "[PROACTIVE] No simulation controller, interval stays disabled")
         return True  # Keep disabled
-    
+
     # Get actual is_playing state (after toggle_play_pause was called)
     is_playing = simulation_controller.is_playing
-    
-    # If playing, enable interval (disabled=False). If paused, disable (disabled=True)
+
+    # If playing, enable interval (disabled=False). If paused, disable
+    # (disabled=True)
     new_disabled = not is_playing
-    proactive_logger.info(f"[PROACTIVE] Interval toggled: disabled={new_disabled} (is_playing={is_playing})")
+    proactive_logger.info(
+        f"[PROACTIVE] Interval toggled: disabled={new_disabled} (is_playing={is_playing})")
     return new_disabled
 
 
@@ -9239,12 +9913,12 @@ def get_race_state_snapshot(
 ) -> Dict[str, Any]:
     """
     Generate comprehensive snapshot of current race state for AI context.
-    
+
     Args:
         session_data: Session store data (race_name, session_key, etc.)
         sim_time_data: Simulation time store data (time, timestamp)
         focused_driver: Driver identifier (e.g., "RUS_2025_63")
-        
+
     Returns:
         Dict with race state snapshot including leaderboard, weather, flags, etc.
     """
@@ -9252,22 +9926,22 @@ def get_race_state_snapshot(
         # Check for None values
         if not session_data or not sim_time_data:
             return {'error': 'Missing session or simulation data'}
-        
+
         session_key = session_data.get('session_key')
         simulation_time = sim_time_data.get('time', 0)
         total_laps = session_data.get('total_laps', 57)
-        
+
         if not session_key or simulation_controller is None:
             return {'error': 'No session loaded or controller unavailable'}
-        
+
         # Get current lap
         current_lap = simulation_controller.get_current_lap()
         session_start_time = simulation_controller.start_time
-        
+
         # Convert datetime to pandas Timestamp for compatibility
         import pandas as pd
         session_start_timestamp = pd.Timestamp(session_start_time)
-        
+
         snapshot = {
             'lap': current_lap,
             'total_laps': total_laps,
@@ -9275,10 +9949,11 @@ def get_race_state_snapshot(
             'race_name': session_data.get('race_name', 'Unknown'),
             'session_type': session_data.get('session_type', 'Race')
         }
-        
+
         # Get leaderboard summary
         try:
-            cache_ready, cache_reason = race_overview_dashboard.warm_cache(session_key)
+            cache_ready, cache_reason = race_overview_dashboard.warm_cache(
+                session_key)
             if not cache_ready:
                 logger.debug(
                     "Race overview cache not warmed (%s) before AI snapshot",
@@ -9295,11 +9970,12 @@ def get_race_state_snapshot(
                 )
                 snapshot['leaderboard'] = leaderboard
             else:
-                snapshot['leaderboard'] = {'error': 'No leaderboard data cached'}
+                snapshot['leaderboard'] = {
+                    'error': 'No leaderboard data cached'}
         except Exception as e:
             logger.error(f"Error getting leaderboard summary: {e}")
             snapshot['leaderboard'] = {'error': str(e)}
-        
+
         # Get weather summary
         try:
             from src.dashboards_dash.weather_dashboard import get_weather_summary
@@ -9312,7 +9988,7 @@ def get_race_state_snapshot(
         except Exception as e:
             logger.error(f"Error getting weather summary: {e}")
             snapshot['weather'] = {'error': str(e)}
-        
+
         # Get race control status
         try:
             if race_control_dashboard._cached_messages is not None:
@@ -9324,13 +10000,14 @@ def get_race_state_snapshot(
                 )
                 snapshot['race_control'] = status
             else:
-                snapshot['race_control'] = {'error': 'No race control data cached'}
+                snapshot['race_control'] = {
+                    'error': 'No race control data cached'}
         except Exception as e:
             logger.error(f"Error getting race control summary: {e}")
             snapshot['race_control'] = {'error': str(e)}
-        
+
         return snapshot
-        
+
     except Exception as e:
         logger.error(f"Error generating race state snapshot: {e}")
         return {'error': str(e)}
@@ -9339,32 +10016,34 @@ def get_race_state_snapshot(
 def format_race_snapshot_for_ai(snapshot: dict) -> str:
     """
     Format race state snapshot as markdown for AI prompt.
-    
+
     Args:
         snapshot: Race state snapshot dict from get_race_state_snapshot()
-        
+
     Returns:
         Formatted markdown string for system prompt
     """
     if 'error' in snapshot:
         return f"⚠️ **No race data available**: {snapshot['error']}"
-    
+
     lines = []
-    
+
     # Check for Safety Car or VSC FIRST - this is critical info!
     race_control = snapshot.get('race_control', {})
     safety_car_active = race_control.get('safety_car', False)
     vsc_active = race_control.get('virtual_safety_car', False)
     flag = race_control.get('flag', 'GREEN')
-    
+
     # PROMINENT SC/VSC WARNING AT THE TOP
     if safety_car_active or flag == 'SC':
         lines.append("## 🚨🚨🚨 SAFETY CAR DEPLOYED 🚨🚨🚨")
         lines.append("")
         lines.append("**⚠️ CRITICAL: The Safety Car is currently on track!**")
-        lines.append("- **Pit window is OPEN** - Gap to cars behind is minimized")
+        lines.append(
+            "- **Pit window is OPEN** - Gap to cars behind is minimized")
         lines.append("- All drivers can pit with minimal time loss")
-        lines.append("- Field is bunched up - positions will be closer on restart")
+        lines.append(
+            "- Field is bunched up - positions will be closer on restart")
         lines.append("")
         lines.append("---")
         lines.append("")
@@ -9384,18 +10063,19 @@ def format_race_snapshot_for_ai(snapshot: dict) -> str:
         lines.append("")
         lines.append("---")
         lines.append("")
-    
+
     lines.append("## 🏁 CURRENT RACE STATE")
     lines.append("")
-    
+
     # Race info
     lines.append(
         f"**Race**: {snapshot.get('race_name', 'Unknown')} - "
         f"{snapshot.get('session_type', 'Race')}"
     )
-    lines.append(f"**Lap**: {snapshot.get('lap', '?')}/{snapshot.get('total_laps', '?')}")
+    lines.append(
+        f"**Lap**: {snapshot.get('lap', '?')}/{snapshot.get('total_laps', '?')}")
     lines.append("")
-    
+
     # Leaderboard
     leaderboard = snapshot.get('leaderboard', {})
     if 'error' not in leaderboard:
@@ -9406,10 +10086,11 @@ def format_race_snapshot_for_ai(snapshot: dict) -> str:
             lines.append(f"- **Gap to leader**: {focus['gap_to_leader']}")
             lines.append(f"- **Gap ahead**: {focus['gap_ahead']}")
             lines.append(f"- **Gap behind**: {focus['gap_behind']}")
-            lines.append(f"- **Tire**: {focus['tire']} (Age: {focus['age']} laps)")
+            lines.append(
+                f"- **Tire**: {focus['tire']} (Age: {focus['age']} laps)")
             lines.append(f"- **Pit stops**: {focus['stops']}")
             lines.append("")
-        
+
         # Pit window drivers
         pit_window = leaderboard.get('pit_window', [])
         if pit_window:
@@ -9418,11 +10099,15 @@ def format_race_snapshot_for_ai(snapshot: dict) -> str:
             lines.append("|-----|--------|-----|------|-----|-------|")
             for driver in pit_window:
                 lines.append(
-                    f"| P{driver['pos']} | {driver['driver']} | {driver['gap']} | "
-                    f"{driver['tire']} | {driver['age']} | {driver['stops']} |"
-                )
+                    f"| P{
+                        driver['pos']} | {
+                        driver['driver']} | {
+                        driver['gap']} | " f"{
+                        driver['tire']} | {
+                        driver['age']} | {
+                            driver['stops']} |")
             lines.append("")
-        
+
         # Top 10
         top_10 = leaderboard.get('top_10', [])
         if top_10 and not focus:  # Only show if no focus driver
@@ -9431,23 +10116,28 @@ def format_race_snapshot_for_ai(snapshot: dict) -> str:
             lines.append("|-----|--------|-----|------|-----|-------|")
             for driver in top_10[:5]:  # Only top 5
                 lines.append(
-                    f"| P{driver['pos']} | {driver['driver']} | {driver['gap']} | "
-                    f"{driver['tire']} | {driver['age']} | {driver['stops']} |"
-                )
+                    f"| P{
+                        driver['pos']} | {
+                        driver['driver']} | {
+                        driver['gap']} | " f"{
+                        driver['tire']} | {
+                        driver['age']} | {
+                            driver['stops']} |")
             lines.append("")
-    
+
     # Weather
     weather = snapshot.get('weather', {})
     if 'error' not in weather:
         lines.append("### 🌤️ Weather")
         lines.append(f"- **Air temp**: {weather.get('air_temp', '?')}°C")
         lines.append(f"- **Track temp**: {weather.get('track_temp', '?')}°C")
-        lines.append(f"- **Wind**: {weather.get('wind_speed', '?')} km/h {weather.get('wind_direction', '')}")
+        lines.append(
+            f"- **Wind**: {weather.get('wind_speed', '?')} km/h {weather.get('wind_direction', '')}")
         lines.append(f"- **Humidity**: {weather.get('humidity', '?')}%")
         if weather.get('rainfall'):
-            lines.append(f"- **⚠️ RAINFALL DETECTED**")
+            lines.append("- **⚠️ RAINFALL DETECTED**")
         lines.append("")
-    
+
     # Race control - show recent events (SC/VSC already shown at top)
     if 'error' not in race_control:
         recent_events = race_control.get('recent_events', [])
@@ -9456,7 +10146,7 @@ def format_race_snapshot_for_ai(snapshot: dict) -> str:
             for event in recent_events[:3]:
                 lines.append(f"- {event}")
         lines.append("")
-    
+
     return "\n".join(lines)
 
 
@@ -9475,10 +10165,10 @@ def analyze_race_state_for_warnings(
 ) -> Optional[str]:
     """
     Analyze race state snapshot and generate proactive warnings using AI.
-    
+
     Returns warning message if significant tactical situation detected,
     None otherwise.
-    
+
     Checks for:
     - Undercut/overcut opportunities
     - Pit window entry/exit timing
@@ -9488,25 +10178,25 @@ def analyze_race_state_for_warnings(
     """
     if not snapshot:
         return None
-    
+
     # Get current lap and driver info
     current_lap = snapshot.get('lap', 0)
     driver_code = focused_driver if focused_driver != 'none' else None
-    
+
     if not driver_code or current_lap == 0:
         return None
-    
+
     # Check if we've warned recently for this situation
     warning_key = f"{driver_code}_{current_lap // 3}"  # Group by 3-lap windows
-    
+
     if warning_key in warning_tracker:
         last_warning_lap = warning_tracker[warning_key]
         if current_lap - last_warning_lap < 3:
             return None  # Don't spam warnings
-    
+
     # Get AI-formatted snapshot
     race_context = format_race_snapshot_for_ai(snapshot)
-    
+
     # Build prompt for tactical analysis
     analysis_prompt = (
         "You are an F1 race strategist monitoring the live race. "
@@ -9527,37 +10217,37 @@ def analyze_race_state_for_warnings(
         "**WARNING:** [Brief title]\n"
         "[2-3 sentence explanation with specific numbers and recommendation]"
     )
-    
+
     # Get LLM provider
     llm_provider = get_llm_provider()
     if not llm_provider:
         return None
-    
+
     try:
         import asyncio
-        
+
         async def get_warning():
             return await llm_provider.generate(
                 prompt=analysis_prompt,
                 system_prompt="You are an F1 race strategist providing tactical warnings."
             )
-        
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
             response: LLMResponse = loop.run_until_complete(get_warning())
         finally:
             loop.close()
-        
+
         warning_text = response.content.strip()
-        
+
         # Check if AI indicates no warning needed
         if 'NO_WARNING' in warning_text or len(warning_text) < 20:
             return None
-        
+
         # Update warning tracker
         warning_tracker[warning_key] = current_lap
-        
+
         # Clean old entries from tracker (keep last 20 laps)
         keys_to_remove = [
             k for k, v in warning_tracker.items()
@@ -9565,16 +10255,16 @@ def analyze_race_state_for_warnings(
         ]
         for k in keys_to_remove:
             del warning_tracker[k]
-        
+
         return warning_text
-    
+
     except Exception as e:
         logger.debug(f"AI warning generation failed: {e}")
         return None
 
 
 # NOTE: check_proactive_ai_warnings callback DISABLED for Phase 1
-# This uses LLM analysis which can block the UI. 
+# This uses LLM analysis which can block the UI.
 # Use rule-based check_proactive_alerts instead.
 # Will be re-enabled in Phase 3 with async/background processing.
 #
@@ -9596,10 +10286,10 @@ def check_proactive_ai_warnings_DISABLED(
 ):
     """
     DISABLED: Periodically check race state and generate AI-powered tactical warnings.
-    
+
     Runs every 5 seconds (configured in proactive-check-interval).
     Only generates warnings for significant tactical situations.
-    
+
     NOTE: This callback is disabled in Phase 1 because:
     1. LLM calls can take 2-5 seconds, blocking the UI
     2. It conflicts with check_proactive_alerts (same interval)
@@ -9607,14 +10297,14 @@ def check_proactive_ai_warnings_DISABLED(
     """
     proactive_logger.debug("[PROACTIVE-LLM] Callback disabled in Phase 1")
     raise PreventUpdate
-    
+
     # Original code preserved for Phase 3:
     if not session_data or not simulation_controller:
         raise PreventUpdate
-    
+
     if not simulation_controller.is_playing:
         raise PreventUpdate
-    
+
     try:
         # Get race state snapshot
         snapshot = get_race_state_snapshot(
@@ -9622,20 +10312,20 @@ def check_proactive_ai_warnings_DISABLED(
             sim_time_data=sim_time_data,
             focused_driver=focused_driver
         )
-        
+
         if not snapshot:
             raise PreventUpdate
-        
+
         # Analyze for warnings
         warning = analyze_race_state_for_warnings(
             snapshot=snapshot,
             session_data=session_data,
             focused_driver=focused_driver
         )
-        
+
         if not warning:
             raise PreventUpdate
-        
+
         # Create warning message
         messages = existing_messages or []
         messages.append({
@@ -9647,11 +10337,12 @@ def check_proactive_ai_warnings_DISABLED(
                 'lap': snapshot.get('lap', 0)
             }
         })
-        
+
         return messages
-        
+
     except Exception as e:
-        proactive_logger.warning(f"[PROACTIVE-LLM] AI warning check failed: {e}")
+        proactive_logger.warning(
+            f"[PROACTIVE-LLM] AI warning check failed: {e}")
         raise PreventUpdate
 
 
@@ -9664,10 +10355,10 @@ def generate_ai_response(
 ) -> Dict[str, Any]:
     """
     Generate AI response using RAG + LLM.
-    
+
     Process:
     1. Search RAG for relevant context documents
-    2. Build context from RAG results  
+    2. Build context from RAG results
     3. Send to LLM with context for intelligent response
     4. If no LLM available, return informative message
     """
@@ -9686,46 +10377,51 @@ def generate_ai_response(
             history_lines.append(f"- {prefix}: {content}")
         if history_lines:
             history_block = "Recent conversation:\n" + "\n".join(history_lines)
-    
+
     # Get context info
-    race_name = (
-        session_data.get('race_name', 'the race') if session_data else 'the race'
-    )
+    race_name = (session_data.get('race_name', 'the race')
+                 if session_data else 'the race')
     driver = (
         focused_driver if focused_driver and focused_driver != 'none'
         else 'a driver'
     )
     year = session_data.get('year', 2024) if session_data else 2024
-    
+
     # Get current lap (available whether playing or paused)
     current_lap = None
     if simulation_controller:
         openf1_lap = simulation_controller.get_current_lap()
         current_lap = openf1_lap if openf1_lap and openf1_lap > 0 else 1
-    
+
     if current_lap:
         lap_info = "Lap 1 (untimed)" if current_lap == 1 else f"Lap {current_lap}"
     else:
         lap_info = "Pre-race"
-    
+
     # Search RAG for context
     rag_manager = get_rag_manager()
     rag_context = ""
     rag_sources = []
-    
+
     if rag_manager.is_context_loaded():
         # Determine category based on query
         category = None
-        if any(w in query_lower for w in ['pit', 'tire', 'tyre', 'stop', 'strategy']):
+        if any(
+            w in query_lower for w in [
+                'pit',
+                'tire',
+                'tyre',
+                'stop',
+                'strategy']):
             category = 'strategy'
         elif any(w in query_lower for w in ['weather', 'rain', 'wet', 'dry']):
             category = 'weather'
         elif any(w in query_lower for w in ['fia', 'rule', 'regulation', 'penalty']):
             category = 'fia'
-        
+
         # Search RAG
         rag_results = rag_manager.search(query=query, k=5, category=category)
-        
+
         if rag_results:
             context_parts = []
             for result in rag_results:
@@ -9735,7 +10431,7 @@ def generate_ai_response(
                     context_parts.append(content)
                     rag_sources.append(source)
             rag_context = "\n\n".join(context_parts)
-    
+
     # Get live race state snapshot
     race_context = ""
     if simulation_controller and session_data and sim_time_data:
@@ -9745,18 +10441,19 @@ def generate_ai_response(
                 sim_time_data=sim_time_data,
                 focused_driver=focused_driver
             )
-            
+
             if snapshot and 'error' not in snapshot:
                 race_context = format_race_snapshot_for_ai(snapshot)
             else:
-                logger.warning(f"No valid snapshot - error: {snapshot.get('error') if snapshot else 'None'}")
+                logger.warning(
+                    f"No valid snapshot - error: {snapshot.get('error') if snapshot else 'None'}")
         except Exception as e:
             logger.error(f"Failed to get race snapshot: {e}")
             race_context = ""
-    
+
     # Get LLM provider
     llm_provider = get_llm_provider()
-    
+
     if llm_provider is not None:
         # Build system prompt for F1 strategy expert with specific guidance
         base_prompt = (
@@ -9769,7 +10466,7 @@ def generate_ai_response(
             "- For pit stop questions: analyze tire wear, lap delta, and track position\n"
             "- Always reference the current race situation in your answer"
         )
-        
+
         # Add live race state if available
         if race_context:
             system_prompt = (
@@ -9778,8 +10475,9 @@ def generate_ai_response(
                 f"Use this live data to provide tactical advice. Be specific and data-driven."
             )
         else:
-            system_prompt = base_prompt + "\n\nNote: Limited live data available. Use general F1 strategy knowledge."
-        
+            system_prompt = base_prompt + \
+                "\n\nNote: Limited live data available. Use general F1 strategy knowledge."
+
         # Build concise user prompt
         prompt_sections: list[str] = []
         if history_block:
@@ -9792,20 +10490,19 @@ def generate_ai_response(
             )
         else:
             prompt_sections.append(
-                f"Q: {query}\n\nAnswer briefly with available general F1 knowledge."
-            )
+                f"Q: {query}\n\nAnswer briefly with available general F1 knowledge.")
         user_prompt = "\n\n".join(prompt_sections)
-        
+
         try:
             # Call LLM asynchronously
             import asyncio
-            
+
             async def get_llm_response():
                 return await llm_provider.generate(
                     prompt=user_prompt,
                     system_prompt=system_prompt
                 )
-            
+
             # Run async function
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -9815,10 +10512,10 @@ def generate_ai_response(
                 )
             finally:
                 loop.close()
-            
+
             # Format response with provider prefix
             response_content = llm_response.content
-            
+
             # Add provider prefix (Claude: or Gemi:)
             provider_name = llm_response.provider.lower() if llm_response.provider else ''
             if 'claude' in provider_name or 'anthropic' in provider_name:
@@ -9827,9 +10524,9 @@ def generate_ai_response(
                 provider_prefix = "**Gemi:** "
             else:
                 provider_prefix = ""
-            
+
             response_content = provider_prefix + response_content
-            
+
             # Add source attribution if RAG was used
             if rag_sources:
                 unique_sources = list(set(rag_sources))
@@ -9838,7 +10535,7 @@ def generate_ai_response(
                     f"\n\n---\n"
                     f"_📚 Sources: {source_text}_"
                 )
-            
+
             return {
                 'content': response_content,
                 'metadata': {
@@ -9850,11 +10547,11 @@ def generate_ai_response(
                     'rag_sources': len(rag_sources)
                 }
             }
-            
+
         except Exception as e:
             logger.error(f"LLM generation failed: {e}")
             # Fall through to no-LLM response
-    
+
     # No LLM available - show clear error
     return {
         'content': (
@@ -9891,12 +10588,12 @@ def update_telemetry_comparison(comparison_driver):
 
 
 if __name__ == '__main__':
-    logger.info("="*60)
+    logger.info("=" * 60)
     logger.info("F1 STRATEGIST AI - DASH VERSION")
-    logger.info("="*60)
+    logger.info("=" * 60)
     logger.info("Starting application...")
     logger.info("Open: http://localhost:8501")
-    logger.info("="*60)
+    logger.info("=" * 60)
 
     # Initialize session with last completed race (dynamic from OpenF1)
     last_race = get_last_completed_race_context()

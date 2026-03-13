@@ -49,6 +49,7 @@
             return;
         }
 
+        // Already initialised on this exact DOM node — skip
         if (container.dataset[DATA_FLAG] === "true") {
             return;
         }
@@ -58,10 +59,15 @@
             return;
         }
 
+        // FIX: handle must be a *child* element of the draggable tile.
+        // Using ".card-header" lets users drag from the card title bar.
+        // The draggable selector stays as ".dashboard-grid-col".
         window.Sortable.create(container, {
             animation: 150,
-            handle: ".dashboard-grid-col",
+            handle: ".card-header",
             draggable: ".dashboard-grid-col",
+            ghostClass: "sortable-ghost",
+            chosenClass: "sortable-chosen",
             onEnd: function () {
                 dispatchOrder(container);
             },
@@ -70,8 +76,30 @@
         container.dataset[DATA_FLAG] = "true";
     }
 
+    // FIX: Dash does NOT emit a "dash-rendered" event.
+    // Use a MutationObserver to detect when Dash replaces #dashboard-grid-inner
+    // so Sortable is (re)initialised on every render cycle.
+    function startObserver() {
+        const observer = new MutationObserver(function (mutations) {
+            for (const mutation of mutations) {
+                for (const node of mutation.addedNodes) {
+                    if (!(node instanceof Element)) continue;
+                    // The added node might be the container itself or contain it
+                    if (node.id === CONTAINER_ID ||
+                        node.querySelector("#" + CONTAINER_ID)) {
+                        setTimeout(initSortable, 50);
+                        return;
+                    }
+                }
+            }
+        });
+
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
     function bootstrap() {
         ensureSortableLoaded(initSortable);
+        startObserver();
     }
 
     if (document.readyState === "loading") {
@@ -79,8 +107,4 @@
     } else {
         setTimeout(bootstrap, 0);
     }
-
-    document.addEventListener("dash-rendered", () => {
-        setTimeout(initSortable, 0);
-    });
 })();

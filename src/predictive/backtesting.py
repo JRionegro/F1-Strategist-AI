@@ -32,13 +32,16 @@ class BacktestResult:
         }
 
 
-def time_order_split(df: pd.DataFrame, test_fraction: float = 0.3) -> tuple[pd.DataFrame, pd.DataFrame]:
+def time_order_split(df: pd.DataFrame,
+                     test_fraction: float = 0.3) -> tuple[pd.DataFrame,
+                                                          pd.DataFrame]:
     """Deterministic time-ordered split to avoid leakage."""
 
     if not 0 < test_fraction < 1:
         raise ValueError("test_fraction must be between 0 and 1")
 
-    df_sorted = df.sort_values(by=["lap_number", "driver_id"]).reset_index(drop=True)
+    df_sorted = df.sort_values(
+        by=["lap_number", "driver_id"]).reset_index(drop=True)
     split_idx = int(len(df_sorted) * (1 - test_fraction))
     if split_idx <= 0 or split_idx >= len(df_sorted):
         raise ValueError("test_fraction results in empty split")

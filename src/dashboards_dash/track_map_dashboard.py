@@ -1,7 +1,6 @@
 """Track map dashboard utilities for the Dash front-end."""
 from __future__ import annotations
 
-import logging
 import math
 from numbers import Real
 from threading import Lock
@@ -42,7 +41,8 @@ class TrackMapDashboard:
         self.circuit_outline: Optional[Dict[str, pd.DataFrame]] = None
         self.session_loaded: bool = False
         self._base_figure: Optional[go.Figure] = None
-        self._axis_ranges: Optional[Tuple[Tuple[float, float], Tuple[float, float]]] = None
+        self._axis_ranges: Optional[Tuple[Tuple[float,
+                                                float], Tuple[float, float]]] = None
         self._load_failed: bool = False
         self._last_session_key: Optional[Tuple[int, str, str]] = None
         logger.info("TrackMapDashboard initialized")
@@ -93,7 +93,8 @@ class TrackMapDashboard:
         """Return marker styling based on team color and focus state."""
         team = driver.get("team_name", "Unknown")
         fill_color = TEAM_COLORS.get(team, TEAM_COLORS["Unknown"])
-        text_color = "#000000" if cls._should_use_dark_text(fill_color) else "#FFFFFF"
+        text_color = "#000000" if cls._should_use_dark_text(
+            fill_color) else "#FFFFFF"
         is_focus = bool(driver.get("is_focus_driver"))
         is_retired = bool(driver.get("retired"))
 
@@ -157,7 +158,8 @@ class TrackMapDashboard:
     @staticmethod
     def build_hovertemplate(driver: Dict[str, Any], team: str) -> str:
         """Return hovertemplate string for a driver marker."""
-        driver_label = driver.get("driver_name") or driver.get("driver_number") or "Driver"
+        driver_label = driver.get("driver_name") or driver.get(
+            "driver_number") or "Driver"
         lines = [
             f"<b>{driver_label}</b>",
             f"Team: {team}",
@@ -174,7 +176,8 @@ class TrackMapDashboard:
 
         return "<br>".join(lines) + "<extra></extra>"
 
-    def get_retirement_marker_position(self, order_index: int) -> Tuple[float, float]:
+    def get_retirement_marker_position(
+            self, order_index: int) -> Tuple[float, float]:
         """Return off-track coordinates to display retired drivers consistently."""
         if self._axis_ranges is None:
             base_x = 4800.0
@@ -191,11 +194,16 @@ class TrackMapDashboard:
         anchor_y = y_max - (order_index + 1) * y_step
         return float(anchor_x), float(anchor_y)
 
-    def get_axis_ranges(self) -> Optional[Tuple[Tuple[float, float], Tuple[float, float]]]:
+    def get_axis_ranges(
+            self) -> Optional[Tuple[Tuple[float, float], Tuple[float, float]]]:
         """Expose cached axis ranges for zoom resets."""
         return self._axis_ranges
 
-    def load_session(self, year: int, country: str, session_type: str = "R") -> bool:
+    def load_session(
+            self,
+            year: int,
+            country: str,
+            session_type: str = "R") -> bool:
         """Load FastF1 telemetry and cache the circuit outline."""
         session_key = (year, country, session_type)
         if self._last_session_key == session_key and self.session_loaded:
@@ -206,7 +214,11 @@ class TrackMapDashboard:
         self._load_failed = False
         self._last_session_key = session_key
 
-        logger.info("Loading track map session: %s %s %s", year, country, session_type)
+        logger.info(
+            "Loading track map session: %s %s %s",
+            year,
+            country,
+            session_type)
         if not self.provider.load_session(year, country, session_type):
             self._load_failed = True
             return False
@@ -245,7 +257,13 @@ class TrackMapDashboard:
                 float(x_vals.min() - left_pad),
                 float(x_vals.max() + right_pad),
             )
-            y_range = (float(y_vals.min() - y_pad), float(y_vals.max() + y_pad))
+            y_range = (
+                float(
+                    y_vals.min() -
+                    y_pad),
+                float(
+                    y_vals.max() +
+                    y_pad))
         else:
             x_range = (-5000.0, 5000.0)
             y_range = (-5000.0, 5000.0)
@@ -359,7 +377,8 @@ class TrackMapDashboard:
             fig.update_xaxes(range=list(self._axis_ranges[0]))
             fig.update_yaxes(range=list(self._axis_ranges[1]))
 
-        sorted_drivers = sorted(driver_data, key=lambda item: item["driver_number"])
+        sorted_drivers = sorted(driver_data,
+                                key=lambda item: item["driver_number"])
         driver_numbers = [entry["driver_number"] for entry in sorted_drivers]
         positions = self.provider.get_all_driver_positions(
             lap_number=lap_filter,
@@ -387,15 +406,19 @@ class TrackMapDashboard:
             if position is None and not is_retired:
                 continue
 
-            position_payload: Dict[str, Any] = position.copy() if isinstance(position, dict) else {}
+            position_payload: Dict[str, Any] = position.copy(
+            ) if isinstance(position, dict) else {}
             team = driver.get("team_name", "Unknown")
             styles = self.resolve_marker_style(driver)
-            lap_hint = driver.get("lap_fallback") if isinstance(driver.get("lap_fallback"), int) else None
-            fallback_lap = int(lap_hint) if isinstance(lap_hint, int) and lap_hint >= 1 else current_lap
+            lap_hint = driver.get("lap_fallback") if isinstance(
+                driver.get("lap_fallback"), int) else None
+            fallback_lap = int(lap_hint) if isinstance(
+                lap_hint, int) and lap_hint >= 1 else current_lap
 
             if is_retired:
                 order_index = int(driver.get("retired_order") or 0)
-                anchor_x, anchor_y = self.get_retirement_marker_position(order_index)
+                anchor_x, anchor_y = self.get_retirement_marker_position(
+                    order_index)
                 position_payload.update({
                     "x": anchor_x,
                     "y": anchor_y,
@@ -411,30 +434,40 @@ class TrackMapDashboard:
             else:
                 pos_x = position_payload.get("x")
                 pos_y = position_payload.get("y")
-                point_x = float(pos_x) if isinstance(pos_x, (int, float)) else 0.0
-                point_y = float(pos_y) if isinstance(pos_y, (int, float)) else 0.0
+                point_x = float(pos_x) if isinstance(
+                    pos_x, (int, float)) else 0.0
+                point_y = float(pos_y) if isinstance(
+                    pos_y, (int, float)) else 0.0
 
-            custom_data = self._build_customdata(driver_number, position_payload, fallback_lap=fallback_lap)
+            custom_data = self._build_customdata(
+                driver_number, position_payload, fallback_lap=fallback_lap)
             hover_template = self.build_hovertemplate(driver, team)
-            fig.add_trace(go.Scatter(
-                x=[point_x],
-                y=[point_y],
-                mode="markers+text",
-                marker=dict(
-                    size=20,
-                    color=styles["fill_color"],
-                    line=dict(color=styles["outline_color"], width=styles["outline_width"]),
-                ),
-                text=[str(driver_number)],
-                textposition="middle center",
-                textfont=dict(color=styles["text_color"], size=10, family="Arial Black"),
-                name=team if not seen_teams.get(team) else None,
-                legendgroup=team,
-                showlegend=team not in seen_teams,
-                hovertemplate=hover_template,
-                customdata=custom_data,
-                uid=str(driver_number),
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=[point_x],
+                    y=[point_y],
+                    mode="markers+text",
+                    marker=dict(
+                        size=20,
+                        color=styles["fill_color"],
+                        line=dict(
+                            color=styles["outline_color"],
+                            width=styles["outline_width"]),
+                    ),
+                    text=[
+                        str(driver_number)],
+                    textposition="middle center",
+                    textfont=dict(
+                        color=styles["text_color"],
+                        size=10,
+                        family="Arial Black"),
+                    name=team if not seen_teams.get(team) else None,
+                    legendgroup=team,
+                    showlegend=team not in seen_teams,
+                    hovertemplate=hover_template,
+                    customdata=custom_data,
+                    uid=str(driver_number),
+                ))
             seen_teams[team] = True
 
         return fig
@@ -479,7 +512,8 @@ class TrackMapDashboard:
         height: Optional[int] = None,
     ) -> go.Figure:
         """Return loading placeholder."""
-        return self._create_error_figure("⏳ Loading track map session...", width, height)
+        return self._create_error_figure(
+            "⏳ Loading track map session...", width, height)
 
     def create_no_data_figure(
         self,
@@ -528,7 +562,8 @@ class TrackMapDashboard:
             x_range = [-5000.0, 5000.0]
             y_range = [-5000.0, 5000.0]
 
-        sorted_drivers = sorted(driver_data, key=lambda item: item["driver_number"])
+        sorted_drivers = sorted(driver_data,
+                                key=lambda item: item["driver_number"])
         driver_numbers = [entry["driver_number"] for entry in sorted_drivers]
         positions = self.provider.get_all_driver_positions(
             lap_number=current_lap,
@@ -544,15 +579,19 @@ class TrackMapDashboard:
             if position is None and not is_retired:
                 continue
 
-            position_payload: Dict[str, Any] = position.copy() if isinstance(position, dict) else {}
+            position_payload: Dict[str, Any] = position.copy(
+            ) if isinstance(position, dict) else {}
             team = driver.get("team_name", "Unknown")
             styles = self.resolve_marker_style(driver)
-            lap_hint = driver.get("lap_fallback") if isinstance(driver.get("lap_fallback"), int) else None
-            fallback_lap = int(lap_hint) if isinstance(lap_hint, int) and lap_hint >= 1 else current_lap
+            lap_hint = driver.get("lap_fallback") if isinstance(
+                driver.get("lap_fallback"), int) else None
+            fallback_lap = int(lap_hint) if isinstance(
+                lap_hint, int) and lap_hint >= 1 else current_lap
 
             if is_retired:
                 order_index = int(driver.get("retired_order") or 0)
-                anchor_x, anchor_y = self.get_retirement_marker_position(order_index)
+                anchor_x, anchor_y = self.get_retirement_marker_position(
+                    order_index)
                 position_payload.update({
                     "x": anchor_x,
                     "y": anchor_y,
@@ -568,31 +607,46 @@ class TrackMapDashboard:
             else:
                 pos_x = position_payload.get("x")
                 pos_y = position_payload.get("y")
-                point_x = float(pos_x) if isinstance(pos_x, (int, float)) else 0.0
-                point_y = float(pos_y) if isinstance(pos_y, (int, float)) else 0.0
+                point_x = float(pos_x) if isinstance(
+                    pos_x, (int, float)) else 0.0
+                point_y = float(pos_y) if isinstance(
+                    pos_y, (int, float)) else 0.0
 
-            custom_data = self._build_customdata(driver_number, position_payload, fallback_lap=fallback_lap)
+            custom_data = self._build_customdata(
+                driver_number, position_payload, fallback_lap=fallback_lap)
             hover_template = self.build_hovertemplate(driver, team)
 
-            fig.add_trace(go.Scatter(
-                x=[point_x],
-                y=[point_y],
-                mode="markers+text",
-                marker=dict(
-                    size=20,
-                    color=styles["fill_color"],
-                    line=dict(color=styles["outline_color"], width=styles["outline_width"]),
-                ),
-                text=[str(driver_number)],
-                textposition="middle center",
-                textfont=dict(color=styles["text_color"], size=10, family="Arial Black"),
-                name=driver.get("driver_name", str(driver_number)),
-                hovertext=f"{driver.get('driver_name', driver_number)} ({team})",
-                hoverinfo="text",
-                customdata=custom_data,
-                uid=str(driver_number),
-                hovertemplate=hover_template,
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=[point_x],
+                    y=[point_y],
+                    mode="markers+text",
+                    marker=dict(
+                        size=20,
+                        color=styles["fill_color"],
+                        line=dict(
+                            color=styles["outline_color"],
+                            width=styles["outline_width"]),
+                    ),
+                    text=[
+                        str(driver_number)],
+                    textposition="middle center",
+                    textfont=dict(
+                        color=styles["text_color"],
+                        size=10,
+                        family="Arial Black"),
+                    name=driver.get(
+                        "driver_name",
+                        str(driver_number)),
+                    hovertext=f"{
+                        driver.get(
+                            'driver_name',
+                            driver_number)} ({team})",
+                    hoverinfo="text",
+                    customdata=custom_data,
+                    uid=str(driver_number),
+                    hovertemplate=hover_template,
+                ))
 
         fig.update_layout(
             xaxis=dict(

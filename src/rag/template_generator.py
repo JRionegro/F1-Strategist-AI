@@ -484,7 +484,8 @@ class TemplateGenerator:
         documents = {}
 
         # Strategy document (includes tire analysis)
-        strategy_doc = self._generate_strategy_doc(year, circuit, template_vars)
+        strategy_doc = self._generate_strategy_doc(
+            year, circuit, template_vars)
         if strategy_doc:
             documents["strategy.md"] = strategy_doc
 
@@ -1807,7 +1808,8 @@ class TemplateGenerator:
                     )
 
                 # Fetch pit stops
-                pit_stops = self.openf1_provider.get_pit_stops(int(session_key))
+                pit_stops = self.openf1_provider.get_pit_stops(
+                    int(session_key))
                 if not pit_stops.empty:
                     historical["historical_pit_data"] = (
                         self._analyze_pit_stops(pit_stops)
@@ -2125,8 +2127,7 @@ class TemplateGenerator:
         }
         return rain_info.get(
             circuit,
-            "Monitor local forecasts. Weather can change throughout race weekend."
-        )
+            "Monitor local forecasts. Weather can change throughout race weekend.")
 
     def _get_crosswind_info(self, circuit: str) -> str:
         """Get crosswind information."""
@@ -2413,7 +2414,8 @@ class TemplateGenerator:
             track = data.get("track_temp", "40")
             rain = "Yes" if data.get("rain", False) else "No"
             notes = data.get("notes", "Standard conditions")
-            lines.append(f"| {year} | {air}°C | {track}°C | {rain} | {notes} |")
+            lines.append(
+                f"| {year} | {air}°C | {track}°C | {rain} | {notes} |")
 
         return "\n".join(lines) if lines else (
             "| 2023 | 28°C | 42°C | No | Standard dry race |"

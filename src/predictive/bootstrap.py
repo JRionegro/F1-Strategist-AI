@@ -29,12 +29,14 @@ def bootstrap_pit_policy_context(rag_manager: RAGManager) -> PitPolicyContext:
     file is missing.
     """
     if rag_manager is None:
-        logger.warning("RAG manager missing; returning empty pit policy context")
+        logger.warning(
+            "RAG manager missing; returning empty pit policy context")
         return PitPolicyContext()
 
     try:
         if not rag_manager.is_context_loaded():
-            logger.warning("RAG context not loaded; returning empty pit policy context")
+            logger.warning(
+                "RAG context not loaded; returning empty pit policy context")
             return PitPolicyContext()
     except Exception as exc:  # noqa: BLE001
         logger.warning("RAG context check failed: %s", exc)

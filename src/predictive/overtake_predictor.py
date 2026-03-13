@@ -20,14 +20,14 @@ def predict_overtake_window(
 ) -> Dict[str, Any]:
     """
     Predict overtake probability for next 5 laps.
-    
+
     Args:
         driver: Driver identifier (e.g., "VER_2025_1")
         ahead_gap: Gap to car ahead in seconds
         behind_gap: Gap to car behind in seconds
         tire_age: Current tire age in laps
         track_position: Current position in race
-    
+
     Returns:
         Dictionary with probability, optimal laps, and confidence
     """
@@ -38,24 +38,24 @@ def predict_overtake_window(
         probability = 0.75  # High chance in DRS range
     else:
         probability = 0.45  # Moderate chance
-    
+
     # Adjust for tire age
     if tire_age > 15:
         probability *= 0.8  # Degraded tires reduce chance
-    
+
     # Determine optimal window
     if probability > 0.6:
         optimal_laps = "1-3"
     else:
         optimal_laps = "3-5"
-    
+
     confidence = "HIGH" if ahead_gap and behind_gap else "MEDIUM"
-    
+
     logger.info(
         f"Overtake prediction for {driver}: "
         f"{probability:.1%} (window: {optimal_laps})"
     )
-    
+
     return {
         "probability": probability,
         "optimal_laps": optimal_laps,

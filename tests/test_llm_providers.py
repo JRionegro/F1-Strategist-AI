@@ -74,7 +74,7 @@ class TestClaudeProvider:
     async def test_generate_mock(self, claude_config):
         """Test Claude generation with mocked API."""
         from anthropic.types import TextBlock
-        
+
         provider = ClaudeProvider(claude_config)
 
         # Mock the Anthropic client

@@ -290,7 +290,8 @@ class CacheGenerationService:
     ) -> Dict[str, Any]:
         """Return status summary for requested cache artifacts."""
         artifacts = self._get_artifacts(selected_keys)
-        meeting_keys = self._resolve_meeting_key_set(year, meeting_key, artifacts)
+        meeting_keys = self._resolve_meeting_key_set(
+            year, meeting_key, artifacts)
         if len(meeting_keys) > 1:
             return {
                 "entries": [],
@@ -305,8 +306,10 @@ class CacheGenerationService:
 
         resolved_meeting = next(iter(meeting_keys)) if meeting_keys else None
 
-        session_info = self._maybe_resolve_session(year, resolved_meeting, session_code, artifacts)
-        meeting_reference = session_info or self._maybe_resolve_meeting(year, resolved_meeting, artifacts)
+        session_info = self._maybe_resolve_session(
+            year, resolved_meeting, session_code, artifacts)
+        meeting_reference = session_info or self._maybe_resolve_meeting(
+            year, resolved_meeting, artifacts)
 
         entries: List[Dict[str, Any]] = []
         total_size = 0
@@ -361,8 +364,11 @@ class CacheGenerationService:
         """Delete the selected caches without regenerating."""
         artifacts = self._get_artifacts(selected_keys)
         targets = list(
-            self._iter_artifact_targets(year, meeting_key, session_code, artifacts)
-        )
+            self._iter_artifact_targets(
+                year,
+                meeting_key,
+                session_code,
+                artifacts))
         deleted: List[Path] = []
         for artifact, resolved_meeting, session_info, meeting_reference in targets:
             target = self._resolve_output_path(
@@ -401,8 +407,11 @@ class CacheGenerationService:
         """Create or regenerate the selected caches."""
         artifacts = self._get_artifacts(selected_keys)
         targets = list(
-            self._iter_artifact_targets(year, meeting_key, session_code, artifacts)
-        )
+            self._iter_artifact_targets(
+                year,
+                meeting_key,
+                session_code,
+                artifacts))
         total = len(targets)
         if total == 0:
             return {"results": [], "total": 0}
@@ -410,7 +419,8 @@ class CacheGenerationService:
         results: List[Dict[str, Any]] = []
         created_count = 0
         skipped_count = 0
-        for index, (artifact, resolved_meeting, session_info, meeting_reference) in enumerate(targets, start=1):
+        for index, (artifact, resolved_meeting, session_info,
+                    meeting_reference) in enumerate(targets, start=1):
             label = artifact.label
             if isinstance(meeting_reference, dict):
                 meeting_name = (
@@ -442,7 +452,8 @@ class CacheGenerationService:
             if output_path.exists():
                 if skip_existing:
                     if progress_callback:
-                        progress_callback(index, total, f"Skipped {label} (already exists)")
+                        progress_callback(
+                            index, total, f"Skipped {label} (already exists)")
                     results.append({
                         "artifact": artifact.key,
                         "status": "skipped",
@@ -485,7 +496,8 @@ class CacheGenerationService:
             else:
                 payload = {"result": generator_result}
             payload.setdefault("artifact", artifact.key)
-            payload.setdefault("path", str(output_path) if output_path else None)
+            payload.setdefault("path", str(output_path)
+                               if output_path else None)
             payload["status"] = payload.get("status", "created")
             results.append(payload)
             created_count += 1
@@ -503,7 +515,9 @@ class CacheGenerationService:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _get_artifacts(self, selected_keys: Iterable[str]) -> List[CacheArtifact]:
+    def _get_artifacts(
+            self,
+            selected_keys: Iterable[str]) -> List[CacheArtifact]:
         artifacts: List[CacheArtifact] = []
         for key in selected_keys:
             artifact = self._artifact_map.get(key)
@@ -520,8 +534,8 @@ class CacheGenerationService:
         meeting_keys: Set[int] = set()
         for artifact in artifacts:
             meeting_keys.update(
-                self._resolve_meeting_keys_for_artifact(year, meeting_selector, artifact)
-            )
+                self._resolve_meeting_keys_for_artifact(
+                    year, meeting_selector, artifact))
         return meeting_keys
 
     def _resolve_meeting_keys_for_artifact(
@@ -534,11 +548,17 @@ class CacheGenerationService:
             return []
 
         meeting_keys = self._select_meetings(year, meeting_selector)
-        if artifact.level in {"meeting", "session", "fastf1"} and not meeting_keys:
+        if artifact.level in {
+            "meeting",
+            "session",
+                "fastf1"} and not meeting_keys:
             raise ValueError("No meetings found for requested season")
         return meeting_keys
 
-    def _select_meetings(self, year: int, meeting_selector: MeetingSelector) -> List[int]:
+    def _select_meetings(
+            self,
+            year: int,
+            meeting_selector: MeetingSelector) -> List[int]:
         if meeting_selector is None:
             return self._list_meeting_keys(year)
 
@@ -549,12 +569,15 @@ class CacheGenerationService:
             try:
                 return [int(float(meeting_selector))]
             except (TypeError, ValueError):
-                raise ValueError(f"Invalid meeting selector: {meeting_selector}") from None
+                raise ValueError(
+                    f"Invalid meeting selector: {meeting_selector}") from None
 
         try:
-            return [int(meeting_selector)] if meeting_selector is not None else self._list_meeting_keys(year)
+            return [
+                int(meeting_selector)] if meeting_selector is not None else self._list_meeting_keys(year)
         except (TypeError, ValueError):
-            raise ValueError(f"Invalid meeting selector: {meeting_selector}") from None
+            raise ValueError(
+                f"Invalid meeting selector: {meeting_selector}") from None
 
     def _list_meeting_keys(self, year: int) -> List[int]:
         if year in self._season_meeting_cache:
@@ -562,7 +585,8 @@ class CacheGenerationService:
 
         keys: List[int] = []
         try:
-            meetings_payload: Any = self.openf1_provider.get_meetings(year=year)
+            meetings_payload: Any = self.openf1_provider.get_meetings(
+                year=year)
         except AttributeError:
             meetings_payload = None
 
@@ -570,7 +594,8 @@ class CacheGenerationService:
             column_candidates = ["MeetingKey", "meeting_key"]
             for column in column_candidates:
                 if column in meetings_payload.columns:
-                    raw_values = meetings_payload[column].dropna().unique().tolist()
+                    raw_values = meetings_payload[column].dropna(
+                    ).unique().tolist()
                     for value in raw_values:
                         try:
                             keys.append(int(value))
@@ -591,7 +616,8 @@ class CacheGenerationService:
         keys = sorted(set(keys))
         self._season_meeting_cache[year] = keys
         if not keys:
-            logger.warning("No meetings found for year %s when building cache plan", year)
+            logger.warning(
+                "No meetings found for year %s when building cache plan", year)
         return keys
 
     def _iter_artifact_targets(
@@ -602,11 +628,15 @@ class CacheGenerationService:
         artifacts: Sequence[CacheArtifact],
     ) -> Iterable[Tuple[CacheArtifact, Optional[int], Optional[Dict[str, Any]], Optional[Dict[str, Any]]]]:
         for artifact in artifacts:
-            meeting_keys = self._resolve_meeting_keys_for_artifact(year, meeting_selector, artifact)
+            meeting_keys = self._resolve_meeting_keys_for_artifact(
+                year, meeting_selector, artifact)
             if not meeting_keys:
-                session_info = self._maybe_resolve_session(year, None, session_code, [artifact])
-                meeting_reference = session_info or self._maybe_resolve_meeting(year, None, [artifact])
-                if artifact.level in {"session", "fastf1"} and session_info is None:
+                session_info = self._maybe_resolve_session(
+                    year, None, session_code, [artifact])
+                meeting_reference = session_info or self._maybe_resolve_meeting(year, None, [
+                                                                                artifact])
+                if artifact.level in {
+                        "session", "fastf1"} and session_info is None:
                     logger.info(
                         "Skipping artifact %s for meeting selector %s (session %s unavailable)",
                         artifact.key,
@@ -618,9 +648,12 @@ class CacheGenerationService:
                 continue
 
             for resolved_meeting in meeting_keys:
-                session_info = self._maybe_resolve_session(year, resolved_meeting, session_code, [artifact])
-                meeting_reference = session_info or self._maybe_resolve_meeting(year, resolved_meeting, [artifact])
-                if artifact.level in {"session", "fastf1"} and session_info is None:
+                session_info = self._maybe_resolve_session(
+                    year, resolved_meeting, session_code, [artifact])
+                meeting_reference = session_info or self._maybe_resolve_meeting(
+                    year, resolved_meeting, [artifact])
+                if artifact.level in {
+                        "session", "fastf1"} and session_info is None:
                     logger.info(
                         "Skipping artifact %s for meeting %s (session %s unavailable)",
                         artifact.key,
@@ -663,9 +696,11 @@ class CacheGenerationService:
         if not needs_session:
             return None
         if meeting_key is None:
-            raise ValueError("Meeting selection required to build session caches")
+            raise ValueError(
+                "Meeting selection required to build session caches")
         if not session_code:
-            raise ValueError("Session selection required to build session caches")
+            raise ValueError(
+                "Session selection required to build session caches")
 
         sessions = self._get_meeting_sessions(year, meeting_key)
         if not sessions:
@@ -719,7 +754,8 @@ class CacheGenerationService:
                 "Skipping meeting %s for session %s; available codes: %s",
                 meeting_key,
                 target_code,
-                ", ".join(sorted(available_codes)) if available_codes else "none",
+                ", ".join(
+                    sorted(available_codes)) if available_codes else "none",
             )
             return None
 
@@ -765,7 +801,8 @@ class CacheGenerationService:
             if meeting_reference is None:
                 return None
             slug = self._build_meeting_slug(meeting_reference)
-            base_dir = self.cache_config.processed_dir / artifact.key / str(year)
+            base_dir = self.cache_config.processed_dir / \
+                artifact.key / str(year)
             base_dir.mkdir(parents=True, exist_ok=True)
             extension = self.cache_config.get_file_extension()
             filename = f"{slug}{extension}"
@@ -785,7 +822,8 @@ class CacheGenerationService:
         if artifact.source == "fastf1":
             if session_info is None:
                 return None
-            translation = self.fastf1_provider.translate_openf1_session(session_info)
+            translation = self.fastf1_provider.translate_openf1_session(
+                session_info)
             translated_year = int(translation.get("year") or year)
             country = str(
                 translation.get("round")
@@ -820,7 +858,8 @@ class CacheGenerationService:
         if alias is not None:
             return alias
         if text in cls.SESSION_CODE_TO_NAME:
-            mapped = cls.SESSION_ALIAS_TO_CODE.get(cls.SESSION_CODE_TO_NAME[text].upper())
+            mapped = cls.SESSION_ALIAS_TO_CODE.get(
+                cls.SESSION_CODE_TO_NAME[text].upper())
             if mapped is not None:
                 return mapped
             return text if text in cls._CANONICAL_CODES else None
@@ -864,7 +903,8 @@ class CacheGenerationService:
     def _build_meeting_slug(self, payload: Dict[str, Any]) -> str:
         date_raw = payload.get("date_start") or payload.get("meeting_start")
         try:
-            parsed = pd.to_datetime(date_raw, format="mixed") if date_raw else None
+            parsed = pd.to_datetime(
+                date_raw, format="mixed") if date_raw else None
         except Exception:  # noqa: BLE001
             parsed = None
         if parsed is not None:
@@ -913,15 +953,22 @@ class CacheGenerationService:
         if artifact.level == "year":
             data = getattr(self.openf1_provider, method_name)(year=year)
             row_count = self._persist_dataframe(data, output_path)
-            return {"key": artifact.key, "path": str(output_path), "rows": row_count}
+            return {
+                "key": artifact.key,
+                "path": str(output_path),
+                "rows": row_count}
 
         if artifact.level == "meeting":
             if meeting_key is None:
-                raise ValueError("Meeting selection required for meeting-level cache")
+                raise ValueError(
+                    "Meeting selection required for meeting-level cache")
             sessions = self._get_meeting_sessions(year, meeting_key)
             dataframe = pd.DataFrame(sessions)
             row_count = self._persist_dataframe(dataframe, output_path)
-            return {"key": artifact.key, "path": str(output_path), "rows": row_count}
+            return {
+                "key": artifact.key,
+                "path": str(output_path),
+                "rows": row_count}
 
         if session_info is None:
             raise ValueError("Session info required for session-level cache")
@@ -946,10 +993,14 @@ class CacheGenerationService:
             else:
                 raise
         except requests.RequestException as error:
-            raise RuntimeError(f"Failed to fetch {method_name} for session {session_key}: {error}") from error
+            raise RuntimeError(
+                f"Failed to fetch {method_name} for session {session_key}: {error}") from error
 
         row_count = self._persist_dataframe(data_frame, output_path)
-        return {"key": artifact.key, "path": str(output_path), "rows": row_count}
+        return {
+            "key": artifact.key,
+            "path": str(output_path),
+            "rows": row_count}
 
     def _generate_fastf1_artifact(
         self,
@@ -964,8 +1015,10 @@ class CacheGenerationService:
             raise ValueError("FastF1 artifacts require session information")
 
         identifier = self._map_to_fastf1_code(session_code)
-        translation = self.fastf1_provider.translate_openf1_session(session_info)
-        translated_year = int(translation.get("year") or session_info.get("year") or year)
+        translation = self.fastf1_provider.translate_openf1_session(
+            session_info)
+        translated_year = int(translation.get(
+            "year") or session_info.get("year") or year)
         country = str(
             translation.get("round")
             or session_info.get("country_name")
@@ -981,9 +1034,9 @@ class CacheGenerationService:
         )
         if not success:
             raise RuntimeError(
-                f"FastF1 session load failed for {translated_year} {country} {identifier}"
-            )
-        # The FastF1 provider saves the cache as a side effect; nothing else to write.
+                f"FastF1 session load failed for {translated_year} {country} {identifier}")
+        # The FastF1 provider saves the cache as a side effect; nothing else to
+        # write.
         file_size = output_path.stat().st_size if output_path.exists() else 0
         return {
             "key": artifact.key,
@@ -1011,7 +1064,8 @@ class CacheGenerationService:
 
         if self.cache_config.use_parquet:
             df_to_write = df.copy()
-            object_columns = [col for col in df_to_write.columns if df_to_write[col].dtype == object]
+            object_columns = [
+                col for col in df_to_write.columns if df_to_write[col].dtype == object]
             for column in object_columns:
                 df_to_write[column] = df_to_write[column].astype("string")
 

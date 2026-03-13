@@ -42,7 +42,7 @@ class GeminiProvider(LLMProvider):
                 "google-genai not installed. "
                 "Install with: pip install google-genai"
             )
-        
+
         self.client = genai.Client(api_key=config.api_key)
         self.model_name = (
             config.model_name or "gemini-2.0-flash-exp"
@@ -88,7 +88,7 @@ class GeminiProvider(LLMProvider):
                 # Generate content using new API
                 if types is None:
                     raise RuntimeError("types module not available")
-                    
+
                 config = types.GenerateContentConfig(
                     temperature=kwargs.get(
                         "temperature",
@@ -99,7 +99,7 @@ class GeminiProvider(LLMProvider):
                         self.config.max_tokens
                     ),
                 )
-                
+
                 response = await asyncio.to_thread(
                     self.client.models.generate_content,
                     model=self.model_name,
@@ -155,7 +155,7 @@ class GeminiProvider(LLMProvider):
                         f"{self.config.max_retries} attempts: {e}"
                     )
                 await asyncio.sleep(2 ** attempt)
-        
+
         raise RuntimeError("Gemini generation failed unexpectedly")
 
     async def generate_with_thinking(

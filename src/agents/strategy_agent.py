@@ -18,13 +18,13 @@ logger = logging.getLogger(__name__)
 class StrategyAgent(BaseAgent):
     """
     Specialized agent for F1 race and qualifying strategy optimization.
-    
+
     Race Mode Responsibilities:
     - Tire strategy (compound selection, stint length)
     - Pit stop timing (optimal windows, undercut/overcut)
     - Fuel management and race pace
     - Team strategy coordination
-    
+
     Qualifying Mode Responsibilities:
     - Track exit strategy (timing, track evolution)
     - Number of attempts (1, 2, or 3 flying laps)
@@ -32,26 +32,26 @@ class StrategyAgent(BaseAgent):
     - Out-lap strategy (tire preparation)
     - Q1/Q2/Q3 progression tactics
     """
-    
+
     def get_system_prompt(self) -> str:
         """
         Get system prompt for Strategy Agent.
-        
+
         Adapts based on session type (race vs qualifying).
-        
+
         Returns:
             System prompt string with role and capabilities
         """
         if not self.context:
             return self._get_default_prompt()
-        
+
         if self.context.session_type == "qualifying":
             return self._get_qualifying_prompt()
         elif self.context.session_type in ["race", "sprint"]:
             return self._get_race_prompt()
         else:
             return self._get_default_prompt()
-    
+
     def _get_default_prompt(self) -> str:
         """Default prompt for Strategy Agent."""
         return """You are an expert F1 Strategy Agent specializing in race and qualifying strategy optimization.
@@ -66,7 +66,7 @@ Your expertise includes:
 Provide clear, data-driven recommendations based on F1 regulations and historical data.
 Always explain your reasoning and consider multiple strategic options when relevant.
 """
-    
+
     def _get_race_prompt(self) -> str:
         """Prompt for race strategy mode."""
         return """You are an expert F1 Race Strategy Agent for the {race} {year}.
@@ -105,9 +105,8 @@ ALWAYS:
 FORMAT: Provide clear, concise answers with strategic reasoning.
 """.format(
             race=self.context.race_name if self.context else "Unknown",
-            year=self.context.year if self.context else "Unknown"
-        )
-    
+            year=self.context.year if self.context else "Unknown")
+
     def _get_qualifying_prompt(self) -> str:
         """Prompt for qualifying strategy mode."""
         return """You are an expert F1 Qualifying Strategy Agent for the {race} {year}.
@@ -150,13 +149,12 @@ ALWAYS:
 FORMAT: Provide clear timing recommendations with strategic reasoning.
 """.format(
             race=self.context.race_name if self.context else "Unknown",
-            year=self.context.year if self.context else "Unknown"
-        )
-    
+            year=self.context.year if self.context else "Unknown")
+
     def get_available_tools(self) -> List[str]:
         """
         Get list of MCP tools available to Strategy Agent.
-        
+
         Returns:
             List of tool names
         """
@@ -168,11 +166,11 @@ FORMAT: Provide clear timing recommendations with strategic reasoning.
             "get_qualifying_results",
             "get_session_info"
         ]
-    
+
     def validate_query(self, query: str) -> bool:
         """
         Validate if query is suitable for Strategy Agent.
-        
+
         Strategy queries typically contain keywords related to:
         - Tire/tyre strategy
         - Pit stops
@@ -180,18 +178,18 @@ FORMAT: Provide clear timing recommendations with strategic reasoning.
         - Qualifying strategy
         - Fuel management
         - Compound selection
-        
+
         Args:
             query: User query string
-            
+
         Returns:
             True if query is suitable for Strategy Agent
         """
         if not query or len(query.strip()) == 0:
             return False
-        
+
         query_lower = query.lower()
-        
+
         # Strategy-related keywords
         strategy_keywords = [
             "tire", "tyre", "pit", "stop", "strategy", "compound",
@@ -202,6 +200,6 @@ FORMAT: Provide clear timing recommendations with strategic reasoning.
             "optimal", "best", "recommend", "should",
             "previous", "historical", "past", "worked", "bahrain", "race"
         ]
-        
+
         # Check if any strategy keyword is in the query
         return any(keyword in query_lower for keyword in strategy_keywords)

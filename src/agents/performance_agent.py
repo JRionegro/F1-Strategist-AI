@@ -18,14 +18,14 @@ logger = logging.getLogger(__name__)
 class PerformanceAgent(BaseAgent):
     """
     Specialized agent for F1 performance and telemetry analysis.
-    
+
     Race Mode Responsibilities:
     - Lap time analysis and trends
     - Pace comparison between drivers
     - Tire degradation impact on performance
     - Fuel effect analysis
     - Stint performance evaluation
-    
+
     Qualifying Mode Responsibilities:
     - Sector time analysis
     - Optimal lap construction
@@ -33,26 +33,26 @@ class PerformanceAgent(BaseAgent):
     - Track evolution and improvement
     - Gap analysis to pole/competitors
     """
-    
+
     def get_system_prompt(self) -> str:
         """
         Get system prompt for Performance Agent.
-        
+
         Adapts based on session type (race vs qualifying).
-        
+
         Returns:
             System prompt string with role and capabilities
         """
         if not self.context:
             return self._get_default_prompt()
-        
+
         if self.context.session_type == "qualifying":
             return self._get_qualifying_prompt()
         elif self.context.session_type in ["race", "sprint"]:
             return self._get_race_prompt()
         else:
             return self._get_default_prompt()
-    
+
     def _get_default_prompt(self) -> str:
         """Default prompt for Performance Agent."""
         return """You are an expert F1 Performance Agent specializing in lap time and telemetry analysis.
@@ -68,7 +68,7 @@ Your expertise includes:
 Provide detailed, data-driven insights based on timing and telemetry.
 Always reference specific lap times, sectors, and performance metrics.
 """
-    
+
     def _get_race_prompt(self) -> str:
         """Prompt for race performance analysis mode."""
         return """You are an expert F1 Performance Agent for the {race} {year}.
@@ -128,7 +128,7 @@ FORMAT: Provide precise, data-driven performance insights with lap times and del
             race=self.context.race_name if self.context else "Unknown",
             year=self.context.year if self.context else "Unknown"
         )
-    
+
     def _get_qualifying_prompt(self) -> str:
         """Prompt for qualifying performance analysis mode."""
         return """You are an expert F1 Performance Agent for qualifying at {race} {year}.
@@ -191,13 +191,12 @@ ALWAYS:
 FORMAT: Provide precise sector-by-sector analysis with times, gaps, and improvement areas.
 """.format(
             race=self.context.race_name if self.context else "Unknown",
-            year=self.context.year if self.context else "Unknown"
-        )
-    
+            year=self.context.year if self.context else "Unknown")
+
     def get_available_tools(self) -> List[str]:
         """
         Get list of MCP tools available to Performance Agent.
-        
+
         Returns:
             List of tool names
         """
@@ -208,67 +207,67 @@ FORMAT: Provide precise sector-by-sector analysis with times, gaps, and improvem
             "get_qualifying_results",
             "get_session_info"
         ]
-    
+
     def validate_query(self, query: str) -> bool:
         """
         Validate if query is suitable for Performance Agent.
-        
+
         Performance queries typically contain keywords related to:
         - Lap times and sectors
         - Pace and speed
         - Telemetry data
         - Driver comparison
         - Performance analysis
-        
+
         Args:
             query: User query string
-            
+
         Returns:
             True if query is suitable for Performance Agent
         """
         if not query or len(query.strip()) == 0:
             return False
-        
+
         query_lower = query.lower()
-        
+
         # Performance-related keywords
         performance_keywords = [
             # Lap times
             "lap time", "sector", "fastest lap", "personal best",
             "purple", "green", "yellow", "delta", "gap",
             "s1", "s2", "s3", "sector 1", "sector 2", "sector 3",
-            
+
             # Pace
             "pace", "speed", "fast", "slow", "quick", "quicker",
             "slower", "faster", "tempo", "rhythm",
-            
+
             # Telemetry
             "telemetry", "throttle", "brake", "speed trap",
             "corner speed", "apex", "acceleration",
             "braking point", "gear", "rpm", "drs",
-            
+
             # Comparison
             "compare", "comparison", "versus", "vs", "against",
             "better than", "worse than", "faster than", "slower than",
             "gap to", "behind", "ahead",
-            
+
             # Performance
             "performance", "degradation", "drop off", "falling off",
             "improving", "getting faster", "getting slower",
             "consistent", "consistency", "variation",
-            
+
             # Analysis
             "analyze", "analysis", "breakdown", "how fast",
             "how much faster", "time lost", "time gained",
             "optimal", "theoretical", "best possible",
-            
+
             # Qualifying specific
             "q1", "q2", "q3", "pole", "grid position",
             "qualifying", "quali", "shootout",
-            
+
             # Race specific
             "stint", "fuel", "tire deg", "tyre deg"
         ]
-        
+
         # Check if any performance keyword is in the query
         return any(keyword in query_lower for keyword in performance_keywords)

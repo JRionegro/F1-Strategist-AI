@@ -131,7 +131,7 @@ class TestChromaDBIntegration:
             collection_name="test_persist",
             persist_directory=temp_chromadb_dir
         )
-        ids = store1.add_documents(sample_documents, metadatas)
+        store1.add_documents(sample_documents, metadatas)
         count1 = store1.get_collection_stats()["document_count"]
 
         # Create new store instance with same directory

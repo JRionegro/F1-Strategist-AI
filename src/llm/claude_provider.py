@@ -34,7 +34,7 @@ class ClaudeProvider(LLMProvider):
         "claude-3-5-sonnet-20240620": {"input": 3.00, "output": 15.00},
         "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
     }
-    
+
     # Default pricing (fallback)
     COST_PER_1M_INPUT = 3.00
     COST_PER_1M_OUTPUT = 15.00
@@ -44,7 +44,7 @@ class ClaudeProvider(LLMProvider):
         super().__init__(config)
         self.client = AsyncAnthropic(api_key=config.api_key)
         self.model = config.model_name or "claude-3-5-sonnet-20241022"
-        
+
         # Validate model and set pricing
         if self.model not in self.MODEL_PRICING:
             logger.warning(
@@ -57,7 +57,7 @@ class ClaudeProvider(LLMProvider):
             pricing = self.MODEL_PRICING[self.model]
             self.COST_PER_1M_INPUT = pricing["input"]
             self.COST_PER_1M_OUTPUT = pricing["output"]
-        
+
         logger.info(
             f"Initialized ClaudeProvider with model: {self.model} "
             f"(${self.COST_PER_1M_INPUT}/${self.COST_PER_1M_OUTPUT} "
@@ -149,7 +149,7 @@ class ClaudeProvider(LLMProvider):
                         f"{self.config.max_retries} attempts: {e}"
                     )
                 await asyncio.sleep(2 ** attempt)
-        
+
         raise RuntimeError("Claude generation failed unexpectedly")
 
     async def generate_with_thinking(
@@ -195,9 +195,9 @@ class ClaudeProvider(LLMProvider):
         if "step" in content.lower() or "reasoning" in content.lower():
             lines = content.split("\n")
             thinking_lines = [
-                l for l in lines[:5]
+                line for line in lines[:5]
                 if any(
-                    kw in l.lower()
+                    kw in line.lower()
                     for kw in ["step", "first", "reasoning", "think"]
                 )
             ]

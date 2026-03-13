@@ -5,7 +5,6 @@ Displays circuit layout with real-time driver positions.
 """
 
 import logging
-from typing import Optional
 import plotly.graph_objects as go
 from dash import html, dcc
 import dash_bootstrap_components as dbc
@@ -30,16 +29,16 @@ TEAM_COLORS = {
 
 class CircuitMapDashboard:
     """Circuit map visualization dashboard."""
-    
+
     @staticmethod
     def create_layout(session_obj=None, current_time=None):
         """
         Create circuit map dashboard layout.
-        
+
         Args:
             session_obj: FastF1 session object
             current_time: Current simulation time (for position updates)
-            
+
         Returns:
             Dash component with circuit map
         """
@@ -53,10 +52,11 @@ class CircuitMapDashboard:
                     )
                 ])
             ], className="mb-3")
-        
+
         # Create circuit map figure
-        fig = CircuitMapDashboard._create_circuit_figure(session_obj, current_time)
-        
+        fig = CircuitMapDashboard._create_circuit_figure(
+            session_obj, current_time)
+
         return dbc.Card([
             dbc.CardHeader([
                 html.H5("🗺️ Circuit Map", className="d-inline", style={"fontSize": "0.9rem"}),
@@ -74,38 +74,38 @@ class CircuitMapDashboard:
                 )
             ], style={'height': 'calc(100% - 45px)', 'padding': '5px'})
         ], className="mb-3 h-100", style={"overflow": "hidden"})
-    
+
     @staticmethod
     def _create_circuit_figure(session_obj, current_time=None):
         """
         Create Plotly figure with circuit layout and driver positions.
-        
+
         Args:
             session_obj: FastF1 session object
             current_time: Current simulation time for position updates
-            
+
         Returns:
             Plotly Figure object
         """
         fig = go.Figure()
-        
+
         try:
             # Get position data for all laps
             laps = session_obj.laps
-            
+
             if laps.empty:
                 logger.warning("No lap data available for circuit map")
                 return CircuitMapDashboard._create_empty_figure(
                     "No lap data available"
                 )
-            
+
             # Draw circuit outline using first driver's telemetry
             first_driver = laps['DriverNumber'].iloc[0]
             first_lap = laps[laps['DriverNumber'] == first_driver].iloc[0]
-            
+
             try:
                 telemetry = first_lap.get_telemetry()
-                
+
                 if not telemetry.empty and 'X' in telemetry.columns and 'Y' in telemetry.columns:
                     # Circuit outline
                     fig.add_trace(go.Scatter(
@@ -117,7 +117,7 @@ class CircuitMapDashboard:
                         hoverinfo='skip',
                         showlegend=False
                     ))
-                    
+
                     # Add start/finish line marker
                     fig.add_trace(go.Scatter(
                         x=[telemetry['X'].iloc[0]],
@@ -131,13 +131,14 @@ class CircuitMapDashboard:
                         hoverinfo='skip'
                     ))
             except Exception as e:
-                logger.warning(f"Could not load telemetry for circuit outline: {e}")
-            
+                logger.warning(
+                    f"Could not load telemetry for circuit outline: {e}")
+
             # Add driver positions
             CircuitMapDashboard._add_driver_positions(
                 fig, session_obj, laps, current_time
             )
-            
+
             # Update layout
             fig.update_layout(
                 plot_bgcolor='#0a0a0a',
@@ -167,18 +168,18 @@ class CircuitMapDashboard:
                     bgcolor='rgba(0,0,0,0.5)'
                 )
             )
-            
+
         except Exception as e:
             logger.error(f"Error creating circuit map: {e}")
             return CircuitMapDashboard._create_empty_figure(f"Error: {str(e)}")
-        
+
         return fig
-    
+
     @staticmethod
     def _add_driver_positions(fig, session_obj, laps, current_time=None):
         """
         Add driver position markers to the circuit map.
-        
+
         Args:
             fig: Plotly Figure object
             session_obj: FastF1 session object
@@ -189,55 +190,63 @@ class CircuitMapDashboard:
             # Get latest positions for each driver
             drivers = session_obj.drivers
             results = session_obj.results
-            
+
             for driver_num in drivers:
                 try:
                     # Get driver info
-                    driver_info = results[results['DriverNumber'] == str(driver_num)].iloc[0]
+                    driver_info = results[results['DriverNumber'] == str(
+                        driver_num)].iloc[0]
                     abbr = driver_info['Abbreviation']
                     team = driver_info['TeamName']
                     color = TEAM_COLORS.get(team, '#FFFFFF')
-                    
+
                     # Get driver's laps
                     driver_laps = laps[laps['DriverNumber'] == driver_num]
                     if driver_laps.empty:
                         continue
-                    
+
                     # Find appropriate lap based on current_time
                     if current_time is not None and 'Time' in driver_laps.columns:
                         # Try to find lap based on Time column
                         try:
-                            # Filter laps where Time is before or at current_time
+                            # Filter laps where Time is before or at
+                            # current_time
                             import pandas as pd
                             valid_laps = driver_laps[
-                                pd.notna(driver_laps['Time']) & 
+                                pd.notna(driver_laps['Time']) &
                                 (driver_laps['Time'] <= current_time)
                             ]
                             if not valid_laps.empty:
-                                # Use the last lap that started before current_time
+                                # Use the last lap that started before
+                                # current_time
                                 current_lap = valid_laps.iloc[-1]
                             else:
                                 # Use first lap if no lap started yet
                                 current_lap = driver_laps.iloc[0]
                         except Exception as e:
-                            logger.debug(f"Error filtering laps for driver {driver_num}: {e}")
+                            logger.debug(
+                                f"Error filtering laps for driver {driver_num}: {e}")
                             # Fallback to first lap
                             current_lap = driver_laps.iloc[0]
                     else:
-                        # Use first lap if no time specified (to show all drivers at start)
+                        # Use first lap if no time specified (to show all
+                        # drivers at start)
                         current_lap = driver_laps.iloc[0]
-                    
+
                     telemetry = current_lap.get_telemetry()
-                    
+
                     if not telemetry.empty and 'X' in telemetry.columns and 'Y' in telemetry.columns:
-                        # Calculate position within the lap based on current_time
+                        # Calculate position within the lap based on
+                        # current_time
                         if current_time is not None and 'Time' in telemetry.columns:
                             try:
                                 # Find closest telemetry point to current_time
                                 import pandas as pd
-                                valid_telem = telemetry[pd.notna(telemetry['Time'])]
+                                valid_telem = telemetry[pd.notna(
+                                    telemetry['Time'])]
                                 if not valid_telem.empty:
-                                    time_diffs = (valid_telem['Time'] - current_time).abs()
+                                    time_diffs = (
+                                        valid_telem['Time'] - current_time).abs()
                                     closest_idx = time_diffs.idxmin()
                                     x_pos = telemetry.loc[closest_idx, 'X']
                                     y_pos = telemetry.loc[closest_idx, 'Y']
@@ -246,7 +255,8 @@ class CircuitMapDashboard:
                                     x_pos = telemetry['X'].iloc[0]
                                     y_pos = telemetry['Y'].iloc[0]
                             except Exception as e:
-                                logger.debug(f"Error calculating position for driver {driver_num}: {e}")
+                                logger.debug(
+                                    f"Error calculating position for driver {driver_num}: {e}")
                                 # Fallback to first position
                                 x_pos = telemetry['X'].iloc[0]
                                 y_pos = telemetry['Y'].iloc[0]
@@ -254,7 +264,7 @@ class CircuitMapDashboard:
                             # Default to first position (start/finish line)
                             x_pos = telemetry['X'].iloc[0]
                             y_pos = telemetry['Y'].iloc[0]
-                        
+
                         # Add driver marker
                         fig.add_trace(go.Scatter(
                             x=[x_pos],
@@ -275,14 +285,15 @@ class CircuitMapDashboard:
                                 f"<extra></extra>"
                             )
                         ))
-                        
+
                 except Exception as e:
-                    logger.debug(f"Could not add position for driver {driver_num}: {e}")
+                    logger.debug(
+                        f"Could not add position for driver {driver_num}: {e}")
                     continue
-                    
+
         except Exception as e:
             logger.error(f"Error adding driver positions: {e}")
-    
+
     @staticmethod
     def _create_empty_figure(message: str):
         """Create empty figure with message."""

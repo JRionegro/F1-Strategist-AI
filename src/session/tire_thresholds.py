@@ -32,9 +32,8 @@ def resolve_tire_windows(
         Merged dictionary with normalized compound keys.
     """
 
-    resolved: Dict[str, TireWindow] = {
-        compound: window.copy() for compound, window in DEFAULT_TIRE_WINDOWS.items()
-    }
+    resolved: Dict[str, TireWindow] = {compound: window.copy(
+    ) for compound, window in DEFAULT_TIRE_WINDOWS.items()}
 
     if not overrides:
         return resolved

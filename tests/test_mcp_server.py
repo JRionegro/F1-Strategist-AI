@@ -54,7 +54,7 @@ class TestF1DataMCPServer:
     async def test_get_race_results_openf1(self, mcp_server):
         """
         Test get_race_results with OpenF1 (2024 season).
-        
+
         OpenF1 is primary data source for 2023+.
         """
         arguments = {
@@ -80,7 +80,7 @@ class TestF1DataMCPServer:
     async def test_get_lap_times_openf1(self, mcp_server):
         """
         Test get_lap_times with OpenF1 (2024 season).
-        
+
         OpenF1 provides lap times via /laps endpoint.
         """
         arguments = {
@@ -96,7 +96,7 @@ class TestF1DataMCPServer:
     async def test_get_pit_stops_openf1(self, mcp_server):
         """
         Test get_pit_stops with OpenF1 (2024 season).
-        
+
         OpenF1 provides pit stops via /pit endpoint.
         """
         arguments = {
@@ -111,7 +111,7 @@ class TestF1DataMCPServer:
     async def test_get_qualifying_results_openf1(self, mcp_server):
         """
         Test get_qualifying_results with OpenF1 (2024 season).
-        
+
         OpenF1 provides qualifying via /sessions and /laps endpoints.
         """
         arguments = {
@@ -128,7 +128,7 @@ class TestF1DataMCPServer:
     async def test_get_practice_results_openf1(self, mcp_server):
         """
         Test get_practice_results with OpenF1 (2024 season).
-        
+
         OpenF1 provides practice via /sessions and /laps endpoints.
         """
         arguments = {
@@ -146,7 +146,7 @@ class TestF1DataMCPServer:
     async def test_get_sprint_results_openf1(self, mcp_server):
         """
         Test get_sprint_results with OpenF1 (2024 season).
-        
+
         OpenF1 provides sprint via /sessions and /laps endpoints.
         """
         arguments = {
@@ -163,7 +163,7 @@ class TestF1DataMCPServer:
     async def test_get_weather_openf1(self, mcp_server):
         """
         Test get_weather with OpenF1 (2024 season).
-        
+
         OpenF1 provides weather via /weather endpoint.
         """
         arguments = {
@@ -178,7 +178,7 @@ class TestF1DataMCPServer:
     async def test_get_tire_strategy_openf1(self, mcp_server):
         """
         Test get_tire_strategy with OpenF1 (2024 season).
-        
+
         OpenF1 provides stints via /stints endpoint.
         """
         arguments = {
@@ -193,7 +193,7 @@ class TestF1DataMCPServer:
     async def test_get_driver_info_openf1(self, mcp_server):
         """
         Test get_driver_info with OpenF1 (2024 season).
-        
+
         OpenF1 provides drivers via /drivers endpoint.
         """
         arguments = {
@@ -219,7 +219,7 @@ class TestF1DataMCPServer:
     async def test_get_race_control_openf1(self, mcp_server):
         """
         Test get_race_control_messages with OpenF1 (2024 season).
-        
+
         OpenF1 provides race control via /race_control endpoint.
         """
         arguments = {
@@ -234,7 +234,7 @@ class TestF1DataMCPServer:
     async def test_get_positions_openf1(self, mcp_server):
         """
         Test get_positions with OpenF1 (NEW API).
-        
+
         OpenF1 /position endpoint provides real race positions.
         CRITICAL: Use this instead of calculating from lap times.
         """
@@ -249,7 +249,7 @@ class TestF1DataMCPServer:
     async def test_get_intervals_openf1(self, mcp_server):
         """
         Test get_intervals with OpenF1 (NEW API).
-        
+
         OpenF1 /intervals endpoint provides time gaps.
         """
         arguments = {
@@ -263,7 +263,7 @@ class TestF1DataMCPServer:
     async def test_get_location_openf1(self, mcp_server):
         """
         Test get_location with OpenF1 (NEW API).
-        
+
         OpenF1 /location endpoint provides GPS coordinates.
         """
         arguments = {
@@ -278,7 +278,7 @@ class TestF1DataMCPServer:
     async def test_get_team_radio_openf1(self, mcp_server):
         """
         Test get_team_radio with OpenF1 (NEW API).
-        
+
         OpenF1 /team_radio endpoint provides radio messages.
         """
         arguments = {
@@ -293,7 +293,7 @@ class TestF1DataMCPServer:
     async def test_get_meetings_openf1(self, mcp_server):
         """
         Test get_meetings with OpenF1 (NEW API).
-        
+
         OpenF1 /meetings endpoint provides race weekend info.
         """
         arguments = {
@@ -307,7 +307,7 @@ class TestF1DataMCPServer:
     async def test_get_overtakes_openf1(self, mcp_server):
         """
         Test get_overtakes with OpenF1 (NEW API).
-        
+
         OpenF1 /overtakes endpoint provides overtaking maneuvers.
         """
         arguments = {
@@ -333,7 +333,7 @@ class TestF1DataMCPServer:
     async def test_telemetry_handler_openf1(self, mcp_server):
         """
         Test telemetry handler with OpenF1 (2024 season).
-        
+
         OpenF1 provides telemetry via /car_data endpoint.
         """
         arguments = {

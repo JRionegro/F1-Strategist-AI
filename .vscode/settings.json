@@ -13,7 +13,7 @@
     "cline.autoApproveCommand": false, // Require approval for terminal commands
     "cline.autoApproveRequest": false, // Require approval for web requests
     // Python Configuration for this Project
-    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+    "python.defaultInterpreterPath": "${workspaceFolder}/venv/Scripts/python.exe",
     "python.analysis.typeCheckingMode": "basic",
     "python.linting.enabled": true,
     "python.linting.flake8Enabled": true,
@@ -42,5 +42,8 @@
         "MD013": false, // Line length
         "MD033": false, // Inline HTML
         "MD041": false // First line heading
+    },
+    "chat.tools.terminal.autoApprove": {
+        "&": true
     }
 }

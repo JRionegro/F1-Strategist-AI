@@ -6,7 +6,6 @@ for the RAG system. Provides a high-level API for loading and querying
 F1-related documents organized by year and circuit.
 """
 
-import logging
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -135,7 +134,8 @@ class RAGManager:
         )
 
         if not documents:
-            logger.warning(f"No documents found for year={year}, circuit={circuit}")
+            logger.warning(
+                f"No documents found for year={year}, circuit={circuit}")
             self._current_context = RAGContext(
                 year=year,
                 circuit=circuit,
@@ -154,7 +154,8 @@ class RAGManager:
             categories[category] = categories.get(category, 0) + 1
 
         # Update current context
-        unique_sources = set(doc.metadata.get("source", "") for doc in documents)
+        unique_sources = set(doc.metadata.get("source", "")
+                             for doc in documents)
         self._current_context = RAGContext(
             year=year,
             circuit=circuit,
@@ -236,7 +237,12 @@ class RAGManager:
         self.vector_store.clear()
         logger.info("RAG collection cleared")
 
-    def _build_filters(self, *, category: Optional[str], year: Optional[int], circuit: Optional[str]) -> list[dict]:
+    def _build_filters(
+            self,
+            *,
+            category: Optional[str],
+            year: Optional[int],
+            circuit: Optional[str]) -> list[dict]:
         """Build a list of Chroma filters to cover global/year + circuit scope.
 
         Chroma's filters are AND-only. To include both global/year docs and
@@ -309,7 +315,8 @@ class RAGManager:
                 for r in results
             ]
 
-        filters = self._build_filters(category=category, year=year, circuit=circuit)
+        filters = self._build_filters(
+            category=category, year=year, circuit=circuit)
 
         merged: list[dict] = []
         seen_ids: set[str] = set()
@@ -404,7 +411,8 @@ class RAGManager:
             metadata = doc.get("metadata", {})
             source = metadata.get("source", "unknown")
 
-            # Filter by year (skip circuit/year docs from other years; keep global)
+            # Filter by year (skip circuit/year docs from other years; keep
+            # global)
             if year is not None:
                 meta_year = metadata.get("year")
                 if meta_year is not None and meta_year != year:
@@ -414,7 +422,8 @@ class RAGManager:
             if circuit:
                 meta_circuit = str(metadata.get("circuit", "")).lower()
                 meta_scope = metadata.get("scope")
-                if meta_scope == "circuit" and meta_circuit != str(circuit).lower():
+                if meta_scope == "circuit" and meta_circuit != str(
+                        circuit).lower():
                     continue
 
             # Skip if already seen (multiple chunks from same doc)

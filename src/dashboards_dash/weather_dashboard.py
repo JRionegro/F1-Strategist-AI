@@ -16,7 +16,6 @@ Future Phases:
 - Phase 3: Wind by sector, AI predictions, automatic alerts
 """
 
-import logging
 from typing import Optional, Any
 
 import pandas as pd
@@ -60,12 +59,21 @@ def create_weather_dashboard() -> html.Div:
             dbc.Card(
                 [
                     dbc.CardHeader([
-                        html.H5("☁️ Weather", className="mb-0", style={"fontSize": "1.2rem"})
+                        html.H5(
+                            "☁️ Weather",
+                            className="mb-0",
+                            style={
+                                "fontSize": "1.2rem"})
                     ], className="py-1"),
                     dbc.CardHeader(
                         id="weather-conditions-header",
                         className="text-white py-1",
-                        style={"fontSize": "0.9rem", "backgroundColor": "#1e1e1e", "display": "flex", "justifyContent": "space-between", "alignItems": "center"}
+                        style={
+                            "fontSize": "0.9rem",
+                            "backgroundColor": "#1e1e1e",
+                            "display": "flex",
+                            "justifyContent": "space-between",
+                            "alignItems": "center"}
                     ),
                     dbc.CardBody(
                         id="weather-conditions-panel",
@@ -82,13 +90,16 @@ def create_weather_dashboard() -> html.Div:
                     dbc.CardHeader(
                         "🌡️ Temperature",
                         className="text-white py-1",
-                        style={"fontSize": "0.9rem", "backgroundColor": "#1e1e1e"}
+                        style={
+                            "fontSize": "0.9rem",
+                            "backgroundColor": "#1e1e1e"}
                     ),
                     dbc.CardBody(
                         [
                             dcc.Graph(
                                 id="weather-temperature-graph",
-                                config={"responsive": True, "displayModeBar": False},
+                                config={
+                                    "responsive": True, "displayModeBar": False},
                                 style={"height": "198px"}
                             ),
                         ],
@@ -105,7 +116,9 @@ def create_weather_dashboard() -> html.Div:
                     dbc.CardHeader(
                         "⚠️ Strategy Impact",
                         className="text-white py-1",
-                        style={"fontSize": "0.9rem", "backgroundColor": "#1e1e1e"}
+                        style={
+                            "fontSize": "0.9rem",
+                            "backgroundColor": "#1e1e1e"}
                     ),
                     dbc.CardBody(
                         id="weather-strategy-panel",
@@ -165,11 +178,14 @@ def create_weather_conditions_panel(
     if session_timezone is not None and pd.notna(latest_time):
         try:
             if getattr(latest_time, 'tzinfo', None) is None:
-                latest_time = pd.Timestamp(latest_time).tz_localize(session_timezone)
+                latest_time = pd.Timestamp(
+                    latest_time).tz_localize(session_timezone)
             else:
-                latest_time = pd.Timestamp(latest_time).tz_convert(session_timezone)
+                latest_time = pd.Timestamp(
+                    latest_time).tz_convert(session_timezone)
         except Exception as exc:
-            logger.debug("Could not align weather time to session timezone: %s", exc)
+            logger.debug(
+                "Could not align weather time to session timezone: %s", exc)
     else:
         latest_time = latest_time if pd.notna(latest_time) else None
 
@@ -193,14 +209,25 @@ def create_weather_conditions_panel(
         metric_items.append(
             html.Span(
                 [
-                    html.Span(icon, style={"fontSize": "0.9rem", "marginRight": "2px"}),
-                    html.Strong(value, className="text-info", style={"fontSize": "0.75rem"}),
-                    html.Span(f" {label}", className="text-muted", style={"fontSize": "0.65rem"}),
+                    html.Span(
+                        icon,
+                        style={
+                            "fontSize": "0.9rem",
+                            "marginRight": "2px"}),
+                    html.Strong(
+                        value,
+                        className="text-info",
+                        style={
+                            "fontSize": "0.75rem"}),
+                    html.Span(
+                        f" {label}",
+                        className="text-muted",
+                        style={
+                            "fontSize": "0.65rem"}),
                 ],
                 className="me-2",
-                style={"whiteSpace": "nowrap"}
-            )
-        )
+                style={
+                    "whiteSpace": "nowrap"}))
 
     # Return tuple: (conditions_content, timestamp)
     conditions_content = html.Div(
@@ -211,9 +238,10 @@ def create_weather_conditions_panel(
             ),
         ]
     )
-    
-    timestamp = latest_time.strftime('%H:%M') if latest_time is not None else "--:--"
-    
+
+    timestamp = latest_time.strftime(
+        '%H:%M') if latest_time is not None else "--:--"
+
     return (conditions_content, timestamp)
 
 
@@ -294,8 +322,9 @@ def create_temperature_graph(
             # Convert current_time to datetime if needed
             if isinstance(current_time, str):
                 from datetime import datetime
-                current_time = datetime.fromisoformat(current_time.replace('Z', '+00:00'))
-            
+                current_time = datetime.fromisoformat(
+                    current_time.replace('Z', '+00:00'))
+
             # Add vertical line at current simulation time
             fig.add_vline(
                 x=current_time,
@@ -309,7 +338,7 @@ def create_temperature_graph(
             )
         except Exception as e:
             logger.warning(f"Could not add current time marker: {e}")
-    
+
     # Update layout (compact) - legend above graph area
     fig.update_layout(
         template="plotly_dark",
@@ -452,7 +481,8 @@ def create_weather_strategy_panel(
     insight_badges = []
     for idx, insight in enumerate(insights):
         # Don't add border-bottom to the last item
-        class_name = "mb-1 p-1" if idx == len(insights) - 1 else "mb-1 p-1 border-bottom border-secondary"
+        class_name = "mb-1 p-1" if idx == len(insights) - \
+            1 else "mb-1 p-1 border-bottom border-secondary"
         insight_badges.append(
             html.Div(
                 [
@@ -541,21 +571,21 @@ def render_weather_content(
 ) -> dbc.Card:
     """
     Render complete Weather dashboard content with live data.
-    
+
     This function generates all weather dashboard components in one go,
     similar to how race_overview_dashboard.render() works.
-    
+
     Args:
         session_key: OpenF1 session key (integer)
         simulation_time: Current simulation time in seconds (optional)
-    
+
     Returns:
         Complete Weather dashboard Card component
     """
     try:
         # Get weather data
         weather_df = get_weather_data(session_key)
-        
+
         if weather_df is None or weather_df.empty:
             logger.warning(f"No weather data for session {session_key}")
             return dbc.Card([
@@ -565,11 +595,11 @@ def render_weather_content(
                     ], className="mb-0", style={"fontSize": "0.9rem"})
                 ]),
                 dbc.CardBody([
-                    html.P("No weather data available for this session", 
+                    html.P("No weather data available for this session",
                            className="text-muted text-center p-3")
                 ])
             ], className="mb-3", style={"height": "650px"})
-        
+
         # Normalize times to session timezone when available for display parity
         weather_df = weather_df.copy()
         if session_start_time is not None and pd.notna(session_start_time):
@@ -578,45 +608,55 @@ def render_weather_content(
                 if session_tz is not None:
                     time_series = weather_df['Time']
                     if time_series.dt.tz is None:
-                        weather_df['Time'] = time_series.dt.tz_localize(session_tz)
+                        weather_df['Time'] = time_series.dt.tz_localize(
+                            session_tz)
                     else:
-                        weather_df['Time'] = time_series.dt.tz_convert(session_tz)
+                        weather_df['Time'] = time_series.dt.tz_convert(
+                            session_tz)
             except Exception as exc:
-                logger.debug("Could not normalize weather timestamps to session tz: %s", exc)
+                logger.debug(
+                    "Could not normalize weather timestamps to session tz: %s", exc)
 
         # Filter data by simulation time if provided
         filtered_weather_df = weather_df
         if simulation_time is not None and not weather_df.empty:
             try:
                 from datetime import timedelta
-                # Get session start time from weather data (aligned to session tz if provided)
-                session_start = session_start_time if session_start_time is not None else weather_df['Time'].min()
+                # Get session start time from weather data (aligned to session
+                # tz if provided)
+                session_start = session_start_time if session_start_time is not None else weather_df['Time'].min(
+                )
                 # Calculate current datetime from elapsed seconds
-                current_time_dt = session_start + timedelta(seconds=simulation_time)
-                
+                current_time_dt = session_start + \
+                    timedelta(seconds=simulation_time)
+
                 # Filter weather data up to current simulation time
-                filtered_weather_df = weather_df[weather_df['Time'] <= current_time_dt].copy()
-                
-                # If no data before current time, use all data (edge case at start)
+                filtered_weather_df = weather_df[weather_df['Time'] <= current_time_dt].copy(
+                )
+
+                # If no data before current time, use all data (edge case at
+                # start)
                 if filtered_weather_df.empty:
                     filtered_weather_df = weather_df
-                    logger.debug("No weather data before current time, using all data")
+                    logger.debug(
+                        "No weather data before current time, using all data")
                 else:
                     logger.debug(
                         f"Filtered weather: {len(filtered_weather_df)}/{len(weather_df)} records"
                     )
-                    
+
             except Exception as e:
-                logger.warning(f"Could not filter weather by simulation time: {e}")
+                logger.warning(
+                    f"Could not filter weather by simulation time: {e}")
                 filtered_weather_df = weather_df
-        
+
         # Generate all components with filtered data
         session_tz = session_start_time.tzinfo if session_start_time is not None else None
         conditions_result = create_weather_conditions_panel(
             filtered_weather_df,
             session_timezone=session_tz
         )
-        
+
         # Unpack result - returns tuple (content, timestamp) or just content
         if isinstance(conditions_result, tuple):
             conditions_panel, timestamp = conditions_result
@@ -638,11 +678,13 @@ def render_weather_content(
         else:
             conditions_panel = conditions_result
             conditions_header = html.Span("🌤️ Conditions")
-        
+
         temperature_graph = create_temperature_graph(filtered_weather_df)
-        strategy_panel = create_weather_strategy_panel(filtered_weather_df, "Race")
-        
-        # Return complete layout with proper title structure (similar to AI Assistant)
+        strategy_panel = create_weather_strategy_panel(
+            filtered_weather_df, "Race")
+
+        # Return complete layout with proper title structure (similar to AI
+        # Assistant)
         return dbc.Card([
             dbc.CardHeader([
                 html.H5(
@@ -657,7 +699,9 @@ def render_weather_content(
                     dbc.CardHeader(
                         conditions_header,
                         className="text-white py-1",
-                        style={"fontSize": "0.9rem", "backgroundColor": "#1e1e1e"}
+                        style={
+                            "fontSize": "0.9rem",
+                            "backgroundColor": "#1e1e1e"}
                     ),
                     dbc.CardBody(
                         conditions_panel,
@@ -665,29 +709,35 @@ def render_weather_content(
                         style={"backgroundColor": "#1e1e1e"}
                     ),
                 ], className="mb-2 border border-secondary", style={"backgroundColor": "#1e1e1e"}),
-                
+
                 # Temperature Graph
                 dbc.Card([
                     dbc.CardHeader(
                         "🌡️ Temperature",
                         className="text-white py-1",
-                        style={"fontSize": "0.9rem", "backgroundColor": "#1e1e1e"}
+                        style={
+                            "fontSize": "0.9rem",
+                            "backgroundColor": "#1e1e1e"}
                     ),
                     dbc.CardBody([
                         dcc.Graph(
                             figure=temperature_graph,
-                            config={"responsive": True, "displayModeBar": False},
+                            config={
+                                "responsive": True,
+                                "displayModeBar": False},
                             style={"height": "198px"}
                         ),
                     ], className="p-1", style={"backgroundColor": "#1e1e1e"}),
                 ], className="mb-2 border border-secondary", style={"backgroundColor": "#1e1e1e"}),
-                
+
                 # Strategy Impact Panel
                 dbc.Card([
                     dbc.CardHeader(
                         "⚠️ Strategy Impact",
                         className="text-white py-1",
-                        style={"fontSize": "0.9rem", "backgroundColor": "#1e1e1e"}
+                        style={
+                            "fontSize": "0.9rem",
+                            "backgroundColor": "#1e1e1e"}
                     ),
                     dbc.CardBody(
                         strategy_panel,
@@ -697,7 +747,7 @@ def render_weather_content(
                 ], className="mb-2 border border-secondary", style={"backgroundColor": "#1e1e1e"}),
             ])
         ], className="mb-3 h-100", style={"overflow": "hidden"})
-        
+
     except Exception as e:
         logger.error(f"Error rendering weather content: {e}", exc_info=True)
         return dbc.Card([
@@ -719,12 +769,12 @@ def get_weather_summary(
 ) -> dict:
     """
     Get compact weather summary for AI context.
-    
+
     Args:
         session_key: OpenF1 session key
         simulation_time: Current simulation time in seconds
         provider: OpenF1DataProvider instance
-        
+
     Returns:
         Dict with weather summary:
         {
@@ -739,13 +789,13 @@ def get_weather_summary(
     """
     try:
         weather_df = provider.get_weather(session_key=session_key)
-        
+
         if weather_df.empty:
             return {'error': 'No weather data available'}
-        
+
         # Get latest weather reading
         latest_weather = weather_df.iloc[-1]
-        
+
         return {
             'air_temp': round(latest_weather.get('AirTemp', 0), 1),
             'track_temp': round(latest_weather.get('TrackTemp', 0), 1),

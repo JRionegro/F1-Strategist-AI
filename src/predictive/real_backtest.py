@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from src.data.cache_config import CacheConfig, DataType
+from src.data.cache_config import CacheConfig
 from src.data.cache_manager import CacheManager
 from src.predictive.artifacts import ModelMetadata, PREDICTIVE_MODEL_VERSION, save_model_artifact
 from src.predictive.backtesting import backtest_pit_baseline
@@ -57,7 +57,8 @@ def backtest_race(
         persist=False,
     )
 
-    model, result = backtest_pit_baseline(dataset, test_fraction=test_fraction, max_iter=max_iter)
+    model, result = backtest_pit_baseline(
+        dataset, test_fraction=test_fraction, max_iter=max_iter)
 
     report = {
         "race": race_name,

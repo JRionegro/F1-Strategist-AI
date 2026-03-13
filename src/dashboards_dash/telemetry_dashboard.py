@@ -7,7 +7,7 @@ on their last completed lap, with comparison support for up to 2 drivers.
 Features:
 - Speed chart with DRS zones overlay (colored bands)
 - Throttle percentage chart
-- Brake percentage chart  
+- Brake percentage chart
 - Gear chart
 - X-axis: Distance (meters) for accurate lap comparison
 - Downsampled to ~500 points for smooth rendering
@@ -15,13 +15,11 @@ Features:
 - Live mode: Real-time telemetry updates
 """
 
-import logging
 import time
-from typing import Optional, List, Any, Dict, Sequence
+from typing import Optional, List, Any, Dict
 from datetime import timedelta
 
 import pandas as pd
-import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from dash import dcc, html
@@ -145,7 +143,7 @@ class TelemetryDashboard:
 
             # Build driver list for visualization
             drivers_to_plot = [(focus_driver_num, telemetry_data)]
-            
+
             # Add comparison driver if specified
             comparison_driver_info = None
             if comparison_driver and comparison_driver != focused_driver:
@@ -213,7 +211,8 @@ class TelemetryDashboard:
                                                 html.Span(
                                                     subtitle_text,
                                                     className="text-muted ms-2",
-                                                    style={"fontSize": "0.8rem"}
+                                                    style={
+                                                        "fontSize": "0.8rem"}
                                                 ),
                                             ],
                                             className="mb-0",
@@ -330,14 +329,14 @@ class TelemetryDashboard:
     def _load_session_metadata(self, session_key: int) -> None:
         """
         Load and cache lightweight session metadata (laps and drivers only).
-        
+
         Car telemetry is loaded on-demand per lap to optimize API calls.
         """
         if self._cached_session_key != session_key:
             logger.info(f"Loading session metadata for {session_key}")
             # Clear lap telemetry cache when session changes
             self._lap_telemetry_cache.clear()
-            
+
             try:
                 self._cached_laps = self.provider.get_laps(
                     session_key=session_key
@@ -346,7 +345,7 @@ class TelemetryDashboard:
                     session_key=session_key
                 )
                 self._cached_session_key = session_key
-                
+
                 logger.info(
                     f"Loaded {len(self._cached_laps)} laps, "
                     f"{len(self._cached_drivers)} drivers"
@@ -364,17 +363,17 @@ class TelemetryDashboard:
     ) -> Optional[pd.DataFrame]:
         """
         Fetch telemetry for a specific lap using time window filtering.
-        
+
         This is much more efficient than loading all session telemetry.
         Typical reduction: 32K records -> ~500-1000 records per lap.
         """
         lap_number = lap_data.get('LapNumber')
         cache_key = (session_key, driver_number, lap_number)
-        
+
         # Check cache first
         if cache_key in self._lap_telemetry_cache:
             return self._lap_telemetry_cache[cache_key]
-        
+
         # TEMPORARILY DISABLED - Check if this request previously failed
         # if cache_key in TelemetryDashboard._failed_lap_requests:
         #     failed_time = TelemetryDashboard._failed_lap_requests[cache_key]
@@ -393,20 +392,20 @@ class TelemetryDashboard:
         #             flush=True
         #         )
         #         del TelemetryDashboard._failed_lap_requests[cache_key]
-        
+
         # Get lap time window
         lap_start = lap_data.get('LapStartTime')
         lap_end = lap_data.get('LapEndTime')
-        
+
         logger.debug(
             f"📊 TELEMETRY: Lap {lap_number} start={lap_start}, "
             f"end={lap_end}"
         )
-        
+
         if pd.isna(lap_start):
             logger.warning(f"⚠️ No LapStartTime for lap {lap_number}")
             return None
-        
+
         # Convert to ISO format for API (without timezone or milliseconds -
         # OpenF1 API returns 500 errors with timezone suffix or milliseconds)
         def to_iso_no_tz(ts: pd.Timestamp) -> str:
@@ -416,12 +415,12 @@ class TelemetryDashboard:
                 ts = ts.tz_localize(None)
             # NO milliseconds - OpenF1 API doesn't accept them
             return ts.strftime('%Y-%m-%dT%H:%M:%S')
-        
+
         if isinstance(lap_start, pd.Timestamp):
             date_start = to_iso_no_tz(lap_start)
         else:
             date_start = str(lap_start).replace('+00:00', '')
-        
+
         # If lap_end is NaT (lap in progress), use lap_start + 2 minutes
         if pd.isna(lap_end):
             # Assume max lap time of 2 minutes
@@ -432,12 +431,12 @@ class TelemetryDashboard:
                 date_end = to_iso_no_tz(lap_end)
             else:
                 date_end = str(lap_end).replace('+00:00', '')
-        
+
         logger.debug(
             f"🌐 TELEMETRY API: Fetching driver {driver_number}, "
             f"lap {lap_number}: {date_start} to {date_end}"
         )
-        
+
         try:
             car_data = self.provider.get_car_data(
                 session_key=session_key,
@@ -445,15 +444,16 @@ class TelemetryDashboard:
                 date_start=date_start,
                 date_end=date_end
             )
-            
+
             if car_data is None or car_data.empty:
                 logger.debug(
                     f"❌ TELEMETRY API: No data returned for driver "
                     f"{driver_number} lap {lap_number}"
                 )
-                TelemetryDashboard._failed_lap_requests[cache_key] = time.time()
+                TelemetryDashboard._failed_lap_requests[cache_key] = time.time(
+                )
                 return None
-            
+
             # Debug: Check DRS data
             if 'DRS' in car_data.columns:
                 drs_active_count = (car_data['DRS'] >= 10).sum()
@@ -466,15 +466,15 @@ class TelemetryDashboard:
                     f"✅ TELEMETRY API: Got {len(car_data)} points for "
                     f"lap {lap_number} | ⚠️ No DRS column"
                 )
-            
+
             # Process data: calculate distance and downsample
             car_data = self._calculate_distance(car_data)
             car_data = self._downsample(car_data, target_points=500)
-            
+
             # Cache the processed result
             self._lap_telemetry_cache[cache_key] = car_data
             return car_data
-            
+
         except Exception as e:
             logger.error(f"Error fetching lap telemetry: {e}")
             TelemetryDashboard._failed_lap_requests[cache_key] = time.time()
@@ -495,7 +495,7 @@ class TelemetryDashboard:
                 f"No previous lap available (simulation just started)"
             )
             return None
-        
+
         if self._cached_laps is None or self._cached_laps.empty:
             logger.debug("🚫 TELEMETRY: No cached laps available")
             return None
@@ -509,7 +509,7 @@ class TelemetryDashboard:
                 f"🚫 TELEMETRY: No laps for driver {driver_number}"
             )
             return None
-        
+
         logger.debug(
             f"📋 TELEMETRY: Driver {driver_number} has "
             f"{len(driver_laps)} laps"
@@ -522,7 +522,8 @@ class TelemetryDashboard:
             if not target_rows.empty:
                 driver_laps = target_rows
             else:
-                earlier_laps = driver_laps[driver_laps['LapNumber'] < current_lap]
+                earlier_laps = driver_laps[driver_laps['LapNumber']
+                                           < current_lap]
                 if not earlier_laps.empty:
                     driver_laps = earlier_laps
 
@@ -532,7 +533,8 @@ class TelemetryDashboard:
             session_start_time is not None and
             driver_laps is not None
         ):
-            current_time = session_start_time + timedelta(seconds=simulation_time)
+            current_time = session_start_time + \
+                timedelta(seconds=simulation_time)
 
             if 'LapEndTime' in driver_laps.columns:
                 completed_laps = driver_laps[
@@ -540,8 +542,8 @@ class TelemetryDashboard:
                     (driver_laps['LapEndTime'] <= current_time)
                 ]
                 logger.debug(
-                    f"📋 TELEMETRY: Completed laps (time filter): {len(completed_laps)}"
-                )
+                    f"📋 TELEMETRY: Completed laps (time filter): {
+                        len(completed_laps)}")
                 if not completed_laps.empty:
                     driver_laps = completed_laps
 
@@ -568,11 +570,11 @@ class TelemetryDashboard:
             timestamps = pd.to_datetime(df['Timestamp'])
             time_diff_td = timestamps.diff()
             time_diff = time_diff_td.dt.total_seconds().fillna(0)
-            
+
             # Calculate distance: speed (km/h) * time (s) / 3.6 = meters
             speed_ms = df['Speed'] / 3.6  # Convert km/h to m/s
             distances = speed_ms * time_diff
-            
+
             # Cumulative distance
             df['Distance'] = distances.cumsum()
         else:
@@ -799,14 +801,14 @@ class TelemetryDashboard:
         racing_lap: int = 1
     ) -> None:
         """Add DRS activation zones as colored bands on speed chart.
-        
+
         F1 Rule: DRS is enabled after completing 2 racing laps.
-        
+
         OpenF1 DRS values:
         - 0, 1: DRS off
         - 8: Detected, eligible once in activation zone
         - 10, 12, 14: DRS on (wing open)
-        
+
         Args:
             racing_lap: Current racing lap (1-based). DRS shown only if lap >= 3.
         """
@@ -1055,18 +1057,24 @@ class TelemetryDashboard:
             }
         )
 
-    def _render_no_lap_data(self, driver: str, current_lap: Optional[int] = None) -> dbc.Card:
+    def _render_no_lap_data(
+            self,
+            driver: str,
+            current_lap: Optional[int] = None) -> dbc.Card:
         """Render when no lap data for driver."""
         # Determine message based on lap number
         if current_lap is not None and current_lap <= 1:
             title = "Waiting for first lap"
-            message = f"Driver #{driver} is on lap {current_lap}. Telemetry will be available after completing the first lap."
+            message = (
+                f"Driver #{driver} is on lap {current_lap}. "
+                "Telemetry will be available after completing the first lap."
+            )
             icon_class = "fas fa-hourglass-start fa-3x mb-3"
         else:
             title = f"No lap data for driver #{driver}"
             message = "Waiting for lap completion..."
             icon_class = "fas fa-flag fa-3x mb-3"
-        
+
         return dbc.Card(
             [
                 dbc.CardHeader(

@@ -129,14 +129,14 @@ def get_hybrid_router_config() -> dict:
 def get_claude_opus_config() -> LLMConfig:
     """
     Get Claude Opus configuration specifically.
-    
+
     Claude Opus is the most capable model, best for:
     - Complex strategic analysis
     - Multi-step reasoning
     - High-stakes decision making
-    
+
     Cost: $15/$75 per 1M tokens (5x more than Sonnet)
-    
+
     Returns:
         LLMConfig configured for Claude Opus
     """

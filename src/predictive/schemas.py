@@ -73,13 +73,16 @@ class PitWindowRow(BaseModel):
                     self.pit_window_end_lap,
                 )
             ):
-                raise ValueError("If center label is None, start/end must also be None")
+                raise ValueError(
+                    "If center label is None, start/end must also be None")
             return
 
         if self.pit_window_start_lap is None or self.pit_window_end_lap is None:
-            raise ValueError("If center label is set, start and end must be set")
+            raise ValueError(
+                "If center label is set, start and end must be set")
 
-        if not (self.pit_window_start_lap <= self.pit_window_center_lap <= self.pit_window_end_lap):
+        if not (self.pit_window_start_lap <=
+                self.pit_window_center_lap <= self.pit_window_end_lap):
             raise ValueError("pit window must include center lap")
 
         if self.pit_window_center_lap <= self.lap_number:
