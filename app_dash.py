@@ -108,9 +108,14 @@ from dotenv import load_dotenv  # noqa: E402
 from src.llm.hybrid_router import HybridRouter  # noqa: E402
 from src.llm.claude_provider import ClaudeProvider  # noqa: E402
 from src.llm.gemini_provider import GeminiProvider  # noqa: E402
+from src.llm.litellm_provider import LiteLLMProvider  # noqa: E402
 from src.llm.provider import LLMProvider  # noqa: E402
 from src.llm.models import LLMResponse  # noqa: E402
-from src.llm.config import get_claude_config, get_gemini_config  # noqa: E402
+from src.llm.config import (  # noqa: E402
+    get_claude_config,
+    get_gemini_config,
+    get_litellm_config,
+)
 
 # Centralized logging configuration
 from src.utils.logging_config import (  # noqa: E402
@@ -144,9 +149,10 @@ track_map_logger = get_logger(LogCategory.TRACK_MAP)  # Track map diagnostics
 
 # Log which LLM keys are visible after loading env
 logger.info(
-    "Env keys present -> Claude: %s, Gemini: %s",
+    "Env keys present -> Claude: %s, Gemini: %s, LiteLLM: %s",
     bool(os.getenv("ANTHROPIC_API_KEY")),
-    bool(os.getenv("GOOGLE_API_KEY"))
+    bool(os.getenv("GOOGLE_API_KEY")),
+    bool(os.getenv("LITELLM_API_KEY") or os.getenv("LITELLM_BASE_URL"))
 )
 enable_category(LogCategory.CHAT)
 enable_category(LogCategory.TRACK_MAP)
@@ -772,7 +778,8 @@ _pit_policy_context: Optional[PitPolicyContext] = None
 
 # LLM provider singleton (lazy initialization)
 _llm_provider: Optional[LLMProvider] = None
-_llm_provider_type: Optional[str] = None  # 'hybrid', 'claude', 'gemini'
+_llm_provider_type: Optional[str] = None  # 'hybrid', 'claude', 'gemini', 'litellm'
+_forced_provider_type: Optional[str] = None  # set by llm-provider-selector dropdown
 
 # Track map figure patching state
 _track_map_trace_offset: Optional[int] = None
@@ -1651,68 +1658,126 @@ def get_llm_provider() -> Optional[LLMProvider]:
     """
     Get or initialize the LLM provider (singleton).
 
-    Logic:
-    - If both keys configured: Use HybridRouter (balances by complexity)
-    - If only Claude key: Use ClaudeProvider only
-    - If only Gemini key: Use GeminiProvider only
-    - If no keys: Return None (will show error in chatbot)
+    Selection order (respects _forced_provider_type from UI dropdown):
+    1. LiteLLM    — if forced, or LITELLM_API_KEY / LITELLM_BASE_URL is set
+                    and no hybrid-forcing is requested.
+    2. Hybrid     — if both Claude + Gemini keys are available (or forced).
+    3. Claude     — if only Claude key (or forced).
+    4. Gemini     — if only Gemini key (or forced).
+    5. None       — no keys at all → chatbot shows an error.
     """
     global _llm_provider, _llm_provider_type
 
     if _llm_provider is not None:
         return _llm_provider
 
-    # Get API keys from environment
+    # Collect available credentials
     claude_api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
     gemini_api_key = os.getenv("GOOGLE_API_KEY", "").strip()
+    litellm_api_key = os.getenv("LITELLM_API_KEY", "").strip()
+    litellm_base_url = os.getenv("LITELLM_BASE_URL", "").strip()
 
-    # No keys configured
-    if not claude_api_key and not gemini_api_key:
-        logger.warning(
-            "No LLM API keys configured. "
-            "Set ANTHROPIC_API_KEY or GOOGLE_API_KEY in Configuration."
-        )
-        return None
+    has_litellm = bool(litellm_api_key or litellm_base_url)
+    has_claude = bool(claude_api_key)
+    has_gemini = bool(gemini_api_key)
+
+    forced = _forced_provider_type  # set by llm-provider-selector callback
 
     try:
-        # Case 1: Both keys - use HybridRouter for smart routing
-        if claude_api_key and gemini_api_key:
+        # ----------------------------------------------------------------
+        # Honour explicit user selection FIRST (before credential checks).
+        # LiteLLM can route using GOOGLE_API_KEY / OPENAI_API_KEY natively
+        # even when LITELLM_API_KEY / LITELLM_BASE_URL are not set.
+        # ----------------------------------------------------------------
+        if forced == 'litellm':
+            _llm_provider = LiteLLMProvider(get_litellm_config())
+            _llm_provider_type = 'litellm'
+            logger.info("LLM initialized: LiteLLM (forced by user)")
+
+        elif forced == 'hybrid' and has_claude and has_gemini:
             claude_config = get_claude_config()
             claude_config.max_tokens = 2048
             claude_config.temperature = 0.7
-
             gemini_config = get_gemini_config()
             gemini_config.max_tokens = 2048
             gemini_config.temperature = 0.7
             gemini_config.extra_params["enable_thinking"] = False
             _llm_provider = HybridRouter(
                 claude_config=claude_config,
-                gemini_config=gemini_config
+                gemini_config=gemini_config,
             )
             _llm_provider_type = 'hybrid'
-            logger.info(
-                "LLM initialized: HybridRouter (Claude + Gemini, "
-                "routes by complexity)"
-            )
+            logger.info("LLM initialized: HybridRouter (Claude + Gemini, forced by user)")
 
-        # Case 2: Only Claude key
-        elif claude_api_key:
+        elif forced == 'claude' and has_claude:
             claude_config = get_claude_config()
             claude_config.max_tokens = 2048
             claude_config.temperature = 0.7
             _llm_provider = ClaudeProvider(claude_config)
             _llm_provider_type = 'claude'
-            logger.info("LLM initialized: Claude only")
+            logger.info("LLM initialized: Claude (forced by user)")
 
-        # Case 3: Only Gemini key
-        elif gemini_api_key:
+        elif forced == 'gemini' and has_gemini:
             gemini_config = get_gemini_config()
             gemini_config.max_tokens = 2048
             gemini_config.temperature = 0.7
             gemini_config.extra_params["enable_thinking"] = False
             _llm_provider = GeminiProvider(gemini_config)
             _llm_provider_type = 'gemini'
-            logger.info("LLM initialized: Gemini only")
+            logger.info("LLM initialized: Gemini (forced by user)")
+
+        # Auto-detection when no forced selection (or forced type unavailable)
+        elif not any([has_claude, has_gemini, has_litellm]):
+            logger.warning(
+                "No LLM credentials configured. "
+                "Set ANTHROPIC_API_KEY, GOOGLE_API_KEY, LITELLM_API_KEY, "
+                "or LITELLM_BASE_URL in Configuration."
+            )
+            return None
+
+        elif has_litellm and not (has_claude and has_gemini):
+            # LiteLLM when set, unless hybrid is fully available
+            _llm_provider = LiteLLMProvider(get_litellm_config())
+            _llm_provider_type = 'litellm'
+            logger.info("LLM initialized: LiteLLM (auto)")
+
+        elif has_claude and has_gemini:
+            claude_config = get_claude_config()
+            claude_config.max_tokens = 2048
+            claude_config.temperature = 0.7
+            gemini_config = get_gemini_config()
+            gemini_config.max_tokens = 2048
+            gemini_config.temperature = 0.7
+            gemini_config.extra_params["enable_thinking"] = False
+            _llm_provider = HybridRouter(
+                claude_config=claude_config,
+                gemini_config=gemini_config,
+            )
+            _llm_provider_type = 'hybrid'
+            logger.info("LLM initialized: HybridRouter (Claude + Gemini, auto)")
+
+        elif has_claude:
+            claude_config = get_claude_config()
+            claude_config.max_tokens = 2048
+            claude_config.temperature = 0.7
+            _llm_provider = ClaudeProvider(claude_config)
+            _llm_provider_type = 'claude'
+            logger.info("LLM initialized: Claude (auto)")
+
+        elif has_litellm:
+            # LiteLLM as last-resort when hybrid was preferred but missing key
+            _llm_provider = LiteLLMProvider(get_litellm_config())
+            _llm_provider_type = 'litellm'
+            logger.info("LLM initialized: LiteLLM (fallback)")
+
+        else:
+            gemini_config = get_gemini_config()
+            gemini_config.max_tokens = 2048
+            gemini_config.temperature = 0.7
+            gemini_config.extra_params["enable_thinking"] = False
+            _llm_provider = GeminiProvider(gemini_config)
+            _llm_provider_type = 'gemini'
+            logger.info("LLM initialized: Gemini (auto)")
 
         return _llm_provider
 
@@ -2571,6 +2636,33 @@ def create_sidebar():
                                 className="mb-1",
                                 style={'fontSize': '0.85rem'}
                             ),
+                            dbc.Label("LiteLLM API Key", className="small"),
+                            dbc.Input(
+                                id='litellm-api-key-input',
+                                type="password",
+                                placeholder="LiteLLM key (optional for proxy)",
+                                value=os.getenv("LITELLM_API_KEY", ""),
+                                className="mb-1",
+                                style={'fontSize': '0.85rem'}
+                            ),
+                            dbc.Label("LiteLLM Base URL", className="small"),
+                            dbc.Input(
+                                id='litellm-base-url-input',
+                                type="text",
+                                placeholder="e.g. http://localhost:4000",
+                                value=os.getenv("LITELLM_BASE_URL", ""),
+                                className="mb-1",
+                                style={'fontSize': '0.85rem'}
+                            ),
+                            dbc.Label("LiteLLM Model", className="small"),
+                            dbc.Input(
+                                id='litellm-model-input',
+                                type="text",
+                                placeholder="e.g. gpt-4o-mini, ollama/llama3",
+                                value=os.getenv("LITELLM_MODEL", "gpt-4o-mini"),
+                                className="mb-1",
+                                style={'fontSize': '0.85rem'}
+                            ),
                             dbc.Button(
                                 "💾 Save Keys",
                                 id="save-api-keys-btn",
@@ -2590,10 +2682,12 @@ def create_sidebar():
                             dcc.Dropdown(
                                 id='llm-provider-selector',
                                 options=[
-                                    {'label': 'Hybrid (Auto)',
+                                    {'label': 'Claude + Gemini (Hybrid)',
                                      'value': 'hybrid'},
                                     {'label': 'Claude Only', 'value': 'claude'},
-                                    {'label': 'Gemini Only', 'value': 'gemini'}
+                                    {'label': 'Gemini Only', 'value': 'gemini'},
+                                    {'label': 'LiteLLM — Chico',
+                                     'value': 'litellm'},
                                 ],
                                 value='hybrid',
                                 className="mb-1",
@@ -8088,9 +8182,15 @@ def reset_telemetry_zoom(n_clicks: Optional[int]):
     State('claude-api-key-input', 'value'),
     State('gemini-api-key-input', 'value'),
     State('openf1-api-key-input', 'value'),
+    State('litellm-api-key-input', 'value'),
+    State('litellm-base-url-input', 'value'),
+    State('litellm-model-input', 'value'),
     prevent_initial_call=True
 )
-def save_api_keys(n_clicks, claude_key, gemini_key, openf1_key):
+def save_api_keys(
+    n_clicks, claude_key, gemini_key, openf1_key,
+    litellm_key, litellm_base_url, litellm_model
+):
     """Save API keys to .env file."""
     if not n_clicks:
         raise PreventUpdate
@@ -8108,6 +8208,9 @@ def save_api_keys(n_clicks, claude_key, gemini_key, openf1_key):
         claude_found = False
         gemini_found = False
         openf1_found = False
+        litellm_key_found = False
+        litellm_url_found = False
+        litellm_model_found = False
 
         for i, line in enumerate(lines):
             if line.startswith('ANTHROPIC_API_KEY='):
@@ -8119,6 +8222,15 @@ def save_api_keys(n_clicks, claude_key, gemini_key, openf1_key):
             elif line.startswith('OPENF1_API_KEY='):
                 lines[i] = f'OPENF1_API_KEY={openf1_key}\n'
                 openf1_found = True
+            elif line.startswith('LITELLM_API_KEY='):
+                lines[i] = f'LITELLM_API_KEY={litellm_key}\n'
+                litellm_key_found = True
+            elif line.startswith('LITELLM_BASE_URL='):
+                lines[i] = f'LITELLM_BASE_URL={litellm_base_url}\n'
+                litellm_url_found = True
+            elif line.startswith('LITELLM_MODEL='):
+                lines[i] = f'LITELLM_MODEL={litellm_model}\n'
+                litellm_model_found = True
 
         # Add keys if not found
         if not claude_found:
@@ -8127,6 +8239,12 @@ def save_api_keys(n_clicks, claude_key, gemini_key, openf1_key):
             lines.append(f'GOOGLE_API_KEY={gemini_key}\n')
         if not openf1_found:
             lines.append(f'OPENF1_API_KEY={openf1_key}\n')
+        if not litellm_key_found:
+            lines.append(f'LITELLM_API_KEY={litellm_key}\n')
+        if not litellm_url_found:
+            lines.append(f'LITELLM_BASE_URL={litellm_base_url}\n')
+        if not litellm_model_found:
+            lines.append(f'LITELLM_MODEL={litellm_model}\n')
 
         # Write back to .env
         with open(env_path, 'w') as f:
@@ -8136,6 +8254,9 @@ def save_api_keys(n_clicks, claude_key, gemini_key, openf1_key):
         os.environ['ANTHROPIC_API_KEY'] = claude_key or ''
         os.environ['GOOGLE_API_KEY'] = gemini_key or ''
         os.environ['OPENF1_API_KEY'] = openf1_key or ''
+        os.environ['LITELLM_API_KEY'] = litellm_key or ''
+        os.environ['LITELLM_BASE_URL'] = litellm_base_url or ''
+        os.environ['LITELLM_MODEL'] = litellm_model or 'gpt-4o-mini'
 
         # Reset LLM provider to use new keys
         global _llm_provider, _llm_provider_type
@@ -8145,9 +8266,15 @@ def save_api_keys(n_clicks, claude_key, gemini_key, openf1_key):
         # Determine which provider will be used
         has_claude = bool(claude_key and claude_key.strip())
         has_gemini = bool(gemini_key and gemini_key.strip())
+        has_litellm = bool(
+            (litellm_key and litellm_key.strip()) or
+            (litellm_base_url and litellm_base_url.strip())
+        )
 
         if has_claude and has_gemini:
             provider_msg = "HybridRouter (Claude + Gemini)"
+        elif has_litellm:
+            provider_msg = "LiteLLM (Chico)"
         elif has_claude:
             provider_msg = "Claude only"
         elif has_gemini:
@@ -8174,6 +8301,21 @@ def save_api_keys(n_clicks, claude_key, gemini_key, openf1_key):
             dismissable=True,
             duration=3000,
             className="small py-1 mb-0 mt-2")
+
+
+@callback(
+    Output('llm-provider-selector', 'value'),
+    Input('llm-provider-selector', 'value'),
+    prevent_initial_call=True
+)
+def on_provider_selector_change(selected_provider):
+    """Apply the manually selected LLM provider."""
+    global _llm_provider, _llm_provider_type, _forced_provider_type
+    _forced_provider_type = selected_provider
+    _llm_provider = None       # force re-init on next generate call
+    _llm_provider_type = None
+    logger.info("LLM provider manually set to: %s", selected_provider)
+    return selected_provider
 
 
 # Callback: Play/Pause simulation
@@ -10516,12 +10658,14 @@ def generate_ai_response(
             # Format response with provider prefix
             response_content = llm_response.content
 
-            # Add provider prefix (Claude: or Gemi:)
+            # Add provider prefix (Claude: / Gemi: / Chico:)
             provider_name = llm_response.provider.lower() if llm_response.provider else ''
             if 'claude' in provider_name or 'anthropic' in provider_name:
                 provider_prefix = "**Claude:** "
             elif 'gemini' in provider_name or 'google' in provider_name:
-                provider_prefix = "**Gemi:** "
+                provider_prefix = "**Gemini:** "
+            elif 'litellm' in provider_name:
+                provider_prefix = "**Chico:** "
             else:
                 provider_prefix = ""
 

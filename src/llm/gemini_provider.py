@@ -23,9 +23,9 @@ logger = logging.getLogger(__name__)
 
 class GeminiProvider(LLMProvider):
     """
-    Gemini 2.0 Flash Thinking provider for simple/moderate queries.
+    Gemini 2.5 Flash provider for simple/moderate queries.
 
-    Cost: $0.01875/1M input, $0.075/1M output (thinking mode)
+    Cost: ~$0.15/1M input, $0.60/1M output
     Context: 1M tokens
     Best for: Fast responses, simple queries, cost-sensitive operations
     """
@@ -44,9 +44,12 @@ class GeminiProvider(LLMProvider):
             )
 
         self.client = genai.Client(api_key=config.api_key)
-        self.model_name = (
-            config.model_name or "gemini-2.0-flash-exp"
-        )
+        if not config.model_name:
+            raise ValueError(
+                "GEMINI_MODEL not set in .env. "
+                "E.g.: GEMINI_MODEL=gemini-2.5-flash"
+            )
+        self.model_name = config.model_name
         self.enable_thinking = config.extra_params.get(
             "enable_thinking",
             True

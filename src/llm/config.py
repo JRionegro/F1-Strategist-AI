@@ -87,10 +87,7 @@ def get_gemini_config() -> LLMConfig:
         )
 
     return LLMConfig(
-        model_name=os.getenv(
-            "GEMINI_MODEL",
-            "gemini-2.0-flash-exp"
-        ),
+        model_name=os.getenv("GEMINI_MODEL") or "",  # set GEMINI_MODEL in .env
         api_key=api_key,
         max_tokens=int(os.getenv("GEMINI_MAX_TOKENS", "8192")),
         temperature=float(os.getenv("GEMINI_TEMPERATURE", "0.7")),
@@ -141,3 +138,32 @@ def get_claude_opus_config() -> LLMConfig:
         LLMConfig configured for Claude Opus
     """
     return get_claude_config(model_override="claude-3-opus-20240229")
+
+
+def get_litellm_config() -> LLMConfig:
+    """
+    Load LiteLLM configuration from environment.
+
+    Optional env vars:
+    - LITELLM_API_KEY  (omit or leave empty for local proxy / Ollama)
+    - LITELLM_MODEL    (default: gpt-4o-mini)
+    - LITELLM_BASE_URL (proxy URL, e.g. http://localhost:4000)
+    - LITELLM_MAX_TOKENS
+    - LITELLM_TEMPERATURE
+
+    Returns:
+        LLMConfig for LiteLLM
+    """
+    api_key = os.getenv("LITELLM_API_KEY", "").strip()
+
+    return LLMConfig(
+        model_name=os.getenv("LITELLM_MODEL") or "",  # set LITELLM_MODEL in .env
+        api_key=api_key,
+        max_tokens=int(os.getenv("LITELLM_MAX_TOKENS", "2048")),
+        temperature=float(os.getenv("LITELLM_TEMPERATURE", "0.7")),
+        timeout=int(os.getenv("LITELLM_TIMEOUT", "60")),
+        max_retries=int(os.getenv("LITELLM_MAX_RETRIES", "3")),
+        extra_params={
+            "base_url": os.getenv("LITELLM_BASE_URL", "").strip() or None
+        },
+    )

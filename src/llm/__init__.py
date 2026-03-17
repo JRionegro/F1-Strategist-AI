@@ -2,5 +2,6 @@
 
 from .models import LLMConfig, LLMResponse
 from .provider import LLMProvider
+from .litellm_provider import LiteLLMProvider
 
-__all__ = ["LLMProvider", "LLMConfig", "LLMResponse"]
+__all__ = ["LLMProvider", "LLMConfig", "LLMResponse", "LiteLLMProvider"]
