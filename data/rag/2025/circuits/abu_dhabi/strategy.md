@@ -4,6 +4,8 @@ template: true
 variables: [circuit_name, circuit_type, lap_length, total_laps, pit_loss, drs_zones]
 ---
 
+pruebo traduccion al Ingles
+
 # Yas Marina Circuit - Complete Strategy Guide
 
 ## Circuit Characteristics

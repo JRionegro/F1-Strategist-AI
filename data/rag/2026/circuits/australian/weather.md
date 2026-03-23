@@ -4,16 +4,16 @@ template: true
 variables: [circuit_name, circuit_location, timezone]
 ---
 
-# Lusail International Circuit - Complete Weather & Track Conditions Guide
+# Australian Circuit - Complete Weather & Track Conditions Guide
 
 ## Location Information
 
 | Property | Value |
 |----------|-------|
-| **Location** | Lusail, Qatar |
-| **Timezone** | Asia/Qatar (GMT+3) |
+| **Location** | Unknown |
+| **Timezone** | UTC |
 | **Typical Race Time** | 14:00 local |
-| **Climate Type** | Desert |
+| **Climate Type** | Unknown |
 
 ---
 
@@ -249,8 +249,8 @@ No major weather events in recent seasons. Check local forecasts for current con
 ## 9. Quick Reference Card
 
 ```
-🌡️ WEATHER OVERVIEW: Lusail International Circuit
-📍 Climate: Desert
+🌡️ WEATHER OVERVIEW: Australian Circuit
+📍 Climate: Unknown
 
 TYPICAL CONDITIONS:
 ├── Air Temp: 28°C (22-34°C range)
@@ -276,4 +276,4 @@ CROSSOVER TIMES:
 ---
 
 *Generated from template. Data: OpenF1 API, Weather Services, Historical Analysis*
-*Last updated: 2026-03-21 21:53*
+*Last updated: 2026-03-21 15:58*

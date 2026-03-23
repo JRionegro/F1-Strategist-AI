@@ -1,9 +1,9 @@
-# Race Control Analysis: {Lusail International Circuit} - N/A
+# Race Control Analysis: {Australian Circuit} - N/A
 
 ## Executive Summary
 
-Circuit: {Lusail International Circuit} ({High-speed flowing circuit})
-Analysis Date: {2026-03-21 21:53}
+Circuit: {Australian Circuit} (N/A)
+Analysis Date: {2026-03-21 15:58}
 Safety Rating: N/A/10
 Historical Incident Rate: N/A%
 
@@ -57,13 +57,13 @@ Critical lapping zones:
 ## 3. VSC (VIRTUAL SAFETY CAR)
 
 ### 3.1 VSC Deployment Criteria
-At {Lusail International Circuit}:
+At {Australian Circuit}:
 - **Light Debris**: {Yellow flag, local caution}
 - **Car Recovery**: {VSC or SC depending on location}
 - **Medical Response**: {Red flag if driver extraction needed}
 
 ### 3.2 VSC Pit Window Benefit
-- **Normal Pit Loss**: {20.5}s
+- **Normal Pit Loss**: {20.0}s
 - **VSC Pit Loss**: {10-12}s
 - **Net Advantage**: {8-10}s
 
@@ -99,7 +99,7 @@ At {Lusail International Circuit}:
 ## 5. RED FLAG SCENARIOS
 
 ### 5.1 Red Flag Triggers
-At {Lusail International Circuit}:
+At {Australian Circuit}:
 1. **Weather**: {Heavy rain, standing water, visibility}
 2. **Major Incident**: {Major collision, medical intervention}
 3. **Track Damage**: {Barrier damage, debris field}
@@ -138,7 +138,7 @@ Turn 15: Entry line critical}
 
 ## 7. PENALTIES AND INVESTIGATIONS
 
-### 7.1 Common Penalties at {Lusail International Circuit}
+### 7.1 Common Penalties at {Australian Circuit}
 | Infraction | Typical Penalty | Frequency |
 |------------|-----------------|-----------|
 | Track Limits | {5s / lap deleted} | N/A |
@@ -221,5 +221,5 @@ Key precedents at this circuit:
 
 ---
 
-*Document generated: {2026-03-21 21:53}*
+*Document generated: {2026-03-21 15:58}*
 *Data source: OpenF1 API + FIA Race Director Guidelines*

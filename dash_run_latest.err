@@ -1,0 +1,838 @@
+18:22:30 - f1.startup - INFO - ============================================================
+18:22:30 - f1.startup - INFO - F1 Strategist AI - Logging initialized
+18:22:30 - f1.startup - INFO - ============================================================
+18:22:30 - f1.startup - INFO - Env keys present -> Claude: False, Gemini: True
+18:22:30 - f1.startup - INFO - Log level for f1.chat: DEBUG
+18:22:30 - f1.startup - INFO - Log level for f1.track_map: DEBUG
+18:22:30 - f1.startup - INFO - Log level for f1.data: DEBUG
+18:22:30 - f1.startup - INFO - Log level for f1.data set to DEBUG via LOG_LEVEL_F1_DATA
+18:22:30 - f1.data - INFO - OpenF1DataProvider initialized
+18:22:30 - f1.data - INFO - FastF1PositionProvider ready (cache dir: cache)
+18:22:30 - src.data.cache_manager - INFO - CacheManager initialized in historical mode
+18:22:30 - f1.startup - INFO - ============================================================
+18:22:30 - f1.startup - INFO - F1 STRATEGIST AI - DASH VERSION
+18:22:30 - f1.startup - INFO - ============================================================
+18:22:30 - f1.startup - INFO - Starting application...
+18:22:30 - f1.startup - INFO - Open: http://localhost:8501
+18:22:30 - f1.startup - INFO - ============================================================
+18:22:30 - f1.data - INFO - Searching for last completed race (current date: 2026-03-21 17:22:30.863954+00:00)
+18:22:31 - f1.data - INFO - Found last completed race: Shanghai (China)
+18:22:32 - f1.startup - INFO - Found last completed race: China GP (Round 4, 2026)
+18:22:32 - f1.startup - INFO - Initialized with China GP (Round 4, 2026)
+18:22:32 - dash.dash - INFO - Dash is running on http://127.0.0.1:8501/
+
+18:23:12 - src.session.live_detector - INFO - Checking for live sessions at 2026-03-21 18:23:12.775113
+18:23:13 - f1.data - INFO - Loaded 26 meetings
+18:23:13 - src.session.live_detector - INFO - No live sessions detected
+18:23:13 - f1.data - INFO - Loaded 25 meetings
+18:23:13 - f1.startup - INFO - Loaded 26 meetings for 2026 (races=24, tests=2)
+18:23:14 - f1.startup - INFO - Loaded 25 meetings for 2025 (races=24, tests=1)
+18:23:14 - f1.data - INFO - Searching for last completed race (current date: 2026-03-21 17:23:14.156444+00:00)
+18:23:14 - f1.data - INFO - Found last completed race: Shanghai (China)
+18:23:15 - f1.data - INFO - Loaded 26 meetings
+18:23:17 - f1.startup - INFO - Using last circuit in calendar as default
+18:23:17 - src.rag.document_loader - INFO - DocumentLoader initialized with base_path=data/rag, chunk_size=1000, overlap=200
+18:23:17 - f1.rag - INFO - Loading embeddings model: all-MiniLM-L6-v2 on cpu
+18:23:17 - f1.startup - WARNING - Missing parameters: session=None, circuit_key=1276, year=2025
+18:23:18 - f1.startup - INFO - Received 5 sessions from OpenF1 API for meeting_key=1276:
+18:23:18 - f1.startup - INFO -   Session: Practice 1 (key=9832)
+18:23:18 - f1.startup - INFO -   Session: Practice 2 (key=9833)
+18:23:18 - f1.startup - INFO -   Session: Practice 3 (key=9834)
+18:23:18 - f1.startup - INFO -   Session: Qualifying (key=9835)
+18:23:18 - f1.startup - INFO -   Session: Race (key=9839)
+18:23:18 - f1.startup - INFO - Building session options from 5 sessions:
+18:23:18 - f1.startup - INFO -   Session: 'Practice 1' \u2192 code=P1, label=Practice 1
+18:23:18 - f1.startup - INFO -   \u2713 Added option: Practice 1 (P1)
+18:23:18 - f1.startup - INFO -   Session: 'Practice 2' \u2192 code=P2, label=Practice 2
+18:23:18 - f1.startup - INFO -   \u2713 Added option: Practice 2 (P2)
+18:23:18 - f1.startup - INFO -   Session: 'Practice 3' \u2192 code=P3, label=Practice 3
+18:23:18 - f1.startup - INFO -   \u2713 Added option: Practice 3 (P3)
+18:23:18 - f1.startup - INFO -   Session: 'Qualifying' \u2192 code=QUALIFYING, label=Qualifying
+18:23:18 - f1.startup - INFO -   \u2713 Added option: Qualifying (QUALIFYING)
+18:23:18 - f1.startup - INFO -   Session: 'Race' \u2192 code=RACE, label=Race
+18:23:18 - f1.startup - INFO -   \u2713 Added option: Race (RACE)
+18:23:18 - f1.startup - INFO - Built 5 unique session options
+18:23:18 - f1.startup - INFO - Circuit changed, clearing session selection. Found 5 sessions for meeting_key=1276
+18:23:18 - f1.startup - INFO - Session selector populated with 5 options for meeting_key=1276
+18:23:18 - f1.startup - WARNING - Session bootstrap aborted: Incomplete context selection
+18:23:18 - f1.startup - WARNING - Missing parameters: session=None, circuit_key=1276, year=2025
+18:23:19 - f1.startup - WARNING - Session bootstrap aborted: Incomplete context selection
+18:23:20 - f1.chat - INFO - [SYNC] Called with messages type=<class 'list'>, count=0
+18:23:20 - f1.chat - INFO - [SYNC] Rendering empty placeholder (no messages)
+18:23:20 - f1.chat - INFO - [SYNC] Called with messages type=<class 'list'>, count=0
+18:23:20 - f1.chat - INFO - [SYNC] Rendering empty placeholder (no messages)
+18:23:20 - f1.rag - INFO - Model loaded: all-MiniLM-L6-v2
+18:23:20 - src.rag.chromadb_store - INFO - Initializing ChromaDB at ./data/chromadb
+18:23:20 - src.rag.chromadb_store - INFO - ChromaDB initialized: collection='f1_rag_documents', path=./data/chromadb
+18:23:20 - f1.rag - INFO - RAGManager initialized: base_path=data/rag, persist_directory=./data/chromadb
+18:23:20 - f1.rag - INFO - Loading RAG context: year=2025, circuit=abu_dhabi
+18:23:21 - src.rag.chromadb_store - INFO - Cleared collection: f1_rag_documents
+18:23:21 - f1.rag - INFO - RAG collection cleared
+18:23:21 - src.rag.document_loader - INFO - Loaded 4 global documents
+18:23:21 - src.rag.document_loader - INFO - Loaded 431 documents for year 2025
+18:23:21 - src.rag.document_loader - INFO - Loaded 52 documents for abu_dhabi 2025
+18:23:21 - src.rag.document_loader - INFO - Total documents loaded: 487 (year=2025, circuit=abu_dhabi)
+18:23:21 - src.rag.chromadb_store - INFO - Generating embeddings for 487 documents
+18:23:43 - src.rag.chromadb_store - INFO - Added 487 documents to ChromaDB
+18:23:43 - f1.rag - INFO - RAG context loaded: 487 chunks from 8 documents
+18:23:43 - f1.startup - INFO - RAG docs by category: [('global', 1), ('fia', 1), ('strategy', 1), ('weather', 1), ('performance', 1), ('race_control', 1), ('race_position', 1), ('other', 1)]
+18:24:06 - f1.startup - WARNING - Missing parameters: session=None, circuit_key=1275, year=2025
+18:24:07 - f1.startup - INFO - Received 5 sessions from OpenF1 API for meeting_key=1275:
+18:24:07 - f1.startup - INFO -   Session: Practice 1 (key=9840)
+18:24:07 - f1.startup - INFO -   Session: Sprint Qualifying (key=9841)
+18:24:07 - f1.startup - INFO -   Session: Sprint (key=9845)
+18:24:07 - f1.startup - INFO -   Session: Qualifying (key=9846)
+18:24:07 - f1.startup - INFO -   Session: Race (key=9850)
+18:24:07 - f1.startup - INFO - Building session options from 5 sessions:
+18:24:07 - f1.startup - INFO -   Session: 'Practice 1' \u2192 code=P1, label=Practice 1
+18:24:07 - f1.startup - INFO -   \u2713 Added option: Practice 1 (P1)
+18:24:07 - f1.startup - INFO -   Session: 'Sprint Qualifying' \u2192 code=SQ, label=Sprint Qualifying
+18:24:07 - f1.startup - INFO -   \u2713 Added option: Sprint Qualifying (SQ)
+18:24:07 - f1.startup - INFO -   Session: 'Sprint' \u2192 code=S, label=Sprint
+18:24:07 - f1.startup - INFO -   \u2713 Added option: Sprint (S)
+18:24:07 - f1.startup - INFO -   Session: 'Qualifying' \u2192 code=QUALIFYING, label=Qualifying
+18:24:07 - f1.startup - INFO -   \u2713 Added option: Qualifying (QUALIFYING)
+18:24:07 - f1.startup - INFO -   Session: 'Race' \u2192 code=RACE, label=Race
+18:24:07 - f1.startup - INFO -   \u2713 Added option: Race (RACE)
+18:24:07 - f1.startup - INFO - Built 5 unique session options
+18:24:07 - f1.startup - INFO - Circuit changed, clearing session selection. Found 5 sessions for meeting_key=1275
+18:24:07 - f1.startup - INFO - Session selector populated with 5 options for meeting_key=1275
+18:24:07 - f1.chat - INFO - [CHAT] Context changed - clearing chat (year=2025, circuit=1275, session=None)
+18:24:07 - f1.rag - INFO - Loading RAG context: year=2025, circuit=qatar
+18:24:07 - src.rag.chromadb_store - INFO - Cleared collection: f1_rag_documents
+18:24:07 - f1.rag - INFO - RAG collection cleared
+18:24:07 - src.rag.document_loader - INFO - Loaded 4 global documents
+18:24:07 - src.rag.document_loader - INFO - Loaded 431 documents for year 2025
+18:24:07 - src.rag.document_loader - INFO - Loaded 66 documents for qatar 2025
+18:24:07 - src.rag.document_loader - INFO - Total documents loaded: 501 (year=2025, circuit=qatar)
+18:24:07 - src.rag.chromadb_store - INFO - Generating embeddings for 501 documents
+18:24:07 - f1.startup - WARNING - Session bootstrap aborted: Incomplete context selection
+18:24:07 - f1.startup - WARNING - Missing parameters: session=None, circuit_key=1275, year=2025
+18:24:08 - f1.startup - WARNING - Session bootstrap aborted: Incomplete context selection
+18:24:09 - f1.startup - INFO - Loading drivers for year=2025, meeting_key=1275, session=RACE
+18:24:09 - f1.startup - INFO - Session resolver cache miss (year=2025 meeting_key=1275)
+18:24:09 - f1.chat - INFO - [CHAT] Context changed - clearing chat (year=2025, circuit=1275, session=RACE)
+18:24:09 - f1.startup - INFO - Searching for session with target_code=RACE
+18:24:09 - f1.startup - INFO -   Checking: Practice 1 \u2192 normalized_code=P1 (session_key=9840)
+18:24:09 - f1.startup - INFO -   Checking: Sprint Qualifying \u2192 normalized_code=SQ (session_key=9841)
+18:24:09 - f1.startup - INFO -   Checking: Sprint \u2192 normalized_code=S (session_key=9845)
+18:24:09 - f1.startup - INFO -   Checking: Qualifying \u2192 normalized_code=QUALIFYING (session_key=9846)
+18:24:09 - f1.startup - INFO -   Checking: Race \u2192 normalized_code=RACE (session_key=9850)
+18:24:09 - f1.startup - INFO -   \u2713 MATCH! Returning session_key=9850
+18:24:09 - f1.startup - INFO - Session resolver using API payload from meeting/year request (meeting_key=1275 session_code=RACE session_key=9850)
+18:24:09 - f1.startup - INFO - Loading session with session_key=9850
+18:24:09 - src.data.openf1_adapter - INFO - SessionAdapter created for  - Race
+18:24:09 - src.data.openf1_adapter - INFO - Loading session data for  - Race
+18:24:09 - src.data.openf1_adapter - INFO - Loading laps from OpenF1...
+18:24:09 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:24:09 - f1.data - INFO - Loaded 61 stints for session 9850 from cache
+18:24:09 - f1.data - INFO - Loaded 20 drivers from cache for session 9850
+18:24:09 - src.data.openf1_adapter - INFO - Loaded 1070 laps
+18:24:09 - src.data.openf1_adapter - INFO - Session data loaded successfully
+18:24:09 - f1.data - INFO - Loaded 20 drivers from cache for session 9850
+18:24:09 - src.data.openf1_adapter - INFO - Loading results from OpenF1...
+18:24:09 - f1.data - INFO - Loaded 476 position updates for session 9850 from cache
+18:24:09 - src.data.openf1_adapter - INFO - Loaded results for 20 drivers
+18:24:09 - f1.startup - INFO - Loaded 20 drivers from session
+18:24:10 - f1.startup - INFO - Created 20 driver options
+18:24:10 - f1.startup - INFO - Sample drivers: # 1 VER - Max VERSTAPPEN, #81 PIA - Oscar PIASTRI, #55 SAI - Carlos SAINZ, # 4 NOR - Lando NORRIS, #12 ANT - Kimi ANTONELLI
+18:24:10 - f1.data - INFO - Loading positions from cache: Qatar_R_positions.pkl
+18:24:10 - f1.data - INFO - Loaded 613625 cached samples
+18:24:11 - f1.chat - INFO - [SYNC] Called with messages type=<class 'list'>, count=0
+18:24:11 - f1.chat - INFO - [SYNC] Rendering empty placeholder (no messages)
+18:24:11 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:24:11 - f1.data - INFO - Loaded 20 drivers from cache for session 9850
+18:24:11 - src.rag.chromadb_store - INFO - Search returned 0 results
+18:24:11 - f1.rag - INFO - strategy.md not found in RAG; using empty pit policy context
+18:24:11 - f1.startup - INFO - Pit policy context loaded from RAG (strategy.md)
+18:24:11 - f1.data - INFO - Loaded 297 car data records for session 9850
+18:24:11 - f1.chat - INFO - [SYNC] Called with messages type=<class 'list'>, count=0
+18:24:11 - f1.chat - INFO - [SYNC] Rendering empty placeholder (no messages)
+18:24:12 - f1.startup - INFO - Loaded tire window overrides from data\rag\2025\circuits\qatar\strategy.md
+18:24:12 - src.session.tire_thresholds - WARNING - Ignoring implausible tire window override for SOFT: min=2 optimal=12 max=15 (using defaults)
+18:24:12 - src.session.tire_thresholds - WARNING - Ignoring implausible tire window override for MEDIUM: min=2 optimal=12 max=15 (using defaults)
+18:24:12 - src.session.tire_thresholds - WARNING - Ignoring implausible tire window override for HARD: min=1 optimal=18 max=25 (using defaults)
+18:24:12 - f1.startup - INFO - Prepared lap timing data from driver #1: 57 laps
+18:24:12 - f1.startup - INFO - Rebased lap timing to simulation start: shift=207.172s
+18:24:12 - f1.startup - INFO - SimulationController initialized: 2025-11-30 16:00:00+00:00 -> 2025-11-30 17:24:38.758000+00:00 (lap1 end 89.4s, final lap 5078.8s)
+18:24:12 - f1.startup - INFO - Calculated total_laps from data: 57
+18:24:12 - f1.startup - INFO - Session bootstrap completed for session_key=9850
+18:24:12 - f1.data - INFO - Loaded 476 position updates for session 9850 from cache
+18:24:12 - f1.data - INFO - Loaded 24118 interval records for session 9850 from cache
+18:24:13 - f1.data - INFO - Loaded 61 stints for session 9850 from cache
+18:24:13 - f1.data - INFO - Loaded 20 drivers from cache for session 9850
+18:24:13 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:24:13 - f1.data - INFO - Race overview render (session 9850): no OpenF1 API calls recorded
+18:24:13 - f1.track_map - DEBUG - [TrajectoryCache] Stored lap 1 with 20 drivers
+18:24:15 - f1.track_map - DEBUG - [TrackMapInitial] drivers=20 sim_elapsed_store=0.000 sim_elapsed_ctrl=0.000 sim_elapsed_clamped=0.000 sim_lap=1
+18:24:15 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:24:15 - f1.data - INFO - Loaded 20 drivers from cache for session 9850
+18:24:15 - f1.data - INFO - OpenF1DataProvider initialized
+18:24:15 - f1.data - INFO - Loaded 149 weather records for session 9850
+18:24:16 - f1.chat - INFO - [SYNC] Called with messages type=<class 'list'>, count=0
+18:24:16 - f1.chat - INFO - [SYNC] Rendering empty placeholder (no messages)
+18:24:24 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:24:25 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=1.861 ctrl_elapsed=1.861 adjusted_time=3523.359 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:24:25 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=1.861 sim_elapsed_ctrl=1.861 sim_elapsed_clamped=1.861 sim_lap=1 cache_lap=1 prev_time=3523.347 next_time=3523.666 query_time=3523.359 sample_time=3523.359
+18:24:27 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:24:28 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=4.857 ctrl_elapsed=4.857 adjusted_time=3526.355 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:24:28 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=4.857 sim_elapsed_ctrl=4.857 sim_elapsed_clamped=4.857 sim_lap=1 cache_lap=1 prev_time=3526.267 next_time=3526.647 query_time=3526.355 sample_time=3526.355
+18:24:30 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:24:31 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=7.866 ctrl_elapsed=7.866 adjusted_time=3529.364 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:24:31 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=7.866 sim_elapsed_ctrl=7.866 sim_elapsed_clamped=7.866 sim_lap=1 cache_lap=1 prev_time=3529.186 next_time=3529.467 query_time=3529.364 sample_time=3529.364
+18:24:33 - src.rag.chromadb_store - INFO - Added 501 documents to ChromaDB
+18:24:33 - f1.rag - INFO - RAG context loaded: 501 chunks from 9 documents
+18:24:33 - f1.startup - INFO - RAG docs by category: [('global', 1), ('fia', 1), ('strategy', 1), ('weather', 1), ('performance', 1), ('race_control', 1), ('race_position', 1), ('other', 2)]
+18:24:33 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:24:34 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=10.863 ctrl_elapsed=10.863 adjusted_time=3532.361 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:24:34 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=10.863 sim_elapsed_ctrl=10.863 sim_elapsed_clamped=10.863 sim_lap=1 cache_lap=1 prev_time=3532.287 next_time=3532.527 query_time=3532.361 sample_time=3532.361
+18:24:36 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:24:37 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=13.550 ctrl_elapsed=13.550 adjusted_time=3535.048 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:24:37 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=13.550 sim_elapsed_ctrl=13.550 sim_elapsed_clamped=13.550 sim_lap=1 cache_lap=1 prev_time=3534.886 next_time=3535.166 query_time=3535.048 sample_time=3535.048
+18:24:37 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:24:37 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:24:37 - f1.data - INFO - Loaded 24118 interval records for session 9850 from cache
+18:24:37 - f1.data - INFO - Loaded 57 laps for session 9850 from cache
+18:24:37 - f1.data - INFO - Loaded 24118 interval records for session 9850 from cache
+18:24:37 - f1.data - INFO - Loaded 24118 interval records for session 9850 from cache
+18:24:39 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:24:39 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=16.861 ctrl_elapsed=16.861 adjusted_time=3538.359 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:24:39 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=16.861 sim_elapsed_ctrl=16.861 sim_elapsed_clamped=16.861 sim_lap=1 cache_lap=1 prev_time=3538.207 next_time=3538.467 query_time=3538.359 sample_time=3538.359
+18:24:42 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:24:43 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=19.553 ctrl_elapsed=19.553 adjusted_time=3541.051 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:24:43 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=19.553 sim_elapsed_ctrl=19.553 sim_elapsed_clamped=19.553 sim_lap=1 cache_lap=1 prev_time=3540.866 next_time=3541.066 query_time=3541.051 sample_time=3541.051
+18:24:45 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:24:45 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=22.873 ctrl_elapsed=22.873 adjusted_time=3544.371 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:24:45 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=22.873 sim_elapsed_ctrl=22.873 sim_elapsed_clamped=22.873 sim_lap=1 cache_lap=1 prev_time=3544.367 next_time=3544.507 query_time=3544.371 sample_time=3544.371
+18:24:48 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:24:48 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=25.537 ctrl_elapsed=25.537 adjusted_time=3547.035 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:24:48 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=25.537 sim_elapsed_ctrl=25.537 sim_elapsed_clamped=25.537 sim_lap=1 cache_lap=1 prev_time=3546.827 next_time=3547.046 query_time=3547.035 sample_time=3547.035
+18:24:51 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:24:51 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=28.850 ctrl_elapsed=28.850 adjusted_time=3550.348 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:24:51 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=28.850 sim_elapsed_ctrl=28.850 sim_elapsed_clamped=28.850 sim_lap=1 cache_lap=1 prev_time=3550.106 next_time=3550.447 query_time=3550.348 sample_time=3550.348
+18:24:52 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:24:52 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:24:54 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:24:55 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=31.544 ctrl_elapsed=31.544 adjusted_time=3553.042 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:24:55 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=31.544 sim_elapsed_ctrl=31.544 sim_elapsed_clamped=31.544 sim_lap=1 cache_lap=1 prev_time=3552.847 next_time=3553.227 query_time=3553.042 sample_time=3553.042
+18:24:57 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:24:57 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=34.849 ctrl_elapsed=34.849 adjusted_time=3556.347 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:24:57 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=34.849 sim_elapsed_ctrl=34.849 sim_elapsed_clamped=34.849 sim_lap=1 cache_lap=1 prev_time=3556.207 next_time=3556.467 query_time=3556.347 sample_time=3556.347
+18:25:00 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:00 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=37.536 ctrl_elapsed=37.536 adjusted_time=3559.034 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:25:00 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=37.536 sim_elapsed_ctrl=37.536 sim_elapsed_clamped=37.536 sim_lap=1 cache_lap=1 prev_time=3558.807 next_time=3559.107 query_time=3559.034 sample_time=3559.034
+18:25:03 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:04 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=40.540 ctrl_elapsed=40.540 adjusted_time=3562.038 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:25:04 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=40.540 sim_elapsed_ctrl=40.540 sim_elapsed_clamped=40.540 sim_lap=1 cache_lap=1 prev_time=3561.846 next_time=3562.306 query_time=3562.038 sample_time=3562.038
+18:25:06 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:06 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=43.858 ctrl_elapsed=43.858 adjusted_time=3565.356 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:25:06 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=43.858 sim_elapsed_ctrl=43.858 sim_elapsed_clamped=43.858 sim_lap=1 cache_lap=1 prev_time=3565.027 next_time=3565.407 query_time=3565.356 sample_time=3565.356
+18:25:07 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:25:07 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:25:09 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:09 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=46.537 ctrl_elapsed=46.537 adjusted_time=3568.035 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:25:09 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=46.537 sim_elapsed_ctrl=46.537 sim_elapsed_clamped=46.537 sim_lap=1 cache_lap=1 prev_time=3567.927 next_time=3568.086 query_time=3568.035 sample_time=3568.035
+18:25:12 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:12 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=49.848 ctrl_elapsed=49.848 adjusted_time=3571.346 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:25:12 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=49.848 sim_elapsed_ctrl=49.848 sim_elapsed_clamped=49.848 sim_lap=1 cache_lap=1 prev_time=3571.267 next_time=3571.527 query_time=3571.346 sample_time=3571.346
+18:25:15 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:15 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=52.847 ctrl_elapsed=52.847 adjusted_time=3574.345 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:25:15 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=52.847 sim_elapsed_ctrl=52.847 sim_elapsed_clamped=52.847 sim_lap=1 cache_lap=1 prev_time=3574.006 next_time=3574.387 query_time=3574.345 sample_time=3574.345
+18:25:18 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:19 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=55.546 ctrl_elapsed=55.546 adjusted_time=3577.044 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:25:19 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=55.546 sim_elapsed_ctrl=55.546 sim_elapsed_clamped=55.546 sim_lap=1 cache_lap=1 prev_time=3576.907 next_time=3577.127 query_time=3577.044 sample_time=3577.044
+18:25:21 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:22 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=58.866 ctrl_elapsed=58.866 adjusted_time=3580.364 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:25:22 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=58.866 sim_elapsed_ctrl=58.866 sim_elapsed_clamped=58.866 sim_lap=1 cache_lap=1 prev_time=3579.986 next_time=3580.387 query_time=3580.364 sample_time=3580.364
+18:25:22 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:25:22 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:25:24 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:24 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=61.853 ctrl_elapsed=61.853 adjusted_time=3583.351 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:25:24 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=61.853 sim_elapsed_ctrl=61.853 sim_elapsed_clamped=61.853 sim_lap=1 cache_lap=1 prev_time=3583.026 next_time=3583.487 query_time=3583.351 sample_time=3583.351
+18:25:27 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:27 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=64.546 ctrl_elapsed=64.546 adjusted_time=3586.044 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:25:27 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=64.546 sim_elapsed_ctrl=64.546 sim_elapsed_clamped=64.546 sim_lap=1 cache_lap=1 prev_time=3586.027 next_time=3586.207 query_time=3586.044 sample_time=3586.044
+18:25:30 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:30 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=67.863 ctrl_elapsed=67.863 adjusted_time=3589.361 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:25:30 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=67.863 sim_elapsed_ctrl=67.863 sim_elapsed_clamped=67.863 sim_lap=1 cache_lap=1 prev_time=3589.326 next_time=3589.507 query_time=3589.361 sample_time=3589.361
+18:25:33 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:33 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=70.856 ctrl_elapsed=70.856 adjusted_time=3592.354 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:25:33 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=70.856 sim_elapsed_ctrl=70.856 sim_elapsed_clamped=70.856 sim_lap=1 cache_lap=1 prev_time=3591.987 next_time=3593.126 query_time=3592.354 sample_time=3592.354
+18:25:36 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:37 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=73.543 ctrl_elapsed=73.543 adjusted_time=3595.041 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:25:37 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=73.543 sim_elapsed_ctrl=73.543 sim_elapsed_clamped=73.543 sim_lap=1 cache_lap=1 prev_time=3595.006 next_time=3595.187 query_time=3595.041 sample_time=3595.041
+18:25:37 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:25:37 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:25:39 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:39 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=76.861 ctrl_elapsed=76.861 adjusted_time=3598.359 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:25:39 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=76.861 sim_elapsed_ctrl=76.861 sim_elapsed_clamped=76.861 sim_lap=1 cache_lap=1 prev_time=3598.347 next_time=3598.587 query_time=3598.359 sample_time=3598.359
+18:25:42 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:43 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=79.534 ctrl_elapsed=79.534 adjusted_time=3601.032 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:25:43 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=79.534 sim_elapsed_ctrl=79.534 sim_elapsed_clamped=79.534 sim_lap=1 cache_lap=1 prev_time=3600.906 next_time=3601.107 query_time=3601.032 sample_time=3601.032
+18:25:45 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:45 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=82.872 ctrl_elapsed=82.872 adjusted_time=3604.370 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:25:45 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=82.872 sim_elapsed_ctrl=82.872 sim_elapsed_clamped=82.872 sim_lap=1 cache_lap=1 prev_time=3604.267 next_time=3604.647 query_time=3604.370 sample_time=3604.370
+18:25:48 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:48 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=85.861 ctrl_elapsed=85.861 adjusted_time=3607.359 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:25:48 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=85.861 sim_elapsed_ctrl=85.861 sim_elapsed_clamped=85.861 sim_lap=1 cache_lap=1 prev_time=3606.926 next_time=3607.566 query_time=3607.359 sample_time=3607.359
+18:25:51 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:52 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=88.547 ctrl_elapsed=88.547 adjusted_time=3610.045 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:25:52 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=88.547 sim_elapsed_ctrl=88.547 sim_elapsed_clamped=88.547 sim_lap=1 cache_lap=1 prev_time=3609.746 next_time=3610.047 query_time=3610.045 sample_time=3610.045
+18:25:52 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:25:52 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:25:52 - f1.data - INFO - Loaded 24118 interval records for session 9850 from cache
+18:25:52 - f1.data - INFO - Loaded 57 laps for session 9850 from cache
+18:25:52 - f1.data - INFO - Loaded 24118 interval records for session 9850 from cache
+18:25:52 - f1.data - INFO - Loaded 24118 interval records for session 9850 from cache
+18:25:54 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:54 - f1.data - INFO - OpenF1DataProvider initialized
+18:25:54 - f1.track_map - DEBUG - [TrajectoryCache] Stored lap 2 with 20 drivers
+18:25:55 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=91.844 ctrl_elapsed=91.844 adjusted_time=3613.342 source=cache drivers=20 lap_map=1:2,4:2,5:1,6:1,10:1,12:2,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:2,63:1,81:2,87:1
+18:25:55 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=91.844 sim_elapsed_ctrl=91.844 sim_elapsed_clamped=91.844 sim_lap=2 cache_lap=2 prev_time=3613.327 next_time=3613.486 query_time=3613.342 sample_time=3613.342
+18:25:55 - f1.data - INFO - Loaded 321 car data records for session 9850
+18:25:55 - f1.data - INFO - Loaded 149 weather records for session 9850
+18:25:57 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:25:57 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=94.862 ctrl_elapsed=94.862 adjusted_time=3616.360 source=cache drivers=20 lap_map=1:2,4:2,5:1,6:2,10:2,12:2,14:2,16:2,18:1,22:1,23:1,27:2,30:1,31:1,43:1,44:1,55:2,63:2,81:2,87:1
+18:25:57 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=94.862 sim_elapsed_ctrl=94.862 sim_elapsed_clamped=94.862 sim_lap=2 cache_lap=2 prev_time=3616.187 next_time=3616.367 query_time=3616.360 sample_time=3616.360
+18:26:00 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:01 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=97.537 ctrl_elapsed=97.537 adjusted_time=3619.035 source=cache drivers=20 lap_map=1:2,4:2,5:1,6:2,10:2,12:2,14:2,16:2,18:1,22:2,23:2,27:2,30:2,31:2,43:1,44:2,55:2,63:2,81:2,87:2
+18:26:01 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=97.537 sim_elapsed_ctrl=97.537 sim_elapsed_clamped=97.537 sim_lap=2 cache_lap=2 prev_time=3618.947 next_time=3619.127 query_time=3619.035 sample_time=3619.035
+18:26:03 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:04 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=100.533 ctrl_elapsed=100.533 adjusted_time=3622.031 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:26:04 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=100.533 sim_elapsed_ctrl=100.533 sim_elapsed_clamped=100.533 sim_lap=2 cache_lap=2 prev_time=3621.767 next_time=3622.047 query_time=3622.031 sample_time=3622.031
+18:26:06 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:07 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=103.533 ctrl_elapsed=103.533 adjusted_time=3625.031 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:26:07 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=103.533 sim_elapsed_ctrl=103.533 sim_elapsed_clamped=103.533 sim_lap=2 cache_lap=2 prev_time=3624.907 next_time=3625.127 query_time=3625.031 sample_time=3625.031
+18:26:07 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:26:07 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:26:09 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:09 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=106.539 ctrl_elapsed=106.539 adjusted_time=3628.037 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:26:09 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=106.539 sim_elapsed_ctrl=106.539 sim_elapsed_clamped=106.539 sim_lap=2 cache_lap=2 prev_time=3627.767 next_time=3628.047 query_time=3628.037 sample_time=3628.037
+18:26:12 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:13 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=109.543 ctrl_elapsed=109.543 adjusted_time=3631.041 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:26:13 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=109.543 sim_elapsed_ctrl=109.543 sim_elapsed_clamped=109.543 sim_lap=2 cache_lap=2 prev_time=3631.027 next_time=3631.187 query_time=3631.041 sample_time=3631.041
+18:26:15 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:15 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=112.543 ctrl_elapsed=112.543 adjusted_time=3634.041 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:26:15 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=112.543 sim_elapsed_ctrl=112.543 sim_elapsed_clamped=112.543 sim_lap=2 cache_lap=2 prev_time=3633.926 next_time=3634.226 query_time=3634.041 sample_time=3634.041
+18:26:18 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:18 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=115.535 ctrl_elapsed=115.535 adjusted_time=3637.033 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:26:18 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=115.535 sim_elapsed_ctrl=115.535 sim_elapsed_clamped=115.535 sim_lap=2 cache_lap=2 prev_time=3636.966 next_time=3637.167 query_time=3637.033 sample_time=3637.033
+18:26:21 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:21 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=118.542 ctrl_elapsed=118.542 adjusted_time=3640.040 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:26:21 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=118.542 sim_elapsed_ctrl=118.542 sim_elapsed_clamped=118.542 sim_lap=2 cache_lap=2 prev_time=3639.946 next_time=3640.166 query_time=3640.040 sample_time=3640.040
+18:26:22 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:26:22 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:26:24 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:24 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=121.532 ctrl_elapsed=121.532 adjusted_time=3643.030 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:26:24 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=121.532 sim_elapsed_ctrl=121.532 sim_elapsed_clamped=121.532 sim_lap=2 cache_lap=2 prev_time=3643.007 next_time=3643.186 query_time=3643.030 sample_time=3643.030
+18:26:27 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:27 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=124.542 ctrl_elapsed=124.542 adjusted_time=3646.040 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:26:28 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=124.542 sim_elapsed_ctrl=124.542 sim_elapsed_clamped=124.542 sim_lap=2 cache_lap=2 prev_time=3645.826 next_time=3646.086 query_time=3646.040 sample_time=3646.040
+18:26:30 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:30 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=127.546 ctrl_elapsed=127.546 adjusted_time=3649.044 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:26:31 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=127.546 sim_elapsed_ctrl=127.546 sim_elapsed_clamped=127.546 sim_lap=2 cache_lap=2 prev_time=3648.906 next_time=3649.127 query_time=3649.044 sample_time=3649.044
+18:26:33 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:33 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=130.534 ctrl_elapsed=130.534 adjusted_time=3652.032 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:26:33 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=130.534 sim_elapsed_ctrl=130.534 sim_elapsed_clamped=130.534 sim_lap=2 cache_lap=2 prev_time=3652.007 next_time=3652.267 query_time=3652.032 sample_time=3652.032
+18:26:36 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:37 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=133.539 ctrl_elapsed=133.539 adjusted_time=3655.037 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:26:37 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=133.539 sim_elapsed_ctrl=133.539 sim_elapsed_clamped=133.539 sim_lap=2 cache_lap=2 prev_time=3654.906 next_time=3655.247 query_time=3655.037 sample_time=3655.037
+18:26:37 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:26:37 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:26:39 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:40 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=136.537 ctrl_elapsed=136.537 adjusted_time=3658.035 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:26:40 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=136.537 sim_elapsed_ctrl=136.537 sim_elapsed_clamped=136.537 sim_lap=2 cache_lap=2 prev_time=3657.987 next_time=3658.047 query_time=3658.035 sample_time=3658.035
+18:26:42 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:43 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=139.533 ctrl_elapsed=139.533 adjusted_time=3661.031 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:26:43 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=139.533 sim_elapsed_ctrl=139.533 sim_elapsed_clamped=139.533 sim_lap=2 cache_lap=2 prev_time=3660.947 next_time=3661.207 query_time=3661.031 sample_time=3661.031
+18:26:45 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:46 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=142.546 ctrl_elapsed=142.546 adjusted_time=3664.044 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:26:46 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=142.546 sim_elapsed_ctrl=142.546 sim_elapsed_clamped=142.546 sim_lap=2 cache_lap=2 prev_time=3663.587 next_time=3664.047 query_time=3664.044 sample_time=3664.044
+18:26:48 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:49 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=145.539 ctrl_elapsed=145.539 adjusted_time=3667.037 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:26:49 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=145.539 sim_elapsed_ctrl=145.539 sim_elapsed_clamped=145.539 sim_lap=2 cache_lap=2 prev_time=3667.027 next_time=3667.366 query_time=3667.037 sample_time=3667.037
+18:26:51 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:52 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=148.538 ctrl_elapsed=148.538 adjusted_time=3670.036 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:26:52 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=148.538 sim_elapsed_ctrl=148.538 sim_elapsed_clamped=148.538 sim_lap=2 cache_lap=2 prev_time=3669.767 next_time=3670.047 query_time=3670.036 sample_time=3670.036
+18:26:52 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:26:52 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:26:54 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:54 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=151.537 ctrl_elapsed=151.537 adjusted_time=3673.035 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:26:54 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=151.537 sim_elapsed_ctrl=151.537 sim_elapsed_clamped=151.537 sim_lap=2 cache_lap=2 prev_time=3672.707 next_time=3673.086 query_time=3673.035 sample_time=3673.035
+18:26:57 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:26:58 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=154.549 ctrl_elapsed=154.549 adjusted_time=3676.047 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:26:58 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=154.549 sim_elapsed_ctrl=154.549 sim_elapsed_clamped=154.549 sim_lap=2 cache_lap=2 prev_time=3676.007 next_time=3676.107 query_time=3676.047 sample_time=3676.047
+18:27:00 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:00 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=157.537 ctrl_elapsed=157.537 adjusted_time=3679.035 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:27:00 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=157.537 sim_elapsed_ctrl=157.537 sim_elapsed_clamped=157.537 sim_lap=2 cache_lap=2 prev_time=3679.026 next_time=3679.286 query_time=3679.035 sample_time=3679.035
+18:27:03 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:03 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=160.540 ctrl_elapsed=160.540 adjusted_time=3682.038 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:27:04 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=160.540 sim_elapsed_ctrl=160.540 sim_elapsed_clamped=160.540 sim_lap=2 cache_lap=2 prev_time=3681.987 next_time=3682.247 query_time=3682.038 sample_time=3682.038
+18:27:06 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:07 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=163.539 ctrl_elapsed=163.539 adjusted_time=3685.037 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:27:07 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=163.539 sim_elapsed_ctrl=163.539 sim_elapsed_clamped=163.539 sim_lap=2 cache_lap=2 prev_time=3684.908 next_time=3685.306 query_time=3685.037 sample_time=3685.037
+18:27:07 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:27:07 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:27:09 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:10 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=166.535 ctrl_elapsed=166.535 adjusted_time=3688.033 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:27:10 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=166.535 sim_elapsed_ctrl=166.535 sim_elapsed_clamped=166.535 sim_lap=2 cache_lap=2 prev_time=3687.927 next_time=3688.247 query_time=3688.033 sample_time=3688.033
+18:27:12 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:13 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=169.541 ctrl_elapsed=169.541 adjusted_time=3691.039 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:27:13 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=169.541 sim_elapsed_ctrl=169.541 sim_elapsed_clamped=169.541 sim_lap=2 cache_lap=2 prev_time=3690.627 next_time=3691.067 query_time=3691.039 sample_time=3691.039
+18:27:15 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:15 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=172.542 ctrl_elapsed=172.542 adjusted_time=3694.040 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:27:15 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=172.542 sim_elapsed_ctrl=172.542 sim_elapsed_clamped=172.542 sim_lap=2 cache_lap=2 prev_time=3694.006 next_time=3694.247 query_time=3694.040 sample_time=3694.040
+18:27:18 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:19 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=175.542 ctrl_elapsed=175.542 adjusted_time=3697.040 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:27:19 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=175.542 sim_elapsed_ctrl=175.542 sim_elapsed_clamped=175.542 sim_lap=2 cache_lap=2 prev_time=3696.887 next_time=3697.087 query_time=3697.040 sample_time=3697.040
+18:27:21 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:21 - f1.data - INFO - OpenF1DataProvider initialized
+18:27:21 - f1.track_map - DEBUG - [TrajectoryCache] Stored lap 3 with 20 drivers
+18:27:21 - f1.data - INFO - Loaded 149 weather records for session 9850
+18:27:22 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=178.536 ctrl_elapsed=178.536 adjusted_time=3700.034 source=cache drivers=20 lap_map=1:3,4:3,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:3,87:2
+18:27:22 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=178.536 sim_elapsed_ctrl=178.536 sim_elapsed_clamped=178.536 sim_lap=3 cache_lap=3 prev_time=3699.927 next_time=3700.127 query_time=3700.034 sample_time=3700.034
+18:27:22 - f1.data - INFO - Loaded 318 car data records for session 9850
+18:27:22 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:27:22 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:27:22 - f1.data - INFO - Loaded 24118 interval records for session 9850 from cache
+18:27:22 - f1.data - INFO - Loaded 57 laps for session 9850 from cache
+18:27:22 - f1.data - INFO - Loaded 24118 interval records for session 9850 from cache
+18:27:22 - f1.data - INFO - Loaded 24118 interval records for session 9850 from cache
+18:27:24 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:24 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=181.859 ctrl_elapsed=181.859 adjusted_time=3703.357 source=cache drivers=20 lap_map=1:3,4:3,5:2,6:2,10:2,12:3,14:3,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:3,63:3,81:3,87:2
+18:27:24 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=181.859 sim_elapsed_ctrl=181.859 sim_elapsed_clamped=181.859 sim_lap=3 cache_lap=3 prev_time=3703.007 next_time=3703.427 query_time=3703.357 sample_time=3703.357
+18:27:27 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:28 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=184.538 ctrl_elapsed=184.538 adjusted_time=3706.036 source=cache drivers=20 lap_map=1:3,4:3,5:2,6:3,10:3,12:3,14:3,16:3,18:2,22:2,23:2,27:3,30:2,31:2,43:2,44:2,55:3,63:3,81:3,87:3
+18:27:28 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=184.538 sim_elapsed_ctrl=184.538 sim_elapsed_clamped=184.538 sim_lap=3 cache_lap=3 prev_time=3706.026 next_time=3706.306 query_time=3706.036 sample_time=3706.036
+18:27:30 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:31 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=187.550 ctrl_elapsed=187.550 adjusted_time=3709.048 source=cache drivers=20 lap_map=1:3,4:3,5:2,6:3,10:3,12:3,14:3,16:3,18:2,22:3,23:3,27:3,30:3,31:3,43:2,44:3,55:3,63:3,81:3,87:3
+18:27:31 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=187.550 sim_elapsed_ctrl=187.550 sim_elapsed_clamped=187.550 sim_lap=3 cache_lap=3 prev_time=3708.967 next_time=3709.187 query_time=3709.048 sample_time=3709.048
+18:27:33 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:34 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=190.552 ctrl_elapsed=190.552 adjusted_time=3712.050 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:27:34 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=190.552 sim_elapsed_ctrl=190.552 sim_elapsed_clamped=190.552 sim_lap=3 cache_lap=3 prev_time=3711.986 next_time=3712.286 query_time=3712.050 sample_time=3712.050
+18:27:36 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:36 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=193.538 ctrl_elapsed=193.538 adjusted_time=3715.036 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:27:36 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=193.538 sim_elapsed_ctrl=193.538 sim_elapsed_clamped=193.538 sim_lap=3 cache_lap=3 prev_time=3714.907 next_time=3715.107 query_time=3715.036 sample_time=3715.036
+18:27:37 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:27:37 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:27:39 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:40 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=196.545 ctrl_elapsed=196.545 adjusted_time=3718.043 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:27:40 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=196.545 sim_elapsed_ctrl=196.545 sim_elapsed_clamped=196.545 sim_lap=3 cache_lap=3 prev_time=3717.787 next_time=3718.246 query_time=3718.043 sample_time=3718.043
+18:27:42 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:43 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=199.544 ctrl_elapsed=199.544 adjusted_time=3721.042 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:27:43 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=199.544 sim_elapsed_ctrl=199.544 sim_elapsed_clamped=199.544 sim_lap=3 cache_lap=3 prev_time=3720.667 next_time=3721.147 query_time=3721.042 sample_time=3721.042
+18:27:45 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:46 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=202.544 ctrl_elapsed=202.544 adjusted_time=3724.042 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:27:46 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=202.544 sim_elapsed_ctrl=202.544 sim_elapsed_clamped=202.544 sim_lap=3 cache_lap=3 prev_time=3723.607 next_time=3724.647 query_time=3724.042 sample_time=3724.042
+18:27:48 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:48 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=205.537 ctrl_elapsed=205.537 adjusted_time=3727.035 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:27:48 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=205.537 sim_elapsed_ctrl=205.537 sim_elapsed_clamped=205.537 sim_lap=3 cache_lap=3 prev_time=3726.887 next_time=3727.207 query_time=3727.035 sample_time=3727.035
+18:27:51 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:51 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=208.859 ctrl_elapsed=208.859 adjusted_time=3730.357 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:27:51 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=208.859 sim_elapsed_ctrl=208.859 sim_elapsed_clamped=208.859 sim_lap=3 cache_lap=3 prev_time=3730.187 next_time=3730.367 query_time=3730.357 sample_time=3730.357
+18:27:52 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:27:52 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:27:54 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:55 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=211.535 ctrl_elapsed=211.535 adjusted_time=3733.033 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:27:55 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=211.535 sim_elapsed_ctrl=211.535 sim_elapsed_clamped=211.535 sim_lap=3 cache_lap=3 prev_time=3732.966 next_time=3733.127 query_time=3733.033 sample_time=3733.033
+18:27:57 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:27:57 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=214.536 ctrl_elapsed=214.536 adjusted_time=3736.034 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:27:57 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=214.536 sim_elapsed_ctrl=214.536 sim_elapsed_clamped=214.536 sim_lap=3 cache_lap=3 prev_time=3735.907 next_time=3736.067 query_time=3736.034 sample_time=3736.034
+18:28:00 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:28:01 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=217.533 ctrl_elapsed=217.533 adjusted_time=3739.031 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:28:01 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=217.533 sim_elapsed_ctrl=217.533 sim_elapsed_clamped=217.533 sim_lap=3 cache_lap=3 prev_time=3738.807 next_time=3739.206 query_time=3739.031 sample_time=3739.031
+18:28:03 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:28:04 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=220.544 ctrl_elapsed=220.544 adjusted_time=3742.042 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:28:04 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=220.544 sim_elapsed_ctrl=220.544 sim_elapsed_clamped=220.544 sim_lap=3 cache_lap=3 prev_time=3741.907 next_time=3742.367 query_time=3742.042 sample_time=3742.042
+18:28:06 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:28:06 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=223.533 ctrl_elapsed=223.533 adjusted_time=3745.031 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:28:06 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=223.533 sim_elapsed_ctrl=223.533 sim_elapsed_clamped=223.533 sim_lap=3 cache_lap=3 prev_time=3744.787 next_time=3745.067 query_time=3745.031 sample_time=3745.031
+18:28:07 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:28:07 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:28:09 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:28:10 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=226.546 ctrl_elapsed=226.546 adjusted_time=3748.044 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:28:10 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=226.546 sim_elapsed_ctrl=226.546 sim_elapsed_clamped=226.546 sim_lap=3 cache_lap=3 prev_time=3747.666 next_time=3748.127 query_time=3748.044 sample_time=3748.044
+18:28:12 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:28:12 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=229.542 ctrl_elapsed=229.542 adjusted_time=3751.040 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:28:12 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=229.542 sim_elapsed_ctrl=229.542 sim_elapsed_clamped=229.542 sim_lap=3 cache_lap=3 prev_time=3750.827 next_time=3751.206 query_time=3751.040 sample_time=3751.040
+18:28:15 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:28:16 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=232.536 ctrl_elapsed=232.536 adjusted_time=3754.034 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:28:16 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=232.536 sim_elapsed_ctrl=232.536 sim_elapsed_clamped=232.536 sim_lap=3 cache_lap=3 prev_time=3753.867 next_time=3754.206 query_time=3754.034 sample_time=3754.034
+18:28:18 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:28:18 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=235.537 ctrl_elapsed=235.537 adjusted_time=3757.035 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:28:18 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=235.537 sim_elapsed_ctrl=235.537 sim_elapsed_clamped=235.537 sim_lap=3 cache_lap=3 prev_time=3756.847 next_time=3757.227 query_time=3757.035 sample_time=3757.035
+18:28:21 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:28:21 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=238.538 ctrl_elapsed=238.538 adjusted_time=3760.036 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:28:21 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=238.538 sim_elapsed_ctrl=238.538 sim_elapsed_clamped=238.538 sim_lap=3 cache_lap=3 prev_time=3759.946 next_time=3760.127 query_time=3760.036 sample_time=3760.036
+18:28:22 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:28:22 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:28:24 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:28:24 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=241.539 ctrl_elapsed=241.539 adjusted_time=3763.037 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:28:24 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=241.539 sim_elapsed_ctrl=241.539 sim_elapsed_clamped=241.539 sim_lap=3 cache_lap=3 prev_time=3762.787 next_time=3763.467 query_time=3763.037 sample_time=3763.037
+18:28:27 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:28:27 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=244.546 ctrl_elapsed=244.546 adjusted_time=3766.044 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:28:27 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=244.546 sim_elapsed_ctrl=244.546 sim_elapsed_clamped=244.546 sim_lap=3 cache_lap=3 prev_time=3765.866 next_time=3766.107 query_time=3766.044 sample_time=3766.044
+18:28:30 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:28:30 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=247.543 ctrl_elapsed=247.543 adjusted_time=3769.041 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:28:30 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=247.543 sim_elapsed_ctrl=247.543 sim_elapsed_clamped=247.543 sim_lap=3 cache_lap=3 prev_time=3768.967 next_time=3769.287 query_time=3769.041 sample_time=3769.041
+18:28:33 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:28:33 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=250.538 ctrl_elapsed=250.538 adjusted_time=3772.036 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:28:33 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=250.538 sim_elapsed_ctrl=250.538 sim_elapsed_clamped=250.538 sim_lap=3 cache_lap=3 prev_time=3771.826 next_time=3772.106 query_time=3772.036 sample_time=3772.036
+18:28:36 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:28:36 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=253.550 ctrl_elapsed=253.550 adjusted_time=3775.048 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:28:36 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=253.550 sim_elapsed_ctrl=253.550 sim_elapsed_clamped=253.550 sim_lap=3 cache_lap=3 prev_time=3774.787 next_time=3775.127 query_time=3775.048 sample_time=3775.048
+18:28:37 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:28:37 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:28:39 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:28:40 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=256.547 ctrl_elapsed=256.547 adjusted_time=3778.045 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:28:40 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=256.547 sim_elapsed_ctrl=256.547 sim_elapsed_clamped=256.547 sim_lap=3 cache_lap=3 prev_time=3777.886 next_time=3778.287 query_time=3778.045 sample_time=3778.045
+18:28:42 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:28:43 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=259.539 ctrl_elapsed=259.539 adjusted_time=3781.037 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:28:43 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=259.539 sim_elapsed_ctrl=259.539 sim_elapsed_clamped=259.539 sim_lap=3 cache_lap=3 prev_time=3781.027 next_time=3781.347 query_time=3781.037 sample_time=3781.037
+18:28:45 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:28:45 - f1.track_map - INFO - [QATAR2025_DIAG] lap=3 store_elapsed=262.549 ctrl_elapsed=262.549 adjusted_time=3784.047 source=cache drivers=20 lap_map=1:3,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:3,87:3
+18:28:45 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=262.549 sim_elapsed_ctrl=262.549 sim_elapsed_clamped=262.549 sim_lap=3 cache_lap=3 prev_time=3784.046 next_time=3784.247 query_time=3784.047 sample_time=3784.047
+18:28:48 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:28:48 - f1.data - INFO - OpenF1DataProvider initialized
+18:28:48 - f1.track_map - DEBUG - [TrajectoryCache] Stored lap 4 with 20 drivers
+18:28:48 - f1.data - INFO - Loaded 149 weather records for session 9850
+18:28:49 - f1.track_map - INFO - [QATAR2025_DIAG] lap=4 store_elapsed=265.540 ctrl_elapsed=265.540 adjusted_time=3787.038 source=cache drivers=20 lap_map=1:4,4:3,5:3,6:3,10:3,12:3,14:3,16:3,18:3,22:3,23:3,27:3,30:3,31:3,43:3,44:3,55:3,63:3,81:4,87:3
+18:28:49 - f1.data - INFO - Loaded 320 car data records for session 9850
+18:28:49 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=265.540 sim_elapsed_ctrl=265.540 sim_elapsed_clamped=265.540 sim_lap=4 cache_lap=4 prev_time=3786.846 next_time=3787.267 query_time=3787.038 sample_time=3787.038
+18:28:51 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:28:52 - src.session.live_detector - INFO - Checking for live sessions at 2026-03-21 18:28:52.470288
+18:28:52 - f1.data - INFO - Searching for last completed race (current date: 2026-03-21 17:28:52.477182+00:00)
+18:28:52 - src.session.live_detector - INFO - No live sessions detected
+18:28:52 - f1.data - INFO - Found last completed race: Shanghai (China)
+18:28:54 - f1.startup - INFO - Using last circuit in calendar as default
+18:28:54 - f1.startup - WARNING - Missing parameters: session=None, circuit_key=1276, year=2025
+18:28:54 - f1.chat - INFO - [CHAT] Context changed - clearing chat (year=2025, circuit=1276, session=None)
+18:28:54 - f1.rag - INFO - Loading RAG context: year=2025, circuit=abu_dhabi
+18:28:55 - src.rag.chromadb_store - INFO - Cleared collection: f1_rag_documents
+18:28:55 - f1.rag - INFO - RAG collection cleared
+18:28:55 - src.rag.document_loader - INFO - Loaded 4 global documents
+18:28:55 - src.rag.document_loader - INFO - Loaded 431 documents for year 2025
+18:28:55 - src.rag.document_loader - INFO - Loaded 52 documents for abu_dhabi 2025
+18:28:55 - src.rag.document_loader - INFO - Total documents loaded: 487 (year=2025, circuit=abu_dhabi)
+18:28:55 - src.rag.chromadb_store - INFO - Generating embeddings for 487 documents
+18:28:55 - f1.startup - WARNING - Session bootstrap aborted: Incomplete context selection
+18:28:55 - f1.startup - INFO - Received 5 sessions from OpenF1 API for meeting_key=1276:
+18:28:55 - f1.startup - INFO -   Session: Practice 1 (key=9832)
+18:28:55 - f1.startup - INFO -   Session: Practice 2 (key=9833)
+18:28:55 - f1.startup - INFO -   Session: Practice 3 (key=9834)
+18:28:55 - f1.startup - INFO -   Session: Qualifying (key=9835)
+18:28:55 - f1.startup - INFO -   Session: Race (key=9839)
+18:28:55 - f1.startup - INFO - Building session options from 5 sessions:
+18:28:55 - f1.startup - INFO -   Session: 'Practice 1' \u2192 code=P1, label=Practice 1
+18:28:55 - f1.startup - INFO -   \u2713 Added option: Practice 1 (P1)
+18:28:55 - f1.startup - INFO -   Session: 'Practice 2' \u2192 code=P2, label=Practice 2
+18:28:55 - f1.startup - INFO -   \u2713 Added option: Practice 2 (P2)
+18:28:55 - f1.startup - INFO -   Session: 'Practice 3' \u2192 code=P3, label=Practice 3
+18:28:55 - f1.startup - INFO -   \u2713 Added option: Practice 3 (P3)
+18:28:55 - f1.startup - INFO -   Session: 'Qualifying' \u2192 code=QUALIFYING, label=Qualifying
+18:28:55 - f1.startup - INFO -   \u2713 Added option: Qualifying (QUALIFYING)
+18:28:55 - f1.startup - INFO -   Session: 'Race' \u2192 code=RACE, label=Race
+18:28:55 - f1.startup - INFO -   \u2713 Added option: Race (RACE)
+18:28:55 - f1.startup - INFO - Built 5 unique session options
+18:28:55 - f1.startup - INFO - Circuit changed, clearing session selection. Found 5 sessions for meeting_key=1276
+18:28:55 - f1.startup - INFO - Session selector populated with 5 options for meeting_key=1276
+18:28:55 - f1.startup - WARNING - Missing parameters: session=None, circuit_key=1276, year=2025
+18:28:56 - f1.startup - WARNING - Session bootstrap aborted: Incomplete context selection
+18:28:57 - f1.startup - WARNING - Missing parameters: session=None, circuit_key=1275, year=2025
+18:28:57 - f1.startup - INFO - Received 5 sessions from OpenF1 API for meeting_key=1275:
+18:28:57 - f1.startup - INFO -   Session: Practice 1 (key=9840)
+18:28:57 - f1.startup - INFO -   Session: Sprint Qualifying (key=9841)
+18:28:57 - f1.startup - INFO -   Session: Sprint (key=9845)
+18:28:57 - f1.startup - INFO -   Session: Qualifying (key=9846)
+18:28:57 - f1.startup - INFO -   Session: Race (key=9850)
+18:28:57 - f1.startup - INFO - Building session options from 5 sessions:
+18:28:57 - f1.startup - INFO -   Session: 'Practice 1' \u2192 code=P1, label=Practice 1
+18:28:57 - f1.startup - INFO -   \u2713 Added option: Practice 1 (P1)
+18:28:57 - f1.startup - INFO -   Session: 'Sprint Qualifying' \u2192 code=SQ, label=Sprint Qualifying
+18:28:57 - f1.startup - INFO -   \u2713 Added option: Sprint Qualifying (SQ)
+18:28:57 - f1.startup - INFO -   Session: 'Sprint' \u2192 code=S, label=Sprint
+18:28:57 - f1.startup - INFO -   \u2713 Added option: Sprint (S)
+18:28:57 - f1.startup - INFO -   Session: 'Qualifying' \u2192 code=QUALIFYING, label=Qualifying
+18:28:57 - f1.startup - INFO -   \u2713 Added option: Qualifying (QUALIFYING)
+18:28:57 - f1.startup - INFO -   Session: 'Race' \u2192 code=RACE, label=Race
+18:28:57 - f1.startup - INFO -   \u2713 Added option: Race (RACE)
+18:28:57 - f1.startup - INFO - Built 5 unique session options
+18:28:57 - f1.startup - INFO - Circuit changed, clearing session selection. Found 5 sessions for meeting_key=1275
+18:28:57 - f1.startup - INFO - Session selector populated with 5 options for meeting_key=1275
+18:28:57 - f1.chat - INFO - [CHAT] Context changed - clearing chat (year=2025, circuit=1275, session=None)
+18:28:57 - f1.rag - INFO - Loading RAG context: year=2025, circuit=qatar
+18:28:58 - src.rag.chromadb_store - INFO - Cleared collection: f1_rag_documents
+18:28:58 - f1.rag - INFO - RAG collection cleared
+18:28:58 - src.rag.document_loader - INFO - Loaded 4 global documents
+18:28:58 - src.rag.document_loader - INFO - Loaded 431 documents for year 2025
+18:28:58 - src.rag.document_loader - INFO - Loaded 66 documents for qatar 2025
+18:28:58 - src.rag.document_loader - INFO - Total documents loaded: 501 (year=2025, circuit=qatar)
+18:28:58 - src.rag.chromadb_store - INFO - Generating embeddings for 501 documents
+18:28:58 - f1.startup - WARNING - Session bootstrap aborted: Incomplete context selection
+18:28:58 - f1.startup - WARNING - Missing parameters: session=None, circuit_key=1275, year=2025
+18:28:59 - f1.startup - WARNING - Session bootstrap aborted: Incomplete context selection
+18:29:00 - f1.startup - INFO - Loading drivers for year=2025, meeting_key=1275, session=RACE
+18:29:00 - f1.startup - INFO - Session resolver cache miss (year=2025 meeting_key=1275)
+18:29:00 - f1.chat - INFO - [CHAT] Context changed - clearing chat (year=2025, circuit=1275, session=RACE)
+18:29:00 - f1.startup - INFO - Searching for session with target_code=RACE
+18:29:00 - f1.startup - INFO -   Checking: Practice 1 \u2192 normalized_code=P1 (session_key=9840)
+18:29:00 - f1.startup - INFO -   Checking: Sprint Qualifying \u2192 normalized_code=SQ (session_key=9841)
+18:29:00 - f1.startup - INFO -   Checking: Sprint \u2192 normalized_code=S (session_key=9845)
+18:29:00 - f1.startup - INFO -   Checking: Qualifying \u2192 normalized_code=QUALIFYING (session_key=9846)
+18:29:00 - f1.startup - INFO -   Checking: Race \u2192 normalized_code=RACE (session_key=9850)
+18:29:00 - f1.startup - INFO -   \u2713 MATCH! Returning session_key=9850
+18:29:00 - f1.startup - INFO - Session resolver using API payload from meeting/year request (meeting_key=1275 session_code=RACE session_key=9850)
+18:29:00 - f1.startup - INFO - Loading session with session_key=9850
+18:29:00 - src.data.openf1_adapter - INFO - SessionAdapter created for  - Race
+18:29:00 - src.data.openf1_adapter - INFO - Loading session data for  - Race
+18:29:00 - src.data.openf1_adapter - INFO - Loading laps from OpenF1...
+18:29:00 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:29:00 - f1.data - INFO - Loaded 61 stints for session 9850 from cache
+18:29:00 - f1.data - INFO - Loaded 20 drivers from cache for session 9850
+18:29:00 - src.data.openf1_adapter - INFO - Loaded 1070 laps
+18:29:00 - src.data.openf1_adapter - INFO - Session data loaded successfully
+18:29:00 - f1.data - INFO - Loaded 20 drivers from cache for session 9850
+18:29:00 - src.data.openf1_adapter - INFO - Loading results from OpenF1...
+18:29:00 - f1.data - INFO - Loaded 476 position updates for session 9850 from cache
+18:29:00 - src.data.openf1_adapter - INFO - Loaded results for 20 drivers
+18:29:00 - f1.startup - INFO - Loaded 20 drivers from session
+18:29:00 - f1.startup - INFO - Created 20 driver options
+18:29:00 - f1.startup - INFO - Sample drivers: # 1 VER - Max VERSTAPPEN, #81 PIA - Oscar PIASTRI, #55 SAI - Carlos SAINZ, # 4 NOR - Lando NORRIS, #12 ANT - Kimi ANTONELLI
+18:29:01 - src.rag.chromadb_store - INFO - Search returned 0 results
+18:29:01 - f1.rag - INFO - strategy.md not found in RAG; using empty pit policy context
+18:29:01 - f1.startup - INFO - Pit policy context loaded from RAG (strategy.md)
+18:29:02 - f1.startup - INFO - Loaded tire window overrides from data\rag\2025\circuits\qatar\strategy.md
+18:29:02 - src.session.tire_thresholds - WARNING - Ignoring implausible tire window override for SOFT: min=2 optimal=12 max=15 (using defaults)
+18:29:02 - src.session.tire_thresholds - WARNING - Ignoring implausible tire window override for MEDIUM: min=2 optimal=12 max=15 (using defaults)
+18:29:02 - src.session.tire_thresholds - WARNING - Ignoring implausible tire window override for HARD: min=1 optimal=18 max=25 (using defaults)
+18:29:02 - f1.startup - INFO - Prepared lap timing data from driver #1: 57 laps
+18:29:02 - f1.startup - INFO - Rebased lap timing to simulation start: shift=207.172s
+18:29:02 - f1.chat - INFO - [SYNC] Called with messages type=<class 'list'>, count=0
+18:29:02 - f1.chat - INFO - [SYNC] Rendering empty placeholder (no messages)
+18:29:02 - f1.startup - INFO - SimulationController initialized: 2025-11-30 16:00:00+00:00 -> 2025-11-30 17:24:38.758000+00:00 (lap1 end 89.4s, final lap 5078.8s)
+18:29:02 - f1.startup - INFO - Calculated total_laps from data: 57
+18:29:02 - f1.startup - INFO - Session bootstrap completed for session_key=9850
+18:29:03 - f1.chat - INFO - [SYNC] Called with messages type=<class 'list'>, count=0
+18:29:03 - f1.chat - INFO - [SYNC] Rendering empty placeholder (no messages)
+18:29:03 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:29:03 - f1.data - INFO - Race overview render (session 9850): no OpenF1 API calls recorded
+18:29:04 - f1.track_map - DEBUG - [TrajectoryCache] Stored lap 1 with 20 drivers
+18:29:05 - f1.track_map - DEBUG - [TrackMapInitial] drivers=20 sim_elapsed_store=0.000 sim_elapsed_ctrl=0.000 sim_elapsed_clamped=0.000 sim_lap=1
+18:29:05 - f1.data - INFO - OpenF1DataProvider initialized
+18:29:06 - f1.data - INFO - Loaded 149 weather records for session 9850
+18:29:06 - f1.chat - INFO - [SYNC] Called with messages type=<class 'list'>, count=0
+18:29:06 - f1.chat - INFO - [SYNC] Rendering empty placeholder (no messages)
+18:29:14 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:29:15 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=1.946 ctrl_elapsed=1.946 adjusted_time=3523.444 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:29:15 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=1.946 sim_elapsed_ctrl=1.946 sim_elapsed_clamped=1.946 sim_lap=1 cache_lap=1 prev_time=3523.347 next_time=3523.666 query_time=3523.444 sample_time=3523.444
+18:29:17 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:29:18 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=4.939 ctrl_elapsed=6.442 adjusted_time=3527.940 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:29:18 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=4.939 sim_elapsed_ctrl=6.442 sim_elapsed_clamped=6.442 sim_lap=1 cache_lap=1 prev_time=3527.926 next_time=3528.127 query_time=3527.940 sample_time=3527.940
+18:29:20 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:29:21 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=7.932 ctrl_elapsed=7.932 adjusted_time=3529.430 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:29:21 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=7.932 sim_elapsed_ctrl=7.932 sim_elapsed_clamped=7.932 sim_lap=1 cache_lap=1 prev_time=3529.186 next_time=3529.467 query_time=3529.430 sample_time=3529.430
+18:29:23 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:29:25 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=10.947 ctrl_elapsed=12.448 adjusted_time=3533.946 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:29:25 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=10.947 sim_elapsed_ctrl=12.448 sim_elapsed_clamped=12.448 sim_lap=1 cache_lap=1 prev_time=3533.867 next_time=3534.086 query_time=3533.946 sample_time=3533.946
+18:29:26 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:29:27 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=13.941 ctrl_elapsed=15.553 adjusted_time=3537.051 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:29:27 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=13.941 sim_elapsed_ctrl=15.553 sim_elapsed_clamped=15.553 sim_lap=1 cache_lap=1 prev_time=3536.806 next_time=3537.147 query_time=3537.051 sample_time=3537.051
+18:29:27 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:29:27 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:29:27 - f1.data - INFO - Loaded 24118 interval records for session 9850 from cache
+18:29:27 - f1.data - INFO - Loaded 57 laps for session 9850 from cache
+18:29:27 - f1.data - INFO - Loaded 24118 interval records for session 9850 from cache
+18:29:28 - f1.data - INFO - Loaded 24118 interval records for session 9850 from cache
+18:29:29 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:29:30 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=16.969 ctrl_elapsed=18.558 adjusted_time=3540.056 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:29:30 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=16.969 sim_elapsed_ctrl=18.558 sim_elapsed_clamped=18.558 sim_lap=1 cache_lap=1 prev_time=3539.847 next_time=3540.067 query_time=3540.056 sample_time=3540.056
+18:29:32 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:29:34 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=19.970 ctrl_elapsed=21.468 adjusted_time=3542.966 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:29:34 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=19.970 sim_elapsed_ctrl=21.468 sim_elapsed_clamped=21.468 sim_lap=1 cache_lap=1 prev_time=3542.947 next_time=3543.147 query_time=3542.966 sample_time=3542.966
+18:29:35 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:29:37 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=22.961 ctrl_elapsed=24.461 adjusted_time=3545.959 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:29:37 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=22.961 sim_elapsed_ctrl=24.461 sim_elapsed_clamped=24.461 sim_lap=1 cache_lap=1 prev_time=3545.907 next_time=3546.207 query_time=3545.959 sample_time=3545.959
+18:29:38 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:29:39 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=25.957 ctrl_elapsed=27.547 adjusted_time=3549.045 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:29:39 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=25.957 sim_elapsed_ctrl=27.547 sim_elapsed_clamped=27.547 sim_lap=1 cache_lap=1 prev_time=3548.827 next_time=3549.087 query_time=3549.045 sample_time=3549.045
+18:29:40 - src.rag.chromadb_store - INFO - Added 487 documents to ChromaDB
+18:29:40 - f1.rag - INFO - RAG context loaded: 487 chunks from 8 documents
+18:29:41 - f1.startup - INFO - RAG docs by category: [('global', 1), ('fia', 1), ('strategy', 1), ('weather', 1), ('performance', 1), ('race_control', 1), ('race_position', 1), ('other', 1)]
+18:29:41 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:29:42 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:29:42 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:29:42 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=29.192 ctrl_elapsed=30.434 adjusted_time=3551.932 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:29:42 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=29.192 sim_elapsed_ctrl=30.434 sim_elapsed_clamped=30.434 sim_lap=1 cache_lap=1 prev_time=3551.867 next_time=3552.167 query_time=3551.932 sample_time=3551.932
+18:29:44 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:29:45 - src.rag.chromadb_store - INFO - Added 501 documents to ChromaDB
+18:29:45 - f1.rag - INFO - RAG context loaded: 501 chunks from 9 documents
+18:29:46 - f1.startup - INFO - RAG docs by category: [('global', 1), ('fia', 1), ('strategy', 1), ('weather', 1), ('performance', 1), ('race_control', 1), ('race_position', 1), ('other', 2)]
+18:29:46 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=31.950 ctrl_elapsed=33.479 adjusted_time=3554.977 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:29:46 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=31.950 sim_elapsed_ctrl=33.479 sim_elapsed_clamped=33.479 sim_lap=1 cache_lap=1 prev_time=3554.706 next_time=3555.046 query_time=3554.977 sample_time=3554.977
+18:29:47 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:29:48 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=34.940 ctrl_elapsed=34.940 adjusted_time=3556.438 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:29:48 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=34.940 sim_elapsed_ctrl=34.940 sim_elapsed_clamped=34.940 sim_lap=1 cache_lap=1 prev_time=3556.207 next_time=3556.467 query_time=3556.438 sample_time=3556.438
+18:29:49 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:29:50 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=37.938 ctrl_elapsed=37.938 adjusted_time=3559.436 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:29:50 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=37.938 sim_elapsed_ctrl=37.938 sim_elapsed_clamped=37.938 sim_lap=1 cache_lap=1 prev_time=3559.287 next_time=3559.547 query_time=3559.436 sample_time=3559.436
+18:29:53 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:29:53 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=40.610 ctrl_elapsed=40.610 adjusted_time=3562.108 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:29:53 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=40.610 sim_elapsed_ctrl=40.610 sim_elapsed_clamped=40.610 sim_lap=1 cache_lap=1 prev_time=3561.846 next_time=3562.306 query_time=3562.108 sample_time=3562.108
+18:29:55 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:29:56 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=43.929 ctrl_elapsed=43.929 adjusted_time=3565.427 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:29:56 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=43.929 sim_elapsed_ctrl=43.929 sim_elapsed_clamped=43.929 sim_lap=1 cache_lap=1 prev_time=3565.407 next_time=3565.827 query_time=3565.427 sample_time=3565.427
+18:29:57 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:29:57 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:29:58 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:29:59 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=46.912 ctrl_elapsed=46.912 adjusted_time=3568.410 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:29:59 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=46.912 sim_elapsed_ctrl=46.912 sim_elapsed_clamped=46.912 sim_lap=1 cache_lap=1 prev_time=3568.306 next_time=3568.467 query_time=3568.410 sample_time=3568.410
+18:30:01 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:02 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=49.615 ctrl_elapsed=49.615 adjusted_time=3571.113 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:30:02 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=49.615 sim_elapsed_ctrl=49.615 sim_elapsed_clamped=49.615 sim_lap=1 cache_lap=1 prev_time=3570.847 next_time=3571.267 query_time=3571.113 sample_time=3571.113
+18:30:04 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:05 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=52.928 ctrl_elapsed=52.928 adjusted_time=3574.426 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:30:05 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=52.928 sim_elapsed_ctrl=52.928 sim_elapsed_clamped=52.928 sim_lap=1 cache_lap=1 prev_time=3574.387 next_time=3574.806 query_time=3574.426 sample_time=3574.426
+18:30:08 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:08 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=55.612 ctrl_elapsed=55.612 adjusted_time=3577.110 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:30:08 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=55.612 sim_elapsed_ctrl=55.612 sim_elapsed_clamped=55.612 sim_lap=1 cache_lap=1 prev_time=3576.907 next_time=3577.127 query_time=3577.110 sample_time=3577.110
+18:30:10 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:11 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=58.919 ctrl_elapsed=58.919 adjusted_time=3580.417 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:30:11 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=58.919 sim_elapsed_ctrl=58.919 sim_elapsed_clamped=58.919 sim_lap=1 cache_lap=1 prev_time=3580.387 next_time=3580.626 query_time=3580.417 sample_time=3580.417
+18:30:12 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:30:12 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:30:14 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:14 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=61.620 ctrl_elapsed=61.620 adjusted_time=3583.118 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:30:14 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=61.620 sim_elapsed_ctrl=61.620 sim_elapsed_clamped=61.620 sim_lap=1 cache_lap=1 prev_time=3583.026 next_time=3583.487 query_time=3583.118 sample_time=3583.118
+18:30:16 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:17 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=64.935 ctrl_elapsed=64.935 adjusted_time=3586.433 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:30:17 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=64.935 sim_elapsed_ctrl=64.935 sim_elapsed_clamped=64.935 sim_lap=1 cache_lap=1 prev_time=3586.207 next_time=3586.526 query_time=3586.433 sample_time=3586.433
+18:30:20 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:20 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=67.615 ctrl_elapsed=67.615 adjusted_time=3589.113 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:30:20 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=67.615 sim_elapsed_ctrl=67.615 sim_elapsed_clamped=67.615 sim_lap=1 cache_lap=1 prev_time=3589.066 next_time=3589.326 query_time=3589.113 sample_time=3589.113
+18:30:22 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:23 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=70.925 ctrl_elapsed=70.925 adjusted_time=3592.423 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:30:23 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=70.925 sim_elapsed_ctrl=70.925 sim_elapsed_clamped=70.925 sim_lap=1 cache_lap=1 prev_time=3591.987 next_time=3593.126 query_time=3592.423 sample_time=3592.423
+18:30:26 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:26 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=73.619 ctrl_elapsed=73.619 adjusted_time=3595.117 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:30:26 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=73.619 sim_elapsed_ctrl=73.619 sim_elapsed_clamped=73.619 sim_lap=1 cache_lap=1 prev_time=3595.006 next_time=3595.187 query_time=3595.117 sample_time=3595.117
+18:30:27 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:30:27 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:30:28 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:29 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=76.930 ctrl_elapsed=76.930 adjusted_time=3598.428 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:30:29 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=76.930 sim_elapsed_ctrl=76.930 sim_elapsed_clamped=76.930 sim_lap=1 cache_lap=1 prev_time=3598.347 next_time=3598.587 query_time=3598.428 sample_time=3598.428
+18:30:32 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:32 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=79.610 ctrl_elapsed=79.610 adjusted_time=3601.108 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:30:32 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=79.610 sim_elapsed_ctrl=79.610 sim_elapsed_clamped=79.610 sim_lap=1 cache_lap=1 prev_time=3601.107 next_time=3601.286 query_time=3601.108 sample_time=3601.108
+18:30:34 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:35 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=82.924 ctrl_elapsed=82.924 adjusted_time=3604.422 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:30:35 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=82.924 sim_elapsed_ctrl=82.924 sim_elapsed_clamped=82.924 sim_lap=1 cache_lap=1 prev_time=3604.267 next_time=3604.647 query_time=3604.422 sample_time=3604.422
+18:30:38 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:38 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=85.611 ctrl_elapsed=85.611 adjusted_time=3607.109 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:30:38 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=85.611 sim_elapsed_ctrl=85.611 sim_elapsed_clamped=85.611 sim_lap=1 cache_lap=1 prev_time=3606.926 next_time=3607.566 query_time=3607.109 sample_time=3607.109
+18:30:40 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:41 - f1.track_map - INFO - [QATAR2025_DIAG] lap=1 store_elapsed=88.953 ctrl_elapsed=88.953 adjusted_time=3610.451 source=cache drivers=20 lap_map=1:1,4:1,5:1,6:1,10:1,12:1,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:1,63:1,81:1,87:1
+18:30:41 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=88.953 sim_elapsed_ctrl=88.953 sim_elapsed_clamped=88.953 sim_lap=1 cache_lap=1 prev_time=3610.387 next_time=3610.507 query_time=3610.451 sample_time=3610.451
+18:30:42 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:30:42 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:30:42 - f1.data - INFO - Loaded 24118 interval records for session 9850 from cache
+18:30:42 - f1.data - INFO - Loaded 57 laps for session 9850 from cache
+18:30:42 - f1.data - INFO - Loaded 24118 interval records for session 9850 from cache
+18:30:42 - f1.data - INFO - Loaded 24118 interval records for session 9850 from cache
+18:30:43 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:44 - f1.data - INFO - OpenF1DataProvider initialized
+18:30:44 - f1.track_map - DEBUG - [TrajectoryCache] Stored lap 2 with 20 drivers
+18:30:45 - f1.data - INFO - Loaded 149 weather records for session 9850
+18:30:45 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=91.950 ctrl_elapsed=91.950 adjusted_time=3613.448 source=cache drivers=20 lap_map=1:2,4:2,5:1,6:1,10:1,12:2,14:1,16:1,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:2,63:1,81:2,87:1
+18:30:45 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=91.950 sim_elapsed_ctrl=91.950 sim_elapsed_clamped=91.950 sim_lap=2 cache_lap=2 prev_time=3613.327 next_time=3613.486 query_time=3613.448 sample_time=3613.448
+18:30:46 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:47 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=94.611 ctrl_elapsed=94.611 adjusted_time=3616.109 source=cache drivers=20 lap_map=1:2,4:2,5:1,6:2,10:2,12:2,14:2,16:2,18:1,22:1,23:1,27:1,30:1,31:1,43:1,44:1,55:2,63:2,81:2,87:1
+18:30:47 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=94.611 sim_elapsed_ctrl=94.611 sim_elapsed_clamped=94.611 sim_lap=2 cache_lap=2 prev_time=3615.966 next_time=3616.187 query_time=3616.109 sample_time=3616.109
+18:30:50 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:50 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=97.610 ctrl_elapsed=97.610 adjusted_time=3619.108 source=cache drivers=20 lap_map=1:2,4:2,5:1,6:2,10:2,12:2,14:2,16:2,18:1,22:2,23:2,27:2,30:2,31:2,43:1,44:2,55:2,63:2,81:2,87:2
+18:30:50 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=97.610 sim_elapsed_ctrl=97.610 sim_elapsed_clamped=97.610 sim_lap=2 cache_lap=2 prev_time=3618.947 next_time=3619.127 query_time=3619.108 sample_time=3619.108
+18:30:53 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:53 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=100.620 ctrl_elapsed=100.620 adjusted_time=3622.118 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:30:53 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=100.620 sim_elapsed_ctrl=100.620 sim_elapsed_clamped=100.620 sim_lap=2 cache_lap=2 prev_time=3622.047 next_time=3622.347 query_time=3622.118 sample_time=3622.118
+18:30:56 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:56 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=103.614 ctrl_elapsed=103.614 adjusted_time=3625.112 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:30:56 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=103.614 sim_elapsed_ctrl=103.614 sim_elapsed_clamped=103.614 sim_lap=2 cache_lap=2 prev_time=3624.907 next_time=3625.127 query_time=3625.112 sample_time=3625.112
+18:30:57 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:30:57 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:30:59 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:30:59 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=106.624 ctrl_elapsed=106.624 adjusted_time=3628.122 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:30:59 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=106.624 sim_elapsed_ctrl=106.624 sim_elapsed_clamped=106.624 sim_lap=2 cache_lap=2 prev_time=3628.047 next_time=3628.307 query_time=3628.122 sample_time=3628.122
+18:31:02 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:31:02 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=109.620 ctrl_elapsed=109.620 adjusted_time=3631.118 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:31:02 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=109.620 sim_elapsed_ctrl=109.620 sim_elapsed_clamped=109.620 sim_lap=2 cache_lap=2 prev_time=3631.027 next_time=3631.187 query_time=3631.118 sample_time=3631.118
+18:31:05 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:31:05 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=112.622 ctrl_elapsed=112.622 adjusted_time=3634.120 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:31:05 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=112.622 sim_elapsed_ctrl=112.622 sim_elapsed_clamped=112.622 sim_lap=2 cache_lap=2 prev_time=3633.926 next_time=3634.226 query_time=3634.120 sample_time=3634.120
+18:31:08 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:31:08 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=115.610 ctrl_elapsed=115.610 adjusted_time=3637.108 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:31:08 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=115.610 sim_elapsed_ctrl=115.610 sim_elapsed_clamped=115.610 sim_lap=2 cache_lap=2 prev_time=3636.966 next_time=3637.167 query_time=3637.108 sample_time=3637.108
+18:31:11 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:31:11 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=118.615 ctrl_elapsed=118.615 adjusted_time=3640.113 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:31:11 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=118.615 sim_elapsed_ctrl=118.615 sim_elapsed_clamped=118.615 sim_lap=2 cache_lap=2 prev_time=3639.946 next_time=3640.166 query_time=3640.113 sample_time=3640.113
+18:31:12 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:31:12 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:31:14 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:31:14 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=121.611 ctrl_elapsed=121.611 adjusted_time=3643.109 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:31:14 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=121.611 sim_elapsed_ctrl=121.611 sim_elapsed_clamped=121.611 sim_lap=2 cache_lap=2 prev_time=3643.007 next_time=3643.186 query_time=3643.109 sample_time=3643.109
+18:31:17 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:31:18 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=124.612 ctrl_elapsed=124.612 adjusted_time=3646.110 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:31:18 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=124.612 sim_elapsed_ctrl=124.612 sim_elapsed_clamped=124.612 sim_lap=2 cache_lap=2 prev_time=3646.086 next_time=3646.247 query_time=3646.110 sample_time=3646.110
+18:31:20 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:31:20 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=127.626 ctrl_elapsed=127.626 adjusted_time=3649.124 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:31:20 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=127.626 sim_elapsed_ctrl=127.626 sim_elapsed_clamped=127.626 sim_lap=2 cache_lap=2 prev_time=3648.906 next_time=3649.127 query_time=3649.124 sample_time=3649.124
+18:31:23 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:31:23 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=130.623 ctrl_elapsed=130.623 adjusted_time=3652.121 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:31:23 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=130.623 sim_elapsed_ctrl=130.623 sim_elapsed_clamped=130.623 sim_lap=2 cache_lap=2 prev_time=3652.007 next_time=3652.267 query_time=3652.121 sample_time=3652.121
+18:31:26 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:31:26 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=133.619 ctrl_elapsed=133.619 adjusted_time=3655.117 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:31:26 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=133.619 sim_elapsed_ctrl=133.619 sim_elapsed_clamped=133.619 sim_lap=2 cache_lap=2 prev_time=3654.906 next_time=3655.247 query_time=3655.117 sample_time=3655.117
+18:31:27 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:31:27 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:31:29 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:31:29 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=136.615 ctrl_elapsed=136.615 adjusted_time=3658.113 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:31:29 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=136.615 sim_elapsed_ctrl=136.615 sim_elapsed_clamped=136.615 sim_lap=2 cache_lap=2 prev_time=3658.047 next_time=3658.287 query_time=3658.113 sample_time=3658.113
+18:31:31 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:31:32 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=139.609 ctrl_elapsed=139.609 adjusted_time=3661.107 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:31:32 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=139.609 sim_elapsed_ctrl=139.609 sim_elapsed_clamped=139.609 sim_lap=2 cache_lap=2 prev_time=3660.947 next_time=3661.207 query_time=3661.107 sample_time=3661.107
+18:31:35 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:31:35 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=142.609 ctrl_elapsed=142.609 adjusted_time=3664.107 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:31:35 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=142.609 sim_elapsed_ctrl=142.609 sim_elapsed_clamped=142.609 sim_lap=2 cache_lap=2 prev_time=3664.047 next_time=3664.207 query_time=3664.107 sample_time=3664.107
+18:31:38 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:31:38 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=145.620 ctrl_elapsed=145.620 adjusted_time=3667.118 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:31:38 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=145.620 sim_elapsed_ctrl=145.620 sim_elapsed_clamped=145.620 sim_lap=2 cache_lap=2 prev_time=3667.027 next_time=3667.366 query_time=3667.118 sample_time=3667.118
+18:31:41 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:31:41 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=148.621 ctrl_elapsed=148.621 adjusted_time=3670.119 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:31:41 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=148.621 sim_elapsed_ctrl=148.621 sim_elapsed_clamped=148.621 sim_lap=2 cache_lap=2 prev_time=3670.047 next_time=3670.187 query_time=3670.119 sample_time=3670.119
+18:31:42 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:31:42 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:31:44 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:31:45 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=151.631 ctrl_elapsed=151.631 adjusted_time=3673.129 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:31:45 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=151.631 sim_elapsed_ctrl=151.631 sim_elapsed_clamped=151.631 sim_lap=2 cache_lap=2 prev_time=3673.086 next_time=3673.326 query_time=3673.129 sample_time=3673.129
+18:31:47 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:31:47 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=154.611 ctrl_elapsed=154.611 adjusted_time=3676.109 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:31:47 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=154.611 sim_elapsed_ctrl=154.611 sim_elapsed_clamped=154.611 sim_lap=2 cache_lap=2 prev_time=3676.107 next_time=3676.406 query_time=3676.109 sample_time=3676.109
+18:31:50 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:31:50 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=157.613 ctrl_elapsed=157.613 adjusted_time=3679.111 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:31:50 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=157.613 sim_elapsed_ctrl=157.613 sim_elapsed_clamped=157.613 sim_lap=2 cache_lap=2 prev_time=3679.026 next_time=3679.286 query_time=3679.111 sample_time=3679.111
+18:31:53 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:31:53 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=160.610 ctrl_elapsed=160.610 adjusted_time=3682.108 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:31:53 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=160.610 sim_elapsed_ctrl=160.610 sim_elapsed_clamped=160.610 sim_lap=2 cache_lap=2 prev_time=3681.987 next_time=3682.247 query_time=3682.108 sample_time=3682.108
+18:31:56 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:31:56 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=163.620 ctrl_elapsed=163.620 adjusted_time=3685.118 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:31:56 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=163.620 sim_elapsed_ctrl=163.620 sim_elapsed_clamped=163.620 sim_lap=2 cache_lap=2 prev_time=3684.908 next_time=3685.306 query_time=3685.118 sample_time=3685.118
+18:31:57 - f1.data - INFO - Loaded 81 race control messages for session 9850 from cache
+18:31:57 - f1.data - INFO - Loaded 27 position updates for session 9850 from cache
+18:31:59 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:32:00 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=166.609 ctrl_elapsed=166.609 adjusted_time=3688.107 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:32:00 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=166.609 sim_elapsed_ctrl=166.609 sim_elapsed_clamped=166.609 sim_lap=2 cache_lap=2 prev_time=3687.927 next_time=3688.247 query_time=3688.107 sample_time=3688.107
+18:32:01 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:32:02 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=169.922 ctrl_elapsed=169.922 adjusted_time=3691.420 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:32:02 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=169.922 sim_elapsed_ctrl=169.922 sim_elapsed_clamped=169.922 sim_lap=2 cache_lap=2 prev_time=3691.227 next_time=3691.567 query_time=3691.420 sample_time=3691.420
+18:32:05 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache
+18:32:05 - f1.track_map - INFO - [QATAR2025_DIAG] lap=2 store_elapsed=172.626 ctrl_elapsed=172.626 adjusted_time=3694.124 source=cache drivers=20 lap_map=1:2,4:2,5:2,6:2,10:2,12:2,14:2,16:2,18:2,22:2,23:2,27:2,30:2,31:2,43:2,44:2,55:2,63:2,81:2,87:2
+18:32:05 - f1.track_map - DEBUG - [TrackMap] driver=1 source=cache sim_elapsed_store=172.626 sim_elapsed_ctrl=172.626 sim_elapsed_clamped=172.626 sim_lap=2 cache_lap=2 prev_time=3694.006 next_time=3694.247 query_time=3694.124 sample_time=3694.124
+18:32:08 - f1.data - INFO - Loaded 1070 laps for session 9850 from cache

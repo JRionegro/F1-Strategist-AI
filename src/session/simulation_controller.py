@@ -51,12 +51,68 @@ class SimulationController:
         self.is_playing = False
         self.speed_multiplier = 1.0
         self.last_update = datetime.now()
+        self.play_start_time = datetime.now()
         self._lap_windows: Dict[int, Tuple[float, float]] = {}
+        self._normalize_lap_seconds_columns()
         self._build_lap_windows()
 
         logger.info(
             f"Initialized SimulationController: "
             f"{start_time} to {end_time}"
+        )
+
+    def _normalize_lap_seconds_columns(self) -> None:
+        """Rebase lap second columns when they are offset from simulation start.
+
+        Some OpenF1 lap payloads use absolute session seconds that do not start
+        from zero for the selected simulation window. Rebase them so
+        ``get_current_lap`` can compare against elapsed seconds reliably.
+        """
+        if self.lap_data is None or self.lap_data.empty:
+            return
+
+        if 'LapStartTime_seconds' not in self.lap_data.columns:
+            return
+
+        try:
+            start_seconds = pd.to_numeric(
+                self.lap_data['LapStartTime_seconds'],
+                errors='coerce',
+            )
+        except Exception:  # noqa: BLE001
+            return
+
+        if 'LapNumber' in self.lap_data.columns:
+            lap_numbers = pd.to_numeric(self.lap_data['LapNumber'], errors='coerce')
+            valid_lap_numbers = lap_numbers.dropna()
+            if not valid_lap_numbers.empty:
+                first_lap_number = float(valid_lap_numbers.min())
+                baseline_candidates = start_seconds[lap_numbers == first_lap_number].dropna()
+            else:
+                baseline_candidates = start_seconds.dropna()
+        else:
+            baseline_candidates = start_seconds.dropna()
+
+        if baseline_candidates.empty:
+            return
+
+        baseline_seconds = float(baseline_candidates.min())
+        if baseline_seconds <= 120.0:
+            return
+
+        self.lap_data = self.lap_data.copy()
+        self.lap_data.loc[:, 'LapStartTime_seconds'] = (start_seconds - baseline_seconds).clip(lower=0.0)
+
+        if 'LapEndTime_seconds' in self.lap_data.columns:
+            end_seconds = pd.to_numeric(
+                self.lap_data['LapEndTime_seconds'],
+                errors='coerce',
+            )
+            self.lap_data.loc[:, 'LapEndTime_seconds'] = (end_seconds - baseline_seconds).clip(lower=0.0)
+
+        logger.warning(
+            "Rebased lap timing inside SimulationController by %.3fs",
+            baseline_seconds,
         )
 
     def play(self, start_from_seconds: Optional[float] = None) -> None:
@@ -67,28 +123,20 @@ class SimulationController:
             start_from_seconds: Optional offset in seconds from session start to begin simulation
         """
         if not self.is_playing:
+            if start_from_seconds is not None:
+                target_time = self.start_time + timedelta(
+                    seconds=float(max(start_from_seconds, 0.0))
+                )
+                self.jump_to_time(target_time)
+
             self.is_playing = True
             self.last_update = datetime.now()
-            self.play_start_time = datetime.now()  # Track when playback started
-            # Track session time when started
-            self.play_start_session_time = self.current_time
-
-            # Only reset offset if explicitly provided, otherwise preserve
-            # current position
-            if start_from_seconds is not None:
-                self.simulation_offset = start_from_seconds
-                logger.info(
-                    f"Simulation started from offset: {
-                        self.simulation_offset:.1f}s")
-            else:
-                # Preserve current position when resuming from pause
-                # Calculate offset from current_time (which was being tracked
-                # during pause)
-                self.simulation_offset = (
-                    self.current_time - self.start_time).total_seconds()
-                logger.info(
-                    f"Simulation resumed at offset: {
-                        self.simulation_offset:.1f}s")
+            self.play_start_time = datetime.now()
+            current_offset = (self.current_time - self.start_time).total_seconds()
+            logger.info(
+                "Simulation started/resumed at offset: %.1fs",
+                current_offset,
+            )
 
     def get_elapsed_seconds(self) -> float:
         """
@@ -97,21 +145,8 @@ class SimulationController:
         Returns:
             Elapsed seconds in simulation time (including offset)
         """
-        if not hasattr(self, 'simulation_offset'):
-            self.simulation_offset = 0.0
-
-        if not self.is_playing:
-            # Return elapsed from start of session to current position
-            return (self.current_time - self.start_time).total_seconds() + \
-                self.simulation_offset
-
-        # Calculate real time elapsed since play started
-        real_elapsed = (datetime.now() - self.play_start_time).total_seconds()
-        # Apply speed multiplier
-        sim_elapsed = real_elapsed * self.speed_multiplier
-        # Add offset
-
-        return self.simulation_offset + sim_elapsed
+        elapsed = (self.current_time - self.start_time).total_seconds()
+        return float(max(elapsed, 0.0))
 
     def pause(self) -> None:
         """Pause simulation playback."""
@@ -171,31 +206,9 @@ class SimulationController:
                 f"Allowed: {allowed_speeds}"
             )
 
-        # CRITICAL FIX: When changing speed, we need to "lock in" the current simulation progress
-        # to prevent get_elapsed_seconds() from recalculating all elapsed time with new speed.
-        #
-        # Problem: get_elapsed_seconds() calculates: (now - play_start_time) * speed_multiplier
-        # If we just change speed_multiplier, ALL previously elapsed time gets recalculated
-        # with the new speed, causing huge time jumps.
-        #
-        # Solution: Capture current progress in simulation_offset and reset
-        # play_start_time
         if self.is_playing:
-            # Get current simulation time BEFORE changing speed
-            current_sim_time = self.get_elapsed_seconds()
-
-            # Lock this time in as the new offset
-            self.simulation_offset = current_sim_time
-
-            # Reset play_start_time so future calculations start from now
-            self.play_start_time = datetime.now()
-
-            # Also reset last_update for the update() method
             self.last_update = datetime.now()
-
-            logger.info(
-                f"Speed change: locked simulation_offset at {
-                    current_sim_time:.1f}s, " f"reset play_start_time")
+            self.play_start_time = self.last_update
 
         self.speed_multiplier = speed
         logger.info(f"Simulation speed set to {speed}x")
@@ -214,16 +227,8 @@ class SimulationController:
 
         self.current_time = target_time
         self.last_update = datetime.now()
-
-        # Update simulation_offset so get_elapsed_seconds() returns correct
-        # value
-        self.simulation_offset = (
-            target_time - self.start_time).total_seconds()
-
-        # Reset play tracking if currently playing
         if self.is_playing:
-            self.play_start_time = datetime.now()
-            self.play_start_session_time = target_time
+            self.play_start_time = self.last_update
 
         if self.on_time_update:
             self.on_time_update(self.current_time)
@@ -332,24 +337,48 @@ class SimulationController:
             logger.warning("No lap data available for lap calculation")
             return 1
 
-        if 'LapStartTime' not in self.lap_data.columns or 'LapNumber' not in self.lap_data.columns:
+        has_lap_start_seconds = 'LapStartTime_seconds' in self.lap_data.columns
+        has_lap_start_time = 'LapStartTime' in self.lap_data.columns
+        if 'LapNumber' not in self.lap_data.columns or (
+            not has_lap_start_seconds and not has_lap_start_time
+        ):
             logger.warning("Lap data missing required columns")
             return 1
 
         try:
-            # Ensure current_time is timezone-aware datetime (not timedelta)
+            # Use pre-computed seconds columns to avoid timezone/type issues.
+            # LapStartTime_seconds is elapsed seconds from session start,
+            # directly comparable with get_elapsed_seconds().
+            elapsed = self.get_elapsed_seconds()
+
+            if 'LapStartTime_seconds' in self.lap_data.columns:
+                data = self.lap_data.copy()
+                data['_lap_num'] = pd.to_numeric(
+                    data['LapNumber'], errors='coerce')
+                data = data.dropna(subset=['_lap_num', 'LapStartTime_seconds'])
+                data = data[data['LapStartTime_seconds'] <= elapsed]
+                if not data.empty:
+                    self.current_lap = int(data['_lap_num'].max())
+                    return self.current_lap
+                # Before first lap started
+                self.current_lap = 1
+                return 1
+
+            # ── Fallback: absolute-timestamp path ──────────────────────────
             current_time = self.current_time
             if isinstance(current_time, pd.Timedelta):
-                logger.error(
-                    f"current_time is Timedelta: {current_time}, converting to datetime")
                 current_time = self.start_time + current_time
 
-            # Use leader's laps (DriverNumber=1) for race lap count
-            leader_laps = self.lap_data[self.lap_data['DriverNumber'] == 1].copy(
-            )
+            # Pick any driver that has lap data; prefer driver #1 if present.
+            driver_nums = self.lap_data['DriverNumber'].unique()
+            target_driver = 1 if 1 in driver_nums else (driver_nums[0] if len(driver_nums) else None)
+            if target_driver is None:
+                return 1
+            leader_laps = self.lap_data[
+                self.lap_data['DriverNumber'] == target_driver].copy()
 
             if leader_laps.empty:
-                logger.warning("No laps found for leader (DriverNumber=1)")
+                logger.warning("No laps found for any driver")
                 return 1
 
             def _to_absolute_timestamp(value):

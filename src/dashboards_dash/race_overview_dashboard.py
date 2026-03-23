@@ -6,6 +6,7 @@ Shows live positions, gaps, tire compounds using Intervals API for accuracy.
 
 import math
 import re
+from datetime import datetime, timezone
 from numbers import Real
 from typing import Any, Dict, Optional, Tuple
 
@@ -38,8 +39,11 @@ TEAM_COLORS = {
     'Alpine': '#FF87BC',
     'Williams': '#64C4FF',
     'RB': '#6692FF',
+    'Racing Bulls': '#6692FF',
     'Kick Sauber': '#52E252',
     'Haas F1 Team': '#B6BABD',
+    'Audi': '#00E701',
+    'Cadillac': '#FFD700',
 }
 
 
@@ -59,6 +63,146 @@ class RaceOverviewDashboard:
         self._cached_intervals = None
         self._cached_stints = None
         self._cached_drivers = None
+        self._last_incremental_refresh_utc: Optional[datetime] = None
+        self._incremental_refresh_interval_seconds = 2.0
+
+    def _maybe_refresh_incremental_timing(self, session_key: int) -> None:
+        """Refresh timing datasets periodically for sequential MCP/live feeds."""
+        now_utc = datetime.now(timezone.utc)
+        if self._last_incremental_refresh_utc is not None:
+            elapsed = (
+                now_utc - self._last_incremental_refresh_utc
+            ).total_seconds()
+            if elapsed < self._incremental_refresh_interval_seconds:
+                return
+
+        self._last_incremental_refresh_utc = now_utc
+
+        try:
+            fresh_positions = self.provider.get_positions(session_key=session_key)
+            if fresh_positions is not None and not fresh_positions.empty:
+                if (
+                    self._cached_positions is None
+                    or self._cached_positions.empty
+                    or len(fresh_positions) >= len(self._cached_positions)
+                ):
+                    self._cached_positions = fresh_positions
+
+            fresh_intervals = self.provider.get_intervals(session_key=session_key)
+            if fresh_intervals is not None and not fresh_intervals.empty:
+                if (
+                    self._cached_intervals is None
+                    or self._cached_intervals.empty
+                    or len(fresh_intervals) >= len(self._cached_intervals)
+                ):
+                    self._cached_intervals = fresh_intervals
+                    logger.info(
+                        "Incremental refresh loaded %s interval records for session %s",
+                        len(fresh_intervals),
+                        session_key,
+                    )
+        except requests.HTTPError as exc:  # pragma: no cover - network guard
+            if exc.response is not None and exc.response.status_code == 429:
+                logger.warning(
+                    "Rate limit during incremental timing refresh for session %s",
+                    session_key,
+                )
+                return
+            logger.warning(
+                "HTTP error during incremental timing refresh for session %s: %s",
+                session_key,
+                exc,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "Incremental timing refresh failed for session %s: %s",
+                session_key,
+                exc,
+            )
+
+    @staticmethod
+    def _get_dataset_anchor_timestamp(data: Optional[pd.DataFrame]) -> Optional[pd.Timestamp]:
+        """Return a robust anchor timestamp for a timing dataset.
+
+        The anchor is the first timestamp where at least half of known drivers
+        have records. This avoids outlier early records from a single driver.
+        """
+        if data is None or data.empty:
+            return None
+        if "Timestamp" not in data.columns or "DriverNumber" not in data.columns:
+            return None
+
+        frame = data[["Timestamp", "DriverNumber"]].dropna().copy()
+        if frame.empty:
+            return None
+
+        frame["Timestamp"] = pd.to_datetime(frame["Timestamp"], errors="coerce")
+        frame = frame.dropna(subset=["Timestamp"])
+        if frame.empty:
+            return None
+
+        driver_count = int(frame["DriverNumber"].nunique())
+        if driver_count <= 0:
+            return None
+
+        coverage_threshold = max(1, math.ceil(driver_count * 0.5))
+        coverage = (
+            frame.groupby("Timestamp")["DriverNumber"]
+            .nunique()
+            .sort_index()
+        )
+        covered = coverage[coverage >= coverage_threshold]
+        if not covered.empty:
+            return pd.Timestamp(covered.index[0])
+
+        # Fallback when no timestamp reaches 50% driver coverage.
+        return pd.Timestamp(frame["Timestamp"].min())
+
+    def _infer_interval_filter_offset_seconds(
+        self,
+        intervals: Optional[pd.DataFrame],
+        session_start_time: Optional[pd.Timestamp],
+    ) -> float:
+        """Infer interval filter lag relative to the simulation session start."""
+        if session_start_time is None:
+            return 0.0
+
+        if intervals is None or intervals.empty:
+            return 0.0
+
+        if "Timestamp" not in intervals.columns or "DriverNumber" not in intervals.columns:
+            return 0.0
+
+        data = intervals[["DriverNumber", "Timestamp"]].dropna().copy()
+        if data.empty:
+            return 0.0
+
+        data["Timestamp"] = pd.to_datetime(data["Timestamp"], errors="coerce")
+        data = data.dropna(subset=["Timestamp"])
+        if data.empty:
+            return 0.0
+
+        first_per_driver = (
+            data.sort_values("Timestamp")
+            .groupby("DriverNumber")["Timestamp"]
+            .first()
+            .dropna()
+        )
+        if first_per_driver.empty:
+            return 0.0
+
+        # Median is robust to single-driver outliers arriving far earlier.
+        int_anchor = pd.Timestamp(first_per_driver.sort_values().iloc[len(first_per_driver) // 2])
+
+        delta_seconds = (int_anchor - pd.Timestamp(session_start_time)).total_seconds()
+        if not math.isfinite(delta_seconds):
+            return 0.0
+
+        # Accept positive offsets up to 15 minutes to cover delayed interval feeds
+        # while avoiding accidental jumps to unrelated timeline blocks.
+        if 0.0 < delta_seconds <= 900.0:
+            return float(delta_seconds)
+        return 0.0
 
     def warm_cache(self, session_key: int) -> Tuple[bool, str]:
         """Ensure leaderboard caches are populated for the given session."""
@@ -102,6 +246,7 @@ class RaceOverviewDashboard:
         self._cached_intervals = intervals
         self._cached_stints = stints
         self._cached_drivers = drivers
+        self._last_incremental_refresh_utc = None
 
         interval_count = len(intervals) if intervals is not None else 0
         stint_count = len(stints) if stints is not None else 0
@@ -123,6 +268,7 @@ class RaceOverviewDashboard:
         session_start_time: Optional[pd.Timestamp] = None,
         formation_offset_seconds: Optional[float] = None,
         current_lap: Optional[int] = None,
+        red_flag_active: bool = False,
         focused_driver_code: Optional[str] = None,
         pit_proba_lookup: Optional[callable] = None,
         retirements: Optional[Dict[int, Dict[str, Any]]] = None,
@@ -136,6 +282,7 @@ class RaceOverviewDashboard:
             session_start_time: Session start timestamp from SimulationController
             formation_offset_seconds: Formation lap offset subtracted from simulation clock
             current_lap: Current lap from SimulationController (OpenF1 format)
+            red_flag_active: Whether red flag is currently active
             focused_driver_code: Driver code to highlight in the table
             pit_proba_lookup: Optional callable(driver_code: str, lap_number: int) -> Optional[float]
                 used to annotate focus driver with pit_stop_proba
@@ -261,6 +408,11 @@ class RaceOverviewDashboard:
             else:
                 logger.info(f"Using cached data for session {session_key}")
 
+            # Keep timing data fresh for sessions where records arrive
+            # progressively (MCP/live). This prevents staying stuck with an
+            # initially empty intervals snapshot.
+            self._maybe_refresh_incremental_timing(session_key)
+
             positions = self._cached_positions
             intervals = self._cached_intervals
             stints = self._cached_stints
@@ -290,20 +442,15 @@ class RaceOverviewDashboard:
             if simulation_time is not None and session_start_time is not None:
                 # Convert simulation_time to absolute timestamp
                 # using session_start_time from SimulationController
-                offset_seconds = (
-                    float(formation_offset_seconds)
-                    if formation_offset_seconds is not None
-                    else 0.0
-                )
-                adjusted_sim_seconds = simulation_time + offset_seconds
                 current_timestamp = session_start_time + pd.Timedelta(
-                    seconds=adjusted_sim_seconds
+                    seconds=simulation_time
                 )
 
                 logger.info(
                     f"Current simulation timestamp: {current_timestamp} "
                     f"(session_start={session_start_time}, "
-                    f"elapsed={simulation_time:.1f}s, formation_offset={offset_seconds:.1f}s)"
+                    f"elapsed={simulation_time:.1f}s, "
+                    f"formation_offset={float(formation_offset_seconds) if formation_offset_seconds is not None else 0.0:.1f}s)"
                 )
 
                 # Get all positions at or before current simulation time
@@ -355,10 +502,20 @@ class RaceOverviewDashboard:
                 # Filter intervals by simulation time
                 if simulation_time is not None and session_start_time is not None:
                     current_timestamp = session_start_time + pd.Timedelta(
-                        seconds=adjusted_sim_seconds
+                        seconds=simulation_time
+                    )
+                    interval_offset_seconds = self._infer_interval_filter_offset_seconds(
+                        intervals,
+                        session_start_time,
+                    )
+
+                    # Intervals can be shifted relative to positions depending on
+                    # source/session. Align using inferred dataset anchors.
+                    interval_filter_timestamp = current_timestamp + pd.Timedelta(
+                        seconds=interval_offset_seconds
                     )
                     filtered_intervals = intervals[
-                        intervals['Timestamp'] <= current_timestamp
+                        intervals['Timestamp'] <= interval_filter_timestamp
                     ]
                     logger.info(
                         f"Filtered intervals: {
@@ -378,9 +535,10 @@ class RaceOverviewDashboard:
                             f"Latest intervals (per driver) at {latest_interval_time}: " f"{
                                 len(latest_intervals)} records")
                         logger.debug(
-                            "Interval coverage -> sim=%.3fs offset=%.3fs latest=%s count=%d",
+                            "Interval coverage -> sim=%.3fs offset=%.3fs filter_ts=%s latest=%s count=%d",
                             simulation_time,
-                            formation_offset_seconds if formation_offset_seconds is not None else 0.0,
+                            interval_offset_seconds,
+                            interval_filter_timestamp,
                             latest_interval_time,
                             len(latest_intervals),
                         )
@@ -533,6 +691,7 @@ class RaceOverviewDashboard:
                 tire_ages = []
                 compounds = []
                 pit_stops = []
+                progress_laps = []
 
                 # DEBUG: Log all driver numbers in leaderboard
                 driver_numbers_in_leaderboard = leaderboard_data['DriverNumber'].tolist(
@@ -552,6 +711,7 @@ class RaceOverviewDashboard:
                     # Use global lap if provided, otherwise fallback to
                     # calculating per-driver
                     driver_current_lap = global_lap if global_lap is not None else 1
+                    driver_progress_lap: Optional[int] = None
                     driver_laps = pd.DataFrame()  # Initialize to fix Pylance error
 
                     # Get driver's actual current lap from lap data PER DRIVER
@@ -737,6 +897,42 @@ class RaceOverviewDashboard:
                                 logger.info(
                                     "  No data available, defaulting to lap 1")
 
+                        # Track per-driver lap progress for leaderboard ordering.
+                        if 'LapNumber' in driver_laps.columns:
+                            lap_numbers = pd.to_numeric(
+                                driver_laps['LapNumber'],
+                                errors='coerce',
+                            )
+                            if (
+                                simulation_time is not None
+                                and session_start_time is not None
+                                and 'LapStartTime' in driver_laps.columns
+                            ):
+                                sim_timestamp = session_start_time + pd.Timedelta(
+                                    seconds=float(simulation_time)
+                                )
+                                lap_starts = pd.to_datetime(
+                                    driver_laps['LapStartTime'],
+                                    errors='coerce',
+                                )
+                                started = lap_numbers[
+                                    lap_starts.notna() &
+                                    (lap_starts <= sim_timestamp)
+                                ]
+                                if not started.empty:
+                                    driver_progress_lap = int(started.max())
+
+                            if driver_progress_lap is None:
+                                valid_laps = lap_numbers.dropna()
+                                if not valid_laps.empty:
+                                    driver_progress_lap = int(valid_laps.max())
+
+                    if driver_progress_lap is None:
+                        try:
+                            driver_progress_lap = int(driver_current_lap)
+                        except (TypeError, ValueError):
+                            driver_progress_lap = 1
+
                         # Log final calculated value for all drivers at
                         # simulation start
                         if simulation_time == 0:
@@ -876,11 +1072,13 @@ class RaceOverviewDashboard:
                     tire_ages.append(tire_age)
                     compounds.append(compound)
                     pit_stops.append(num_pit_stops)
+                    progress_laps.append(driver_progress_lap)
 
                 # Assign all at once
                 leaderboard_data['TyreAge'] = tire_ages
                 leaderboard_data['Compound'] = compounds
                 leaderboard_data['PitStops'] = pit_stops
+                leaderboard_data['ProgressLap'] = progress_laps
 
                 # Log sample tire data for debugging
                 if not leaderboard_data.empty:
@@ -945,18 +1143,29 @@ class RaceOverviewDashboard:
                 for driver_num, info in retirement_lookup.items():
                     retire_time_value = info.get("time")
                     retire_lap_value = info.get("lap")
-                    should_flag = False
-                    if elapsed_value is not None and isinstance(
+                    should_flag_from_time = False
+                    should_flag_from_lap = False
+
+                    if isinstance(retire_lap_value, Real) and current_lap is not None:
+                        retire_lap_int = max(int(float(retire_lap_value)), 1)
+                        if red_flag_active:
+                            should_flag_from_lap = current_lap >= retire_lap_int
+                        else:
+                            should_flag_from_lap = current_lap > retire_lap_int
+                    elif elapsed_value is not None and isinstance(
                             retire_time_value, Real) and math.isfinite(
                             float(retire_time_value)):
-                        should_flag = elapsed_value >= float(retire_time_value)
-                    elif isinstance(retire_lap_value, int) and current_lap is not None:
-                        should_flag = current_lap >= max(retire_lap_value, 1)
+                        should_flag_from_time = elapsed_value >= float(retire_time_value)
+
+                    should_flag = should_flag_from_time or should_flag_from_lap
                     if should_flag:
                         active_retirements[driver_num] = info
 
             if not leaderboard_data.empty:
                 leaderboard_data = leaderboard_data.copy()
+                leaderboard_data = self._align_display_positions(
+                    leaderboard_data,
+                )
                 driver_numbers_series = pd.to_numeric(
                     leaderboard_data.get('DriverNumber'),
                     errors='coerce'
@@ -992,6 +1201,33 @@ class RaceOverviewDashboard:
                 else:
                     leaderboard_data['Retired'] = False
                     leaderboard_data['RetiredStatus'] = None
+
+                if 'Retired' in leaderboard_data.columns:
+                    retired_mask = leaderboard_data['Retired'].fillna(False).astype(bool)
+                    leaderboard_data = leaderboard_data.assign(_retired_sort=retired_mask)
+                    leaderboard_data = leaderboard_data.sort_values(
+                        by=['_retired_sort', 'Position', 'DriverNumber'],
+                        ascending=[True, True, True],
+                        kind='stable',
+                        na_position='last',
+                    ).reset_index(drop=True)
+
+                    active_count = int((~leaderboard_data['_retired_sort']).sum())
+                    total_count = len(leaderboard_data)
+                    if 'Position' in leaderboard_data.columns and total_count > 0:
+                        leaderboard_data.loc[
+                            ~leaderboard_data['_retired_sort'],
+                            'Position'
+                        ] = range(1, active_count + 1)
+                        leaderboard_data.loc[
+                            leaderboard_data['_retired_sort'],
+                            'Position'
+                        ] = range(active_count + 1, total_count + 1)
+
+                    leaderboard_data = leaderboard_data.drop(
+                        columns=['_retired_sort'],
+                        errors='ignore',
+                    )
 
             leaderboard_table = self._build_leaderboard_table(
                 leaderboard_data,
@@ -1069,6 +1305,17 @@ class RaceOverviewDashboard:
                 "minHeight": "0"
             })
 
+    _LAP_RE = re.compile(r"\d+\s*LAPS?\b", re.IGNORECASE)
+
+    @staticmethod
+    def _is_lapped_value(value: Any) -> bool:
+        """Return True when *value* represents a lapped gap (e.g. '1 LAP')."""
+        if not isinstance(value, str):
+            return False
+        return bool(
+            RaceOverviewDashboard._LAP_RE.search(value)
+        )
+
     @staticmethod
     def _parse_timing_value(value: Any) -> Optional[float]:
         """Convert timing values (gap/interval) to floats when possible."""
@@ -1085,6 +1332,8 @@ class RaceOverviewDashboard:
             upper = stripped.upper()
             if upper in {"-", "PIT", "OUT", "IN", "RET", "DNF", "DSQ"}:
                 return None
+            if RaceOverviewDashboard._LAP_RE.search(stripped):
+                return None
             cleaned = stripped.replace(",", ".")
             cleaned = cleaned.lstrip("+")
             cleaned = cleaned.replace("−", "-")
@@ -1096,6 +1345,67 @@ class RaceOverviewDashboard:
                 except ValueError:
                     return None
         return None
+
+    def _align_display_positions(
+        self,
+        leaderboard_data: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """Align table order with the most reliable per-snapshot signal.
+
+        Position updates can be sparse. When `GapToLeader` coverage is good,
+        rank by gap so displayed positions stay coherent with current intervals.
+        """
+        if leaderboard_data.empty:
+            return leaderboard_data
+
+        aligned = leaderboard_data.copy()
+        aligned["_progress_lap"] = pd.to_numeric(
+            aligned.get("ProgressLap"),
+            errors="coerce",
+        )
+        aligned["_pos_src"] = pd.to_numeric(
+            aligned.get("Position"),
+            errors="coerce",
+        )
+
+        if "GapToLeader" in aligned.columns:
+            aligned["_gap_num"] = aligned["GapToLeader"].apply(
+                self._parse_timing_value,
+            )
+            # Lapped drivers: _parse_timing_value returns None for "N LAP(S)".
+            # Assign a large sentinel so they sort after all non-lapped drivers
+            # but still ahead of retired/missing entries (NaN stays last).
+            lapped_mask = aligned["GapToLeader"].apply(self._is_lapped_value)
+            aligned.loc[lapped_mask, "_gap_num"] = 999_999.0
+        else:
+            aligned["_gap_num"] = pd.Series(
+                [None] * len(aligned),
+                index=aligned.index,
+            )
+
+        valid_gap_count = int(aligned["_gap_num"].notna().sum())
+        has_gap_signal = valid_gap_count >= max(3, len(aligned) // 2)
+
+        if has_gap_signal:
+            aligned = aligned.sort_values(
+                by=["_progress_lap", "_gap_num", "_pos_src", "DriverNumber"],
+                ascending=[False, True, True, True],
+                kind="stable",
+                na_position="last",
+            )
+            aligned["Position"] = range(1, len(aligned) + 1)
+        else:
+            aligned = aligned.sort_values(
+                by=["_progress_lap", "_pos_src", "DriverNumber"],
+                ascending=[False, True, True],
+                kind="stable",
+                na_position="last",
+            )
+
+        return aligned.drop(
+            columns=["_progress_lap", "_pos_src", "_gap_num"],
+            errors="ignore",
+        )
 
     def _build_leaderboard_table(
         self,
@@ -1125,20 +1435,30 @@ class RaceOverviewDashboard:
             is_retired = bool(row.get('Retired'))
             retired_status = row.get('RetiredStatus') or 'DNF'
 
-            # Format gaps
-            gap_to_leader = self._parse_timing_value(row.get('GapToLeader'))
+            # Format gaps — detect lapped values first
+            raw_gap = row.get('GapToLeader')
+            raw_interval = row.get('Interval')
+            gap_lapped = self._is_lapped_value(raw_gap)
+            int_lapped = self._is_lapped_value(raw_interval)
+
+            gap_to_leader = self._parse_timing_value(raw_gap)
             if is_retired:
                 gap_display = retired_status
             elif position <= 1:
                 gap_display = "Leader"
+            elif gap_lapped:
+                gap_display = f"+{str(raw_gap).strip()}"
             elif gap_to_leader is None or abs(gap_to_leader) < 0.001:
                 gap_display = "-"
             else:
                 gap_display = f"+{gap_to_leader:.3f}s"
 
-            interval = self._parse_timing_value(row.get('Interval'))
-            if is_retired or position <= 1 or interval is None or abs(
-                    interval) < 0.001:
+            interval = self._parse_timing_value(raw_interval)
+            if is_retired or position <= 1:
+                interval_display = "-"
+            elif int_lapped:
+                interval_display = f"+{str(raw_interval).strip()}"
+            elif interval is None or abs(interval) < 0.001:
                 interval_display = "-"
             else:
                 interval_display = f"+{interval:.3f}s"
@@ -1294,7 +1614,8 @@ class RaceOverviewDashboard:
         current_lap: int,
         focused_driver: Optional[str] = None,
         pit_window_range: int = 3,
-        pit_proba_lookup: Optional[callable] = None
+        pit_proba_lookup: Optional[callable] = None,
+        retirements: Optional[Dict[int, Dict[str, Any]]] = None
     ) -> dict:
         """
         Get compact leaderboard summary for AI context.
@@ -1304,16 +1625,18 @@ class RaceOverviewDashboard:
             simulation_time: Current simulation time in seconds
             session_start_time: Session start timestamp
             current_lap: Current lap number
-            focused_driver: Driver code/number to focus on (e.g., "RUS" or "63")
-            pit_window_range: Number of positions ahead/behind to include
-            pit_proba_lookup: Optional callable returning pit probability for driver and lap
+            focused_driver: Driver code/number to focus on
+            pit_window_range: Positions ahead/behind to include
+            pit_proba_lookup: Callable returning pit probability
+            retirements: Dict mapping driver number (int) to
+                retirement info with 'lap', 'time', 'status'
 
         Returns:
             Dict with leaderboard summary:
             {
-                'top_10': [{pos, driver, gap, tire, age, stops}, ...],
-                'focus_driver': {pos, gap_ahead, gap_behind, tire, age, stops},
-                'pit_window': [{pos, driver, gap, tire, age, stops}, ...]
+                'top_10': [{pos, driver, gap, tire, age, stops}],
+                'focus_driver': {pos, gap_ahead, gap_behind, ...},
+                'pit_window': [{pos, driver, gap, tire, age, stops}]
             }
         """
         # Use cached data if available
@@ -1396,6 +1719,96 @@ class RaceOverviewDashboard:
                 how='left'
             )
 
+        leaderboard = self._align_display_positions(leaderboard)
+
+        # --- Filter out retired drivers ---
+        retired_nums: set = set()
+
+        # Method 1: Use explicit retirement data from FastF1
+        if retirements and current_lap is not None:
+            logger.debug(
+                "AI leaderboard filter: %d retirements received, "
+                "current_lap=%s, keys=%s",
+                len(retirements), current_lap,
+                list(retirements.keys()),
+            )
+            elapsed_secs = (
+                float(simulation_time)
+                if isinstance(simulation_time, Real)
+                and math.isfinite(float(simulation_time))
+                else None
+            )
+            for drv_num, info in retirements.items():
+                retire_lap = info.get("lap")
+                retire_time = info.get("time")
+                flagged = False
+                if (
+                    isinstance(retire_lap, Real)
+                    and current_lap > max(int(float(retire_lap)), 1)
+                ):
+                    flagged = True
+                elif (
+                    not flagged
+                    and elapsed_secs is not None
+                    and isinstance(retire_time, Real)
+                    and math.isfinite(float(retire_time))
+                    and elapsed_secs >= float(retire_time)
+                ):
+                    flagged = True
+                if flagged:
+                    retired_nums.add(str(int(drv_num)))
+
+        # Method 2: Detect stale drivers from OpenF1 timestamps
+        # A driver whose last position update is far behind the
+        # current timestamp is almost certainly retired/DNF.
+        if (
+            current_timestamp is not None
+            and 'Timestamp' in leaderboard.columns
+            and current_lap is not None
+            and current_lap > 5
+        ):
+            avg_lap_seconds = 90.0  # ~1.5min per lap
+            stale_threshold = pd.Timedelta(
+                seconds=max(avg_lap_seconds * 5, 450)
+            )
+            for _, row in leaderboard.iterrows():
+                drv_ts = row.get('Timestamp')
+                drv_num_str = str(row.get('DriverNumber', ''))
+                if (
+                    drv_ts is not None
+                    and pd.notna(drv_ts)
+                    and (current_timestamp - drv_ts) > stale_threshold
+                ):
+                    if drv_num_str not in retired_nums:
+                        retired_nums.add(drv_num_str)
+                        logger.debug(
+                            "AI leaderboard: stale driver %s "
+                            "(last update %s, current %s, gap %s)",
+                            drv_num_str, drv_ts,
+                            current_timestamp,
+                            current_timestamp - drv_ts,
+                        )
+
+        if retired_nums:
+            pre_count = len(leaderboard)
+            leaderboard = leaderboard[
+                ~leaderboard['DriverNumber'].astype(str)
+                .isin(retired_nums)
+            ].reset_index(drop=True)
+            logger.debug(
+                "AI leaderboard: filtered %d retired drivers "
+                "(retired_nums=%s), %d remaining",
+                pre_count - len(leaderboard),
+                retired_nums,
+                len(leaderboard),
+            )
+        else:
+            logger.debug(
+                "AI leaderboard: no drivers flagged as retired "
+                "at lap %s",
+                current_lap,
+            )
+
         # Normalize driver number, position, and gap columns
         if 'DriverNumber' in leaderboard.columns:
             leaderboard['DriverNumber'] = leaderboard['DriverNumber'].astype(
@@ -1409,6 +1822,8 @@ class RaceOverviewDashboard:
             leaderboard['Position'] = leaderboard['Position'].astype(int)
             leaderboard = leaderboard.sort_values(
                 'Position').reset_index(drop=True)
+            # Reassign sequential positions after filtering
+            leaderboard['Position'] = range(1, len(leaderboard) + 1)
         for gap_col in ('GapToLeader', 'Interval'):
             if gap_col in leaderboard.columns:
                 leaderboard[gap_col] = pd.to_numeric(
@@ -1459,10 +1874,7 @@ class RaceOverviewDashboard:
                 position: int) -> str:
             if position == 1:
                 return 'LEADER'
-            if gap_value is None or (
-                isinstance(
-                    gap_value,
-                    float) and math.isnan(gap_value)):
+            if gap_value is None or pd.isna(gap_value):
                 return 'N/A'
             if gap_value <= 0:
                 return 'LEADER'
@@ -1554,10 +1966,7 @@ class RaceOverviewDashboard:
                             logger.debug("pit_proba_lookup failed: %s", exc)
 
                     def format_gap_value(value: Optional[float]) -> str:
-                        if value is None or (
-                            isinstance(
-                                value,
-                                float) and math.isnan(value)):
+                        if value is None or pd.isna(value):
                             return 'N/A'
                         if value <= 0:
                             return 'CLOSED'
@@ -1570,7 +1979,7 @@ class RaceOverviewDashboard:
                         'gap_to_leader': (
                             f"{gap_to_leader_val:.1f}s"
                             if isinstance(gap_to_leader_val, (int, float))
-                            and not math.isnan(gap_to_leader_val)
+                            and not pd.isna(gap_to_leader_val)
                             and gap_to_leader_val > 0
                             else 'LEADER'
                         ),
@@ -1604,7 +2013,7 @@ class RaceOverviewDashboard:
                                 'gap': (
                                     f"{row_data['GapToLeader']:.1f}s"
                                     if isinstance(row_data.get('GapToLeader'), (int, float))
-                                    and not math.isnan(row_data.get('GapToLeader'))
+                                    and not pd.isna(row_data.get('GapToLeader'))
                                     and row_data.get('GapToLeader') > 0
                                     else 'LEADER'
                                 ),

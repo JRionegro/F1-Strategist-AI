@@ -1,9 +1,9 @@
-# Performance Analysis: {Lusail International Circuit} - N/A
+# Performance Analysis: {Chinese Circuit} - N/A
 
 ## Executive Summary
 
-Circuit: {Lusail International Circuit} ({High-speed flowing circuit})
-Analysis Date: {2026-03-21 21:53}
+Circuit: {Chinese Circuit} (N/A)
+Analysis Date: {2026-03-21 13:13}
 Data Sources: OpenF1 API, Historical Telemetry
 
 ---
@@ -89,7 +89,7 @@ Historical speed comparison:
 | Tire Degradation Rate     | >N/A% avg  | >N/A% avg  |
 
 ### 4.2 Common Underperformance Causes
-At {Lusail International Circuit}:
+At {Chinese Circuit}:
 1. **Setup Issues**: {Wing angle, ride height, diff settings}
 2. **Tire Management**: {Overheating, graining, blistering}
 3. **Traffic Impact**: {Dirty air cost: 0.3-0.8s per lap}
@@ -178,5 +178,5 @@ Hidden patterns from historical analysis:
 
 ---
 
-*Document generated: {2026-03-21 21:53}*
+*Document generated: {2026-03-21 13:13}*
 *Data source: OpenF1 API + Historical Analysis*

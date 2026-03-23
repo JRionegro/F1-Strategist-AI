@@ -4,15 +4,15 @@ template: true
 variables: [circuit_name, year]
 ---
 
-# Lusail International Circuit - Complete Tire Analysis (2025)
+# Australian Circuit - Complete Tire Analysis (2026)
 
 ## Circuit Tire Demands
 
 | Metric | Rating | Notes |
 |--------|--------|-------|
-| **Overall Tire Stress** | 7/10 | Balanced tire stress across compounds |
-| **Front Tire Stress** | 7/10 | Front-limited in slow corners |
-| **Rear Tire Stress** | 7/10 | Traction zones stress rears |
+| **Overall Tire Stress** | 5/10 | Balanced tire stress across compounds |
+| **Front Tire Stress** | 5/10 | Front-limited in slow corners |
+| **Rear Tire Stress** | 5/10 | Traction zones stress rears |
 | **Lateral Load** | 6/10 | High-speed corners |
 | **Traction Demand** | 6/10 | Acceleration zones |
 | **Braking Severity** | 6/10 | Heavy braking zones |
@@ -24,7 +24,7 @@ variables: [circuit_name, year]
 
 ---
 
-## 1. Compound Allocation (2025)
+## 1. Compound Allocation (2026)
 
 ### 1.1 Pirelli Selection
 
@@ -297,7 +297,7 @@ When opponents choose standard strategy, consider:
 ## 12. Quick Reference Card
 
 ```
-🛞 TIRE GUIDE: Lusail International Circuit (2025)
+🛞 TIRE GUIDE: Australian Circuit (2026)
 
 COMPOUNDS:
 ├── SOFT (C5/C4/C3): ~18 laps, 0.08s/lap deg
@@ -310,8 +310,8 @@ PACE DELTA (new tires):
 └── SOFT vs HARD: 1.4s
 
 CIRCUIT STRESS:
-├── Front: 7/10
-├── Rear: 7/10
+├── Front: 5/10
+├── Rear: 5/10
 └── Primary Limit: Rear
 
 DEG MODE: Thermal
@@ -326,4 +326,4 @@ MANAGEMENT SAVINGS:
 ---
 
 *Generated from template. Data: OpenF1 API, Pirelli Data, Historical Analysis*
-*Last updated: 2026-03-21 21:53*
+*Last updated: 2026-03-21 15:58*

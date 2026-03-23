@@ -1,9 +1,9 @@
-# Race Position Analysis: {Lusail International Circuit} - N/A
+# Race Position Analysis: {Australian Circuit} - N/A
 
 ## Executive Summary
 
-Circuit: {Lusail International Circuit} ({High-speed flowing circuit})
-Analysis Date: {2026-03-21 21:53}
+Circuit: {Australian Circuit} (N/A)
+Analysis Date: {2026-03-21 15:58}
 Overtaking Difficulty: N/A/10
 Track Position Value: N/A/10
 
@@ -17,7 +17,7 @@ Track Position Value: N/A/10
 - **P4-P10 Points Finish**: N/A%
 - **Average Grid Movement**: {2-3} positions
 
-### 1.2 Position Value at {Lusail International Circuit}
+### 1.2 Position Value at {Australian Circuit}
 | Position | Strategic Value | Expected Points | Difficulty to Pass |
 |----------|-----------------|-----------------|-------------------|
 | P1       | 10/10           | N/A  | N/A               |
@@ -241,5 +241,5 @@ Position battle scenarios:
 
 ---
 
-*Document generated: {2026-03-21 21:53}*
+*Document generated: {2026-03-21 15:58}*
 *Data source: OpenF1 API + Position Analytics*

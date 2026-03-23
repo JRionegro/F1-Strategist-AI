@@ -4,16 +4,16 @@ template: true
 variables: [circuit_name, circuit_type, lap_length, total_laps, pit_loss, drs_zones]
 ---
 
-# Lusail International Circuit - Complete Strategy Guide
+# Australian Circuit - Complete Strategy Guide
 
 ## Circuit Characteristics
 
 | Property | Value |
 |----------|-------|
-| **Circuit Type** | High-speed flowing circuit |
-| **Lap Length** | 5.419 km |
-| **Race Laps** | 57 |
-| **Pit Lane Time Loss** | 20.5 seconds |
+| **Circuit Type** | Unknown |
+| **Lap Length** | 5.0 km |
+| **Race Laps** | 55 |
+| **Pit Lane Time Loss** | 20.0 seconds |
 | **DRS Zones** | 2 |
 
 ## Track Layout
@@ -27,7 +27,7 @@ Technical circuit requiring good car balance and tire management.
 ### Starting Grid Position Value
 
 - **Overtaking Difficulty**: 5/10
-- **Track Position Importance**: 6/10
+- **Track Position Importance**: 5/10
 - **First Lap Position Gain Potential**: 1-3 positions typical
 - **Clean Air Premium**: ~0.3-0.5s per lap
 
@@ -38,7 +38,7 @@ Technical circuit requiring good car balance and tire management.
 | **Start** | 1-5 | Position defense/attack, tire preservation |
 | **Early Race** | 6-20 | Undercut window opens, fuel burn effect |
 | **Mid-Race** | 21-40 | Primary pit window, SC probability peak |
-| **Late Race** | 41-57 | Final stint management, DRS trains |
+| **Late Race** | 41-55 | Final stint management, DRS trains |
 
 ---
 
@@ -48,18 +48,16 @@ Technical circuit requiring good car balance and tire management.
 
 | Strategy | Stops | Lap Range | Compounds | Notes |
 |----------|-------|-----------|-----------|-------|
-| **Two-Stop Aggressive** | 2 | Laps 12-15, 30-35 | SOFT → MEDIUM → SOFT | Optimal option |
-| **Three-Stop Sprint** | 3 | Laps 10, 25, 40 | SOFT → MEDIUM → SOFT  → SOFT | Only if its a free PitStop and no lost positions|
-
-### PIRELLI-FIA NOTE FOR THIS RACE:
-MAXIMUN 25 LAPS PER COMPOUND, IT MEAN A LEAST TWO STOPS ARE MANDATORY. FIRST STOP RECOMENDED BEFORE LAP 7. IF STOPS AFTER THIS LAP 3 STOPS WILL BE NECESARY.
+| **One-Stop Optimal** | 1 | Lap 18-25 | MEDIUM → HARD | Standard strategy |
+| **Two-Stop Aggressive** | 2 | Laps 12-15, 30-35 | SOFT → MEDIUM → SOFT | Aggressive option |
+| **Three-Stop Sprint** | 3 | Laps 10, 25, 40 | SOFT → SOFT → SOFT | Only if SC opportunities arise |
 
 ### 2.2 Pit Lane Analysis
 
 - **Entry Speed Limit**: 80 km/h
 - **Pit Lane Length**: 400 m
 - **Typical Stationary Time**: 2.5 seconds
-- **Total Time Loss per Stop**: 20.5 seconds
+- **Total Time Loss per Stop**: 20.0 seconds
 - **Delta vs Track (per stop)**: ~18-22s
 
 ### 2.3 Undercut Analysis
@@ -67,7 +65,7 @@ MAXIMUN 25 LAPS PER COMPOUND, IT MEAN A LEAST TWO STOPS ARE MANDATORY. FIRST STO
 The **undercut** involves pitting earlier than your rival to gain track position
 through fresh tire pace advantage.
 
-- **Undercut Power at Lusail International Circuit**: 6/10
+- **Undercut Power at Australian Circuit**: 6/10
 - **Optimal Window**: 1-2 laps before rival
 - **Fresh Tire Advantage**: ~1.5s per lap
 - **Effective For**: Rival with degraded tires
@@ -135,7 +133,7 @@ Secondary straight end
 
 ### 4.1 Historical Data
 
-- **SC Probability**: 30%
+- **SC Probability**: 35%
 - **Average SCs per Race**: 1.2
 - **VSC Probability**: 25%
 - **Red Flag Probability**: 5%
@@ -205,7 +203,7 @@ SC provides opportunity for cheap pit stops. Monitor tire age vs rivals to optim
 
 ### 5.4 Reverse Strategy Analysis
 
-What strategies would opponents fear most at Lusail International Circuit?
+What strategies would opponents fear most at Australian Circuit?
 
 - Leader fears: Successful undercut or late SC
 - Midfield fears: DRS trains preventing progress, wrong strategy call
@@ -283,10 +281,10 @@ Based on recent seasons:
 ## 10. Quick Reference Card
 
 ```
-🏁 CIRCUIT: Lusail International Circuit
-📍 TYPE: High-speed flowing circuit
-🔄 LAPS: 57 @ 5.419 km
-⏱️ PIT LOSS: 20.5s
+🏁 CIRCUIT: Australian Circuit
+📍 TYPE: Unknown
+🔄 LAPS: 55 @ 5.0 km
+⏱️ PIT LOSS: 20.0s
 
 OPTIMAL STRATEGIES:
 ├── 1-STOP: Lap 18-25 (MEDIUM → HARD)
@@ -296,10 +294,10 @@ OPTIMAL STRATEGIES:
 KEY METRICS:
 ├── Overtake Difficulty: 5/10
 ├── Undercut Power: 6/10
-└── SC Probability: 30%
+└── SC Probability: 35%
 ```
 
 ---
 
 *Generated from template. Data: OpenF1 API, FIA Regulations, Historical Analysis*
-*Last updated: 2026-03-21 21:53*
+*Last updated: 2026-03-21 15:58*

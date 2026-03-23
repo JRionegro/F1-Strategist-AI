@@ -198,6 +198,15 @@ class RaceEventDetector:
     ) -> Optional[RaceEvent]:
         """Check if driver is in optimal pit window."""
         try:
+            # Never alert before lap 5 (covers formation lap, outlap, and
+            # the internal lap counter offset of ~2 vs the visual display)
+            if current_lap < 5:
+                logger.debug(
+                    "[PIT_CHECK] Lap %d < 5, skipping pit window check",
+                    current_lap,
+                )
+                return None
+
             # Get current stint info
             stints_df = self.provider.get_stints(
                 session_key=session_key,

@@ -28,6 +28,81 @@ class RaceControlDashboard:
         self._cached_session_key = None
         self._cached_messages = None
         self._cached_drivers = None
+        self._last_timing_diag_signature: Optional[tuple] = None
+
+    def _log_timing_diagnostics(
+        self,
+        session_key: Optional[int],
+        current_lap: Optional[int],
+        simulation_time: Optional[float],
+        session_start_time: Optional[pd.Timestamp],
+        cutoff_time: Optional[pd.Timestamp],
+        messages: pd.DataFrame,
+        filtered_messages: pd.DataFrame,
+        mode: str,
+    ) -> None:
+        """Emit concise timing diagnostics to identify race-control offset drift."""
+        if session_key is None:
+            return
+
+        message_times = pd.to_datetime(messages.get("Time"), utc=True, errors="coerce")
+        sc_mask = messages.get("Message", pd.Series(dtype=str)).astype(str).str.contains(
+            "SAFETY CAR DEPLOYED",
+            case=False,
+            na=False,
+        )
+        sc_times = message_times[sc_mask]
+        first_sc_time = None
+        if not sc_times.empty:
+            first_sc_time = sc_times.min()
+
+        cutoff_value = cutoff_time
+        if cutoff_value is None and simulation_time is not None and session_start_time is not None:
+            try:
+                cutoff_value = pd.Timestamp(
+                    session_start_time + timedelta(seconds=float(simulation_time))
+                )
+                if cutoff_value.tzinfo is None:
+                    cutoff_value = cutoff_value.tz_localize("UTC")
+                else:
+                    cutoff_value = cutoff_value.tz_convert("UTC")
+            except Exception:  # noqa: BLE001
+                cutoff_value = None
+
+        sc_visible = bool(
+            filtered_messages.get("Message", pd.Series(dtype=str)).astype(str).str.contains(
+                "SAFETY CAR DEPLOYED",
+                case=False,
+                na=False,
+            ).any()
+        )
+
+        signature = (
+            session_key,
+            int(current_lap) if isinstance(current_lap, int) else -1,
+            int(float(simulation_time)) if isinstance(simulation_time, (int, float)) else -1,
+            mode,
+            cutoff_value.isoformat() if cutoff_value is not None else None,
+            bool(sc_visible),
+        )
+        if signature == self._last_timing_diag_signature:
+            return
+
+        self._last_timing_diag_signature = signature
+        logger.warning(
+            "[RC_TIMING_DIAG] mode=%s session=%s lap=%s sim_time=%s start=%s cutoff=%s total=%d filtered=%d "
+            "first_sc=%s sc_visible=%s",
+            mode,
+            session_key,
+            current_lap,
+            f"{float(simulation_time):.3f}" if isinstance(simulation_time, (int, float)) else "None",
+            str(session_start_time),
+            str(cutoff_value),
+            len(messages),
+            len(filtered_messages),
+            str(first_sc_time),
+            sc_visible,
+        )
 
     def _get_messages_and_drivers(
         self,
@@ -64,10 +139,61 @@ class RaceControlDashboard:
         self,
         messages: pd.DataFrame,
         simulation_time: Optional[float],
-        session_start_time: Optional[pd.Timestamp]
+        session_start_time: Optional[pd.Timestamp],
+        session_key: Optional[int] = None,
+        current_lap: Optional[int] = None,
     ) -> pd.DataFrame:
         """Filter messages to those occurring before the current simulation time."""
         filtered_messages = messages
+        current_time_utc: Optional[pd.Timestamp] = None
+
+        if simulation_time is not None and session_start_time is not None:
+            try:
+                session_start_ts = pd.Timestamp(session_start_time)
+                if session_start_ts.tzinfo is None:
+                    session_start_ts = session_start_ts.tz_localize("UTC")
+                else:
+                    session_start_ts = session_start_ts.tz_convert("UTC")
+
+                current_time_utc = session_start_ts + timedelta(seconds=float(simulation_time))
+                current_time_utc = pd.Timestamp(current_time_utc)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "Race control precise cutoff build failed (sim=%r start=%r): %s",
+                    simulation_time,
+                    session_start_time,
+                    exc,
+                )
+
+        # Most precise path: when absolute simulation timestamp is available,
+        # never reveal events that happen later within the same lap.
+        if current_time_utc is not None:
+            try:
+                time_series = pd.to_datetime(
+                    messages.get('Time'), utc=True, errors='coerce')
+                if not time_series.isna().all():
+                    filtered_messages = messages[time_series <= current_time_utc].copy()
+                    self._log_timing_diagnostics(
+                        session_key=session_key,
+                        current_lap=current_lap,
+                        simulation_time=simulation_time,
+                        session_start_time=session_start_time,
+                        cutoff_time=current_time_utc,
+                        messages=messages,
+                        filtered_messages=filtered_messages,
+                        mode="time_cutoff_precise",
+                    )
+                    return filtered_messages
+            except Exception as exc:  # noqa: BLE001
+                logger.debug(
+                    "Precise time-based race control filtering unavailable: %s",
+                    exc,
+                )
+
+        # Do not use lap-end cutoff fallback for race control visibility.
+        # It delays yellow/SC updates by up to multiple laps when lap timing
+        # alignment drifts from simulation playback.
+
         if simulation_time is None or session_start_time is None:
             return filtered_messages
 
@@ -91,14 +217,22 @@ class RaceControlDashboard:
                 return messages
 
             filtered_messages = messages[time_series <= current_time].copy()
-
-            if filtered_messages.empty:
-                filtered_messages = messages
-                logger.debug("No messages before current time, using all")
-            else:
-                logger.debug(
-                    f"Filtered to {len(filtered_messages)}/{len(messages)} messages"
-                )
+            self._log_timing_diagnostics(
+                session_key=session_key,
+                current_lap=current_lap,
+                simulation_time=simulation_time,
+                session_start_time=session_start_time,
+                cutoff_time=current_time,
+                messages=messages,
+                filtered_messages=filtered_messages,
+                mode="time_cutoff",
+            )
+            logger.debug(
+                "Filtered to %d/%d messages at %s",
+                len(filtered_messages),
+                len(messages),
+                current_time,
+            )
         except Exception as exc:
             logger.warning(f"Could not filter by simulation time: {exc}")
             filtered_messages = messages
@@ -696,16 +830,26 @@ class RaceControlDashboard:
         if messages.empty:
             return "GREEN", None
 
-        # Check last 10 messages for current status
-        recent_messages = messages.tail(10)
+        time_col = 'Time' if 'Time' in messages.columns else (
+            'Timestamp' if 'Timestamp' in messages.columns else None
+        )
+        if time_col is not None:
+            try:
+                ordered_messages = messages.sort_values(by=time_col, ascending=True)
+            except Exception:
+                ordered_messages = messages
+        else:
+            ordered_messages = messages
 
         status_flag = "GREEN"
         status_detail: Optional[str] = None
         sc_end_lap_hint: Optional[int] = None
 
-        # Look for SC/VSC and session end/flags
-        for idx, row in recent_messages.iloc[::-1].iterrows():
+        # Replay the filtered timeline to preserve active state across long
+        # periods where no new SC/VSC message is emitted.
+        for _, row in ordered_messages.iterrows():
             message = str(row.get('Message', '')).upper()
+            flag_value = str(row.get('Flag', '')).upper()
 
             end_tokens = (
                 'CHEQUERED FLAG',
@@ -734,33 +878,44 @@ class RaceControlDashboard:
                     lap_hint = None
 
             if any(token in message for token in end_tokens):
-                return "CHEQUERED", "Session Ended"
+                status_flag, status_detail = "CHEQUERED", "Session Ended"
+                continue
 
             if 'SAFETY CAR DEPLOYED' in message:
                 status_flag, status_detail = "SC", "SC Active"
-                break
+                continue
             if 'SAFETY CAR IN THIS LAP' in message or 'SC ENDING' in message:
                 status_flag, status_detail = "GREEN", "SC Ending"
                 sc_end_lap_hint = lap_hint if lap_hint is not None else current_lap
-                break
+                continue
             if 'VIRTUAL SAFETY CAR' in message and 'ENDING' not in message:
                 status_flag, status_detail = "VSC", "VSC Active"
-                break
+                continue
             if 'VSC ENDING' in message:
                 status_flag, status_detail = "GREEN", "VSC Ending"
                 sc_end_lap_hint = lap_hint if lap_hint is not None else current_lap
-                break
+                continue
             if 'RED FLAG' in message:
                 status_flag, status_detail = "RED", "Session Suspended"
-                break
+                continue
 
-        # Check for yellow flags if nothing else matched
-        if status_flag == "GREEN" and status_detail is None:
-            for idx, row in recent_messages.iloc[::-1].iterrows():
-                message = str(row.get('Message', '')).upper()
-                if 'YELLOW FLAG' in message and 'INFRINGEMENT' not in message:
+            if 'GREEN FLAG' in message or flag_value == 'GREEN':
+                if status_flag not in {'SC', 'VSC', 'RED', 'CHEQUERED'}:
+                    status_flag, status_detail = "GREEN", None
+                continue
+
+            # Detect active yellow states from both message text and explicit
+            # OpenF1 Flag field values (e.g. YELLOW / DOUBLE YELLOW).
+            if (
+                'DOUBLE YELLOW' in message
+                or 'YELLOW IN TRACK SECTOR' in message
+                or 'YELLOW FLAG' in message
+                or 'DOUBLE YELLOW' in flag_value
+                or flag_value == 'YELLOW'
+            ) and 'BLACK AND WHITE' not in message:
+                if status_flag not in {'SC', 'VSC', 'RED', 'CHEQUERED'}:
                     status_flag, status_detail = "YELLOW", None
-                    break
+                continue
 
         # Clear "SC/VSC Ending" indicator once the lap has advanced
         if (
@@ -911,18 +1066,17 @@ class RaceControlDashboard:
 
         messages = self._cached_messages
 
-        # Determine time column (OpenF1 provider renames 'date' to 'Time')
-        time_col = 'Time' if 'Time' in messages.columns else 'Timestamp'
+        # Reuse the same robust filtering path as the main dashboard timeline.
+        filtered_messages = self._filter_messages_by_time(
+            messages=messages,
+            simulation_time=simulation_time,
+            session_start_time=session_start_time,
+            session_key=session_key,
+            current_lap=current_lap,
+        )
 
-        # Filter messages by simulation time
-        current_timestamp = session_start_time + \
-            pd.Timedelta(seconds=simulation_time)
-        try:
-            filtered_messages = messages[messages[time_col]
-                                         <= current_timestamp]
-        except Exception as e:
-            logger.warning(f"Error filtering messages by time: {e}")
-            filtered_messages = messages
+        # Determine time column (OpenF1 provider renames 'date' to 'Time')
+        time_col = 'Time' if 'Time' in filtered_messages.columns else 'Timestamp'
 
         if filtered_messages.empty:
             return {
@@ -1048,7 +1202,9 @@ class RaceControlDashboard:
         filtered_messages = self._filter_messages_by_time(
             messages,
             simulation_time,
-            session_start_time
+            session_start_time,
+            session_key=session_key,
+            current_lap=current_lap,
         )
 
         if filtered_messages.empty:
@@ -1108,7 +1264,9 @@ class RaceControlDashboard:
         filtered_messages = self._filter_messages_by_time(
             messages,
             simulation_time,
-            session_start_time
+            session_start_time,
+            session_key=session_key,
+            current_lap=current_lap,
         )
         if filtered_messages.empty:
             filtered_messages = messages.tail(50)

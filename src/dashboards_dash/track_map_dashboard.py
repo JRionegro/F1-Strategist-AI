@@ -25,7 +25,10 @@ TEAM_COLORS: Dict[str, str] = {
     "Williams": "#64C4FF",
     "Haas F1 Team": "#B6BABD",
     "RB": "#6692FF",
+    "Racing Bulls": "#6692FF",
     "Kick Sauber": "#52E252",
+    "Audi": "#00E701",
+    "Cadillac": "#FFD700",
     "Unknown": "#FFFFFF",
 }
 
@@ -169,8 +172,14 @@ class TrackMapDashboard:
         if driver.get("retired"):
             status_text = str(driver.get("retired_status") or "Retired")
             retired_lap = driver.get("retired_lap")
-            if isinstance(retired_lap, int) and retired_lap >= 1:
-                lines.append(f"Status: {status_text} (Lap {retired_lap})")
+            retired_lap_num = None
+            if isinstance(retired_lap, Real):
+                retired_lap_value = float(retired_lap)
+                if math.isfinite(retired_lap_value) and retired_lap_value >= 1.0:
+                    retired_lap_num = int(retired_lap_value)
+
+            if retired_lap_num is not None:
+                lines.append(f"Status: {status_text} (Lap {retired_lap_num})")
             else:
                 lines.append(f"Status: {status_text}")
 

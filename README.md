@@ -670,7 +670,16 @@ pytest tests/test_strategy_agent.py -v
 
 # Run with coverage
 pytest --cov=src --cov-report=html
+
+# Run critical timing anti-regressions (mandatory for simulation timing changes)
+python -m pytest -q tests/test_simulation_controller_qatar_regression.py tests/test_simulation_time_alignment.py
 ```
+
+Critical timing regressions are automatically enforced in CI via
+`.github/workflows/critical-regressions.yml`.
+
+Copilot timing guardrails for Vibe coding changes are defined in
+`.github/copilot/instructions/simulation-timing.instructions.md`.
 
 ---
 

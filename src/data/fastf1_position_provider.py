@@ -34,7 +34,7 @@ class FastF1PositionProvider:
         "Sprint Qualifying": "SQ",
     }
 
-    CACHE_SCHEMA_VERSION: int = 4
+    CACHE_SCHEMA_VERSION: int = 5
 
     def __init__(self, cache_dir: str = "./cache") -> None:
         self.cache_dir = Path(cache_dir)
@@ -163,6 +163,9 @@ class FastF1PositionProvider:
             return False
 
         self._loading_lock = True
+        # Clear the circuit outline cache whenever a new session is requested
+        # so the outline is rebuilt for the correct circuit.
+        self._circuit_outline_cache = None
         self.session_params = session_key
         cache_path = self._get_positions_cache_path(
             year, country, session_type)
@@ -186,6 +189,7 @@ class FastF1PositionProvider:
                 self.positions_df = positions
                 self._driver_mapping = cache_data.get("driver_mapping", {})
                 self.session = cache_data.get("session")
+                self._circuit_outline_cache = cache_data.get("circuit_outline")
                 self._session_time_offset = float(
                     cache_data.get("time_offset", 0.0))
                 time_bounds = cache_data.get("time_bounds")
@@ -199,6 +203,7 @@ class FastF1PositionProvider:
 
                 self._current_session_key = session_key
                 logger.info("Loaded %d cached samples", len(self.positions_df))
+                self._loading_lock = False
                 return True
         except Exception as exc:  # noqa: BLE001
             logger.warning("Cache load failed: %s", exc)
@@ -219,13 +224,33 @@ class FastF1PositionProvider:
             self._loading_lock = False
             return False
 
-        if not hasattr(self.session, "pos_data"):
-            logger.error("Session has no pos_data attribute")
-            self.session = None
-            self._loading_lock = False
-            return False
+        # FastF1 car_data may fail on newer seasons (e.g. 2026) due to format
+        # changes. In that case pos_data is never stored internally. Fall back
+        # to loading it directly from the F1 timing API.
+        try:
+            pos_attr = getattr(self.session, "_pos_data", None)
+            if not pos_attr:
+                logger.warning(
+                    "FastF1 pos_data empty (car_data parse failure?). "
+                    "Injecting position data directly from F1 API..."
+                )
+                import fastf1._api as _f1api  # noqa: PLC0415
+                raw = _f1api.position_data(self.session.api_path)
+                injected: Dict[str, pd.DataFrame] = {}
+                for drv, df in raw.items():
+                    d = df.copy()
+                    if "Time" in d.columns and "SessionTime" not in d.columns:
+                        d = d.rename(columns={"Time": "SessionTime"})
+                    injected[str(drv)] = d
+                self.session._pos_data = injected  # type: ignore[attr-defined]
+                logger.info(
+                    "Injected raw position data for %d drivers", len(injected)
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Position data fallback failed: %s", exc)
 
-        pos_data = self.session.pos_data  # type: ignore[attr-defined]
+        # Read pos_data safely (avoid DataNotLoadedError from the property)
+        pos_data = getattr(self.session, "_pos_data", None) or {}
         if not isinstance(pos_data, dict) or len(pos_data) == 0:
             logger.error("Position data unavailable for session")
             self.session = None
@@ -240,6 +265,9 @@ class FastF1PositionProvider:
                     row["DriverNumber"])] = row["Abbreviation"]
 
         self._preload_all_positions()
+        # Pre-build circuit outline while session is loaded so it can be
+        # persisted in the cache and restored on subsequent loads.
+        self.get_circuit_outline()
         self._save_positions_cache(cache_path)
         self._current_session_key = session_key
         self._loading_lock = False
@@ -250,7 +278,7 @@ class FastF1PositionProvider:
         if self.session is None:
             raise ValueError("Session not loaded")
 
-        pos_data = getattr(self.session, "pos_data", None)
+        pos_data = getattr(self.session, "_pos_data", None)
         if not isinstance(pos_data, dict) or len(pos_data) == 0:
             raise ValueError("Position telemetry unavailable")
 
@@ -280,9 +308,22 @@ class FastF1PositionProvider:
             filtered.loc[:, "z"] = filtered.get("Z", pd.Series(
                 0.0, index=filtered.index)).fillna(0.0).astype(float)
 
-            driver_laps = self.session.laps.pick_drivers(driver_id)
-            lap_info = driver_laps[["LapNumber",
-                                    "LapStartTime"]].dropna().copy()
+            # Prefer direct DriverNumber filtering to avoid ambiguous
+            # pick_drivers() behaviour with numeric identifiers.
+            lap_source = self.session.laps
+            driver_laps = pd.DataFrame()
+            if isinstance(lap_source, pd.DataFrame) and not lap_source.empty:
+                if "DriverNumber" in lap_source.columns:
+                    mask = lap_source["DriverNumber"].astype(str) == driver_id
+                    driver_laps = lap_source.loc[mask]
+
+                if driver_laps.empty:
+                    try:
+                        driver_laps = self.session.laps.pick_drivers(driver_id)
+                    except Exception:  # noqa: BLE001
+                        driver_laps = pd.DataFrame()
+
+            lap_info = driver_laps[["LapNumber", "LapStartTime"]].dropna().copy()
             lap_info.loc[:, "LapStartTime"] = pd.to_timedelta(
                 lap_info["LapStartTime"])
             lap_info.sort_values("LapStartTime", inplace=True)
@@ -371,6 +412,7 @@ class FastF1PositionProvider:
             "schema_version": self.CACHE_SCHEMA_VERSION,
             "time_offset": self._session_time_offset,
             "time_bounds": self._time_bounds,
+            "circuit_outline": self._circuit_outline_cache,
         }
         with cache_path.open("wb") as handle:
             pickle.dump(data, handle)
@@ -608,12 +650,40 @@ class FastF1PositionProvider:
                     laps=True,
                     weather=False,
                     messages=False)
+                # car_data may fail on newer seasons (e.g. 2026). Inject
+                # pos_data directly from the F1 API as fallback.
+                pos_attr = getattr(reload_session, "_pos_data", None)
+                if not pos_attr:
+                    try:
+                        import fastf1._api as _f1api  # noqa: PLC0415
+                        raw = _f1api.position_data(reload_session.api_path)
+                        injected: Dict[str, pd.DataFrame] = {}
+                        for drv, df in raw.items():
+                            d = df.copy()
+                            if "Time" in d.columns and "SessionTime" not in d.columns:
+                                d = d.rename(columns={"Time": "SessionTime"})
+                            injected[str(drv)] = d
+                        reload_session._pos_data = injected  # type: ignore[attr-defined]
+                        logger.info(
+                            "Circuit outline: injected pos_data for %d drivers",
+                            len(injected),
+                        )
+                    except Exception as inj_exc:  # noqa: BLE001
+                        logger.warning(
+                            "Circuit outline pos_data injection failed: %s",
+                            inj_exc,
+                        )
                 self.session = reload_session
             except Exception as exc:  # noqa: BLE001
                 logger.error("Failed to reload session for outline: %s", exc)
                 return None
 
         if self.session is None:
+            # Last-resort fallback: derive the outline from the already-loaded
+            # positions_df when no live session is available (e.g. schema v4
+            # cache that was generated without a persisted outline).
+            if self.positions_df is not None and not self.positions_df.empty:
+                return self._build_outline_from_positions_df(track_width)
             return None
 
         if sample_driver_number is None:
@@ -624,15 +694,62 @@ class FastF1PositionProvider:
         if first_lap is None:
             return None
 
-        telemetry = first_lap.get_telemetry()
-        if telemetry is None or telemetry.empty:
-            return None
+        # Try standard telemetry first; fall back to raw pos_data when
+        # car_data is unavailable (e.g. 2026 format change in FastF1).
+        telemetry = None
+        try:
+            t = first_lap.get_telemetry()
+            if t is not None and not t.empty:
+                telemetry = t
+        except Exception:  # noqa: BLE001
+            pass
 
-        x_center = telemetry["X"].astype(float).to_numpy()
-        y_center = telemetry["Y"].astype(float).to_numpy()
-        z_center = telemetry.get("Z", pd.Series(0.0, index=telemetry.index)).fillna(
-            0.0).astype(float).to_numpy()
-        distance = telemetry["Distance"].astype(float).to_numpy()
+        if telemetry is not None:
+            x_center = telemetry["X"].astype(float).to_numpy()
+            y_center = telemetry["Y"].astype(float).to_numpy()
+            z_center = telemetry.get(
+                "Z", pd.Series(0.0, index=telemetry.index)
+            ).fillna(0.0).astype(float).to_numpy()
+            distance = telemetry["Distance"].astype(float).to_numpy()
+        else:
+            # Fallback: build circuit outline from raw pos_data
+            logger.warning(
+                "get_telemetry() unavailable; building circuit outline "
+                "from raw pos_data (no car_data for this season)"
+            )
+            pos_data = getattr(self.session, "_pos_data", None) or {}
+            drv_key = str(sample_driver_number)
+            if drv_key not in pos_data:
+                drv_key = next(iter(pos_data), None)  # type: ignore[assignment]
+            if not drv_key or drv_key not in pos_data:
+                return None
+            raw_df = pos_data[drv_key].copy()
+            # Filter to a single lap (use first ~lap-length window of on-track data)
+            raw_df = raw_df[
+                (raw_df["X"] != 0) | (raw_df["Y"] != 0)
+            ].dropna(subset=["X", "Y"]).reset_index(drop=True)
+            if raw_df.empty:
+                return None
+            if "LapNumber" in raw_df.columns:
+                first_lap_num = raw_df["LapNumber"].iloc[0]
+                raw_df = raw_df[raw_df["LapNumber"] == first_lap_num]
+            elif len(raw_df) > 800:
+                raw_df = raw_df.iloc[:800]  # ~1 lap at 3.7 Hz ≈ 500-800 rows
+            raw_df = raw_df.reset_index(drop=True)
+            x_center = raw_df["X"].astype(float).to_numpy()
+            y_center = raw_df["Y"].astype(float).to_numpy()
+            z_col = "Z" if "Z" in raw_df.columns else None
+            z_center = (
+                raw_df[z_col].fillna(0.0).astype(float).to_numpy()
+                if z_col else np.zeros(len(x_center))
+            )
+            # Calculate cumulative distance from X,Y coordinates
+            dx = np.diff(x_center, prepend=x_center[0])
+            dy = np.diff(y_center, prepend=y_center[0])
+            distance = np.cumsum(np.sqrt(dx**2 + dy**2))
+
+        if len(x_center) == 0:
+            return None
 
         dx = np.gradient(x_center)
         dy = np.gradient(y_center)
@@ -665,6 +782,77 @@ class FastF1PositionProvider:
 
         outline = {"center": center_df, "inner": inner_df, "outer": outer_df}
         self._circuit_outline_cache = outline
+        return outline
+
+    def _build_outline_from_positions_df(
+        self,
+        track_width: float = 200.0,
+    ) -> Optional[Dict[str, pd.DataFrame]]:
+        """Build a circuit outline from the cached positions_df.
+
+        Used as a last-resort fallback when no live session is available
+        (e.g. v4 cache without a persisted outline, or when FastF1 reload
+        fails for a newer season where car_data is unavailable).
+        """
+        if self.positions_df is None or self.positions_df.empty:
+            return None
+
+        df = self.positions_df.copy()
+        # Use the first driver found in the data
+        if "driver_number" in df.columns:
+            first_driver = df["driver_number"].iloc[0]
+            df = df[df["driver_number"] == first_driver]
+        # Take the first ~800 rows which correspond roughly to one lap
+        if len(df) > 800:
+            df = df.iloc[:800]
+        df = df.dropna(subset=["x", "y"]).reset_index(drop=True)
+        if df.empty:
+            return None
+
+        x_center = df["x"].astype(float).to_numpy()
+        y_center = df["y"].astype(float).to_numpy()
+        z_center = (
+            df["z"].fillna(0.0).astype(float).to_numpy()
+            if "z" in df.columns else np.zeros(len(x_center))
+        )
+        dx_arr = np.diff(x_center, prepend=x_center[0])
+        dy_arr = np.diff(y_center, prepend=y_center[0])
+        distance = np.cumsum(np.sqrt(dx_arr ** 2 + dy_arr ** 2))
+
+        dx = np.gradient(x_center)
+        dy = np.gradient(y_center)
+        norm = np.sqrt(dx ** 2 + dy ** 2)
+        norm[norm == 0] = 1.0
+        dx /= norm
+        dy /= norm
+        nx = -dy
+        ny = dx
+        half_width = track_width / 2.0
+        x_outer = x_center + nx * half_width
+        y_outer = y_center + ny * half_width
+        x_inner = x_center - nx * half_width
+        y_inner = y_center - ny * half_width
+
+        center_df = pd.DataFrame(
+            {"X": x_center, "Y": y_center, "Z": z_center, "Distance": distance}
+        )
+        inner_df = pd.DataFrame(
+            {"X": x_inner, "Y": y_inner, "Z": z_center, "Distance": distance}
+        )
+        outer_df = pd.DataFrame(
+            {"X": x_outer, "Y": y_outer, "Z": z_center, "Distance": distance}
+        )
+        # Close the loop
+        center_df = pd.concat([center_df, center_df.iloc[[0]]], ignore_index=True)
+        inner_df = pd.concat([inner_df, inner_df.iloc[[0]]], ignore_index=True)
+        outer_df = pd.concat([outer_df, outer_df.iloc[[0]]], ignore_index=True)
+
+        outline = {"center": center_df, "inner": inner_df, "outer": outer_df}
+        self._circuit_outline_cache = outline
+        logger.info(
+            "Circuit outline built from positions_df fallback (%d points)",
+            len(center_df),
+        )
         return outline
 
     def clear_cache(self) -> None:
