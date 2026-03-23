@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Any, Iterable, Optional
 
 import joblib
 
@@ -56,6 +57,13 @@ class ModelMetadata:
         )
 
 
+def _nan_safe_default(obj: Any) -> Any:
+    """Convert NaN/Inf floats to None for JSON serialization."""
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+
 def save_model_artifact(
     model: PitStopBaselineModel,
     metadata: ModelMetadata,
@@ -71,7 +79,12 @@ def save_model_artifact(
 
     metadata_path = path.with_suffix(".json")
     with open(metadata_path, "w", encoding="utf-8") as meta_file:
-        json.dump(metadata.__dict__, meta_file, indent=2)
+        json.dump(
+            metadata.__dict__,
+            meta_file,
+            indent=2,
+            default=_nan_safe_default,
+        )
 
     return path
 

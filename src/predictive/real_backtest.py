@@ -8,7 +8,12 @@ from typing import Optional
 
 from src.data.cache_config import CacheConfig
 from src.data.cache_manager import CacheManager
-from src.predictive.artifacts import ModelMetadata, PREDICTIVE_MODEL_VERSION, save_model_artifact
+from src.predictive.artifacts import (
+    ModelMetadata,
+    PREDICTIVE_MODEL_VERSION,
+    save_model_artifact,
+    _nan_safe_default,
+)
 from src.predictive.backtesting import backtest_pit_baseline
 from src.predictive.dataset_builder import build_pit_window_dataset_from_cache
 
@@ -70,7 +75,7 @@ def backtest_race(
 
     metrics_path = METRICS_DIR / f"{year}_{race_name}_metrics.json"
     with open(metrics_path, "w", encoding="utf-8") as f:
-        json.dump(report, f, indent=2)
+        json.dump(report, f, indent=2, default=_nan_safe_default)
 
     # Persist artifact alongside metrics
     metadata = ModelMetadata.create(

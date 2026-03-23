@@ -845,6 +845,7 @@ class RaceControlDashboard:
         status_detail: Optional[str] = None
         sc_end_lap_hint: Optional[int] = None
 
+        prev_flag = "GREEN"
         # Replay the filtered timeline to preserve active state across long
         # periods where no new SC/VSC message is emitted.
         for _, row in ordered_messages.iterrows():
@@ -899,38 +900,69 @@ class RaceControlDashboard:
                 status_flag, status_detail = "RED", "Session Suspended"
                 continue
 
-            if 'GREEN FLAG' in message or flag_value == 'GREEN':
-                if status_flag not in {'SC', 'VSC', 'RED', 'CHEQUERED'}:
-                    status_flag, status_detail = "GREEN", None
-                continue
+            # ── Flag messages ──
+            # In OpenF1, actual flag changes come as messages
+            # starting with "FLAG" (e.g. "FLAG YELLOW",
+            # "FLAG DOUBLE YELLOW", "FLAG GREEN",
+            # "FLAG TRACK CLEAR", "FLAG RED").
+            # Only these should alter the track flag state.
+            is_flag_msg = message.startswith('FLAG')
 
-            # Detect active yellow states from both message text and explicit
-            # OpenF1 Flag field values (e.g. YELLOW / DOUBLE YELLOW).
-            if (
-                'DOUBLE YELLOW' in message
-                or 'YELLOW IN TRACK SECTOR' in message
-                or 'YELLOW FLAG' in message
-                or 'DOUBLE YELLOW' in flag_value
-                or flag_value == 'YELLOW'
-            ) and 'BLACK AND WHITE' not in message:
-                if status_flag not in {'SC', 'VSC', 'RED', 'CHEQUERED'}:
-                    status_flag, status_detail = "YELLOW", None
-                continue
+            if is_flag_msg:
+                if (
+                    'GREEN' in message
+                    or 'CLEAR' in message
+                ):
+                    if status_flag not in {
+                        'SC', 'VSC', 'RED', 'CHEQUERED'
+                    }:
+                        status_flag, status_detail = (
+                            "GREEN", None
+                        )
+                        sc_end_lap_hint = None
+                elif 'YELLOW' in message:
+                    if status_flag not in {
+                        'SC', 'VSC', 'RED', 'CHEQUERED'
+                    }:
+                        status_flag, status_detail = (
+                            "YELLOW", None
+                        )
+                elif 'RED' in message:
+                    status_flag = "RED"
+                    status_detail = "Session Suspended"
+                elif 'CHEQUERED' in message:
+                    status_flag = "CHEQUERED"
+                    status_detail = "Session Ended"
 
-        # Clear "SC/VSC Ending" indicator once the lap has advanced
+            # Track transitions for diagnostics
+            if status_flag != prev_flag:
+                logger.info(
+                    "[FLAG_DIAG] transition %s -> %s "
+                    "msg=%r flag_field=%r",
+                    prev_flag, status_flag,
+                    message[:80], flag_value,
+                )
+                prev_flag = status_flag
+
+        logger.info(
+            "[FLAG_DIAG] FINAL state=%s detail=%r "
+            "total_messages=%d lap=%s",
+            status_flag, status_detail,
+            len(ordered_messages), current_lap,
+        )
+
+        # Clear "SC/VSC Ending" indicator.  If a FLAG GREEN /
+        # FLAG TRACK CLEAR was replayed, status_detail is already
+        # None.  If it still says "SC Ending" or "VSC Ending" it
+        # means no explicit green-flag message followed the SC/VSC
+        # end.  In either case, the SC/VSC has ended so drop the
+        # detail unconditionally – it is only useful during the
+        # transition lap itself.
         if (
             status_flag == "GREEN"
             and status_detail in {"SC Ending", "VSC Ending"}
-            and current_lap is not None
         ):
-            # If we have a lap hint for the ending message, hide after the next
-            # lap
-            if sc_end_lap_hint is not None and current_lap > sc_end_lap_hint:
-                return "GREEN", None
-            # If no lap hint, assume it should clear after current lap advances by 1
-            # (current_lap passed in reflects the active lap)
-            if sc_end_lap_hint is None:
-                return "GREEN", None
+            return "GREEN", None
 
         return status_flag, status_detail
 
@@ -1135,10 +1167,19 @@ class RaceControlDashboard:
                 flag = 'GREEN'
                 break
 
-            # Check for YELLOW
-            if 'YELLOW' in message or category == 'FLAG':
-                flag = 'YELLOW'
-                # Don't break - keep looking for SC/VSC
+            # Check for GREEN FLAG or CLEAR (reset yellow)
+            # In OpenF1, flag messages start with "FLAG"
+            if message.startswith('FLAG'):
+                if 'GREEN' in message or 'CLEAR' in message:
+                    flag = 'GREEN'
+                    break
+                if 'YELLOW' in message:
+                    flag = 'YELLOW'
+                    # Don't break - keep looking for SC/VSC
+                    continue
+                if 'RED' in message:
+                    flag = 'RED'
+                    break
 
         # Get recent events (last 5 messages)
         recent_events = []

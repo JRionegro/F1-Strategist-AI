@@ -1039,9 +1039,6 @@ def _format_track_map_lap_label(
     elapsed_time_seconds: float,
 ) -> str:
     """Build the lap label shown below the track map."""
-    if formation_offset_seconds > 0.0 and current_lap <= 1 and elapsed_time_seconds < 1.0:
-        return "Formation Lap"
-
     lap_value = max(current_lap, 1)
     if total_laps and total_laps > 0:
         return f"Lap {lap_value} / {total_laps}"
@@ -1400,6 +1397,55 @@ def _normalize_lap_timing_data(
 
     fastf1_lap_one_seconds = _extract_fastf1_lap1_seconds(
         dashboard, driver_number)
+
+    # Fallback: when FastF1 lap-one is unavailable AND lap 1 has
+    # no end time (untimed formation lap), use lap2_start − lap1_start
+    # as formation offset so the simulation starts at the real race.
+    if fastf1_lap_one_seconds is None and lap_two_start_seconds is not None:
+        lap_one = normalized.loc[
+            normalized["LapNumber"] == 1
+        ].head(1)
+        lap_one_end_is_nan = True
+        if not lap_one.empty:
+            lap_one_end_val = _timedelta_to_seconds(
+                lap_one.iloc[0].get("LapEndTime")
+            )
+            lap_one_end_is_nan = lap_one_end_val is None
+
+        if lap_one_end_is_nan:
+            lap_one_start_val = _timedelta_to_seconds(
+                lap_one.iloc[0]["LapStartTime"]
+            ) if not lap_one.empty else 0.0
+            lap_one_start_val = lap_one_start_val or 0.0
+            estimated_offset = (
+                lap_two_start_seconds - lap_one_start_val
+            )
+            if estimated_offset > 120.0:
+                fastf1_lap_one_seconds = 0.0
+                # Drop the untimed formation lap and renumber
+                # so the first racing lap becomes lap 1.
+                normalized = normalized.loc[
+                    normalized["LapNumber"] != 1
+                ].copy()
+                normalized.loc[:, "LapNumber"] = (
+                    normalized["LapNumber"] - 1
+                )
+                # Refresh lap_two reference after renumber
+                lap_two = normalized.loc[
+                    normalized["LapNumber"] == 1
+                ].head(1)
+                if not lap_two.empty:
+                    lap_two_start_seconds = _timedelta_to_seconds(
+                        lap_two.iloc[0]["LapStartTime"]
+                    )
+                logger.info(
+                    "Lap 1 end=NaN (formation lap); dropped "
+                    "and renumbered. offset=%.1fs, "
+                    "new rows=%d",
+                    estimated_offset,
+                    len(normalized),
+                )
+
     formation_offset_seconds = None
 
     if lap_two_start_seconds is not None and fastf1_lap_one_seconds is not None:
@@ -4977,6 +5023,57 @@ def _build_session_store_payload(
                     offset_seconds > 0.0
                 )
 
+                # Sync position provider with formation offset so
+                # elapsed=0 maps to the first racing lap, not the
+                # formation lap.
+                if (
+                    offset_seconds > 0.0
+                    and track_map_dashboard is not None
+                ):
+                    prov = track_map_dashboard.provider
+                    if (
+                        prov.positions_df is not None
+                        and "lap_number"
+                        in prov.positions_df.columns
+                    ):
+                        prov.positions_df = (
+                            prov.positions_df.copy()
+                        )
+                        # Find where the first racing lap
+                        # (original lap 2) starts in the cache
+                        racing_start_mask = (
+                            prov.positions_df["lap_number"] == 2
+                        )
+                        if racing_start_mask.any():
+                            racing_start_time = float(
+                                prov.positions_df.loc[
+                                    racing_start_mask, "time"
+                                ].min()
+                            )
+                            prov._session_time_offset = (
+                                racing_start_time
+                            )
+                        else:
+                            prov._session_time_offset += (
+                                offset_seconds
+                            )
+                        # Decrement lap numbers so original
+                        # lap 2 becomes lap 1
+                        prov.positions_df["lap_number"] = (
+                            prov.positions_df["lap_number"] - 1
+                        )
+                        prov._calculate_time_bounds()
+                    else:
+                        prov._session_time_offset += (
+                            offset_seconds
+                        )
+                    logger.info(
+                        "Position provider synced: "
+                        "offset=%.1fs, "
+                        "lap_numbers decremented by 1",
+                        prov._session_time_offset,
+                    )
+
                 simulation_controller = SimulationController(
                     start_time,
                     end_time,
@@ -6972,10 +7069,7 @@ def update_dashboards(
                     total_laps = session_data.get(
     'total_laps', 57) if session_data else 57
                     display_lap = overview_current_lap if overview_current_lap and overview_current_lap > 0 else 1
-                    lap_info_text = (
-                        f"Lap 1 (untimed)/{total_laps}" if display_lap == 1
-                        else f"Lap {display_lap}/{total_laps}"
-                    )
+                    lap_info_text = f"Lap {display_lap}/{total_laps}"
                     
                     dashboards.append(
                         dbc.Card(
@@ -8713,10 +8807,7 @@ def update_simulation_progress(n_intervals, session_data):
         # Get EXACT current lap from simulation controller (no estimation)
         current_lap = simulation_controller.get_current_lap()
 
-        # Keep raw lap count; if first lap has no timing (NaT), display as
-        # untimed
         display_lap = current_lap if current_lap and current_lap > 0 else 1
-        is_untimed_lap = display_lap == 1
 
         # Get total_laps from session_data (calculated from actual race data)
         total_laps = session_data.get('total_laps', 57) if session_data else 57
@@ -8731,8 +8822,7 @@ def update_simulation_progress(n_intervals, session_data):
         # Get current speed multiplier
         speed = simulation_controller.speed_multiplier
         
-        lap_label = f"Lap {
-    int(display_lap)}" if not is_untimed_lap else "Lap 1 (untimed)"
+        lap_label = f"Lap {int(display_lap)}"
         progress_text = (
             f"⏱️ {lap_label}/{int(total_laps)} | "
             f"⏳ {remaining_minutes}m {remaining_seconds}s left | 🚀 {speed}x"
@@ -8993,6 +9083,16 @@ def _render_telemetry(
     if _cached_telemetry_component is not None and cache_key == _cached_telemetry_key:
         return _cached_telemetry_component
 
+    # Compute OpenF1 lap offset: when formation lap was dropped
+    # and laps renumbered, OpenF1 raw data still uses original
+    # numbering (lap 2 = first racing lap).  offset=1 in that
+    # case so telemetry queries the correct OpenF1 lap.
+    openf1_lap_offset = 0
+    if session_data:
+        tm = session_data.get('track_map', {})
+        if tm.get('controller_start_includes_formation_offset'):
+            openf1_lap_offset = 1
+
     telemetry_content = telemetry_dashboard.render(
         session_key=session_key,
         simulation_time=simulation_time,
@@ -9000,7 +9100,8 @@ def _render_telemetry(
         focused_driver=focused_driver if focused_driver != 'none' else None,
         comparison_driver=comparison_driver,
         current_lap=current_lap,
-        driver_options=driver_options
+        driver_options=driver_options,
+        openf1_lap_offset=openf1_lap_offset,
     )
     _cached_telemetry_component = telemetry_content
     _cached_telemetry_key = cache_key
@@ -9416,12 +9517,10 @@ def update_current_lap_store(n_intervals, session_data):
         total_laps = session_data.get('total_laps', 57) if session_data else 57
 
         display_lap = current_lap if current_lap and current_lap > 0 else 1
-        is_untimed_lap = display_lap == 1
 
         return {
             'lap': display_lap,
             'total': total_laps,
-            'untimed': is_untimed_lap,
             'timestamp': n_intervals
         }
     except Exception as e:
@@ -9442,10 +9541,6 @@ def update_lap_badge(lap_data):
     
     lap = lap_data.get('lap', 1)
     total = lap_data.get('total', 57)
-    untimed = lap_data.get('untimed', False)
-
-    if untimed:
-        return f"Lap 1 (untimed)/{total}"
     return f"Lap {lap}/{total}"
 
 
@@ -10807,7 +10902,7 @@ def generate_ai_response(
         current_lap = openf1_lap if openf1_lap and openf1_lap > 0 else 1
     
     if current_lap:
-        lap_info = "Lap 1 (untimed)" if current_lap == 1 else f"Lap {current_lap}"
+        lap_info = f"Lap {current_lap}"
     else:
         lap_info = "Pre-race"
     

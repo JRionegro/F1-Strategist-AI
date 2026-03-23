@@ -60,6 +60,54 @@ class SimulationController:
             f"Initialized SimulationController: "
             f"{start_time} to {end_time}"
         )
+        self._diag_last_log_time = 0.0
+        self._log_lap_data_summary()
+
+    def _log_lap_data_summary(self) -> None:
+        """Log a concise summary of lap_data for diagnostics."""
+        if self.lap_data is None or self.lap_data.empty:
+            logger.warning("[LAP_DIAG] lap_data is None/empty")
+            return
+        cols = list(self.lap_data.columns)
+        logger.warning(
+            "[LAP_DIAG] lap_data cols=%s rows=%d",
+            cols, len(self.lap_data),
+        )
+        if 'LapStartTime_seconds' in self.lap_data.columns:
+            lss = pd.to_numeric(
+                self.lap_data['LapStartTime_seconds'],
+                errors='coerce',
+            ).dropna()
+            lnums = pd.to_numeric(
+                self.lap_data.get('LapNumber', pd.Series(dtype=float)),
+                errors='coerce',
+            ).dropna()
+            logger.warning(
+                "[LAP_DIAG] LapStartTime_seconds: "
+                "min=%.1f max=%.1f count=%d | "
+                "LapNumber: min=%s max=%s",
+                lss.min() if not lss.empty else -1,
+                lss.max() if not lss.empty else -1,
+                len(lss),
+                lnums.min() if not lnums.empty else '?',
+                lnums.max() if not lnums.empty else '?',
+            )
+            # Show first 5 laps
+            preview = self.lap_data[[
+                c for c in (
+                    'LapNumber',
+                    'LapStartTime_seconds',
+                    'LapEndTime_seconds',
+                ) if c in self.lap_data.columns
+            ]].head(5)
+            logger.warning(
+                "[LAP_DIAG] First 5 rows:\n%s",
+                preview.to_string(index=False),
+            )
+        else:
+            logger.warning(
+                "[LAP_DIAG] No LapStartTime_seconds column"
+            )
 
     def _normalize_lap_seconds_columns(self) -> None:
         """Rebase lap second columns when they are offset from simulation start.
@@ -356,7 +404,40 @@ class SimulationController:
                 data['_lap_num'] = pd.to_numeric(
                     data['LapNumber'], errors='coerce')
                 data = data.dropna(subset=['_lap_num', 'LapStartTime_seconds'])
+
+                # Throttled diagnostic (every 10s real-time)
+                import time as _time
+                _now = _time.time()
+                if _now - self._diag_last_log_time >= 10.0:
+                    self._diag_last_log_time = _now
+                    first_start = (
+                        data['LapStartTime_seconds'].min()
+                        if not data.empty else None
+                    )
+                    logger.warning(
+                        "[LAP_DIAG] get_current_lap: "
+                        "elapsed=%.1f first_lap_start=%s "
+                        "rows_before_filter=%d "
+                        "current_time=%s start_time=%s",
+                        elapsed,
+                        first_start,
+                        len(data),
+                        self.current_time,
+                        self.start_time,
+                    )
+
                 data = data[data['LapStartTime_seconds'] <= elapsed]
+
+                if _now - (self._diag_last_log_time) < 0.1:
+                    # Same log cycle — add post-filter info
+                    logger.warning(
+                        "[LAP_DIAG] after filter: "
+                        "rows=%d max_lap=%s",
+                        len(data),
+                        int(data['_lap_num'].max())
+                        if not data.empty else 'NONE',
+                    )
+
                 if not data.empty:
                     self.current_lap = int(data['_lap_num'].max())
                     return self.current_lap

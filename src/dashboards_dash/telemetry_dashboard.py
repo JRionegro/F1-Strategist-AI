@@ -86,7 +86,8 @@ class TelemetryDashboard:
         focused_driver: Optional[str] = None,
         comparison_driver: Optional[str] = None,
         current_lap: Optional[int] = None,
-        driver_options: Optional[List[Dict[str, Any]]] = None
+        driver_options: Optional[List[Dict[str, Any]]] = None,
+        openf1_lap_offset: int = 0,
     ) -> dbc.Card:
         """
         Render the Telemetry Dashboard.
@@ -127,7 +128,8 @@ class TelemetryDashboard:
                 focus_driver_num,
                 simulation_time,
                 session_start_time,
-                current_lap
+                current_lap,
+                openf1_lap_offset=openf1_lap_offset,
             )
 
             if lap_data is None:
@@ -155,7 +157,8 @@ class TelemetryDashboard:
                         comp_driver_num,
                         simulation_time,
                         session_start_time,
-                        current_lap
+                        current_lap,
+                        openf1_lap_offset=openf1_lap_offset,
                     )
                     if comp_lap is not None:
                         comp_telemetry = self._fetch_lap_telemetry(
@@ -488,14 +491,16 @@ class TelemetryDashboard:
         driver_number: int,
         simulation_time: Optional[float],
         session_start_time: Optional[pd.Timestamp],
-        current_lap: Optional[int]
+        current_lap: Optional[int],
+        openf1_lap_offset: int = 0,
     ) -> Optional[dict]:
         """Get the last completed lap for a driver."""
         # If simulation just started, no previous lap exists yet
         if current_lap is not None and current_lap <= 1:
             logger.info(
-                f"🏁 TELEMETRY: Lap {current_lap} - "
-                f"No previous lap available (simulation just started)"
+                "TELEMETRY: Lap %s - "
+                "No previous lap available (simulation just started)",
+                current_lap,
             )
             return None
         
@@ -518,9 +523,12 @@ class TelemetryDashboard:
             f"{len(driver_laps)} laps"
         )
 
-        # Prefer the previous completed lap based on controller lap
+        # Prefer the previous completed lap based on controller lap.
+        # openf1_lap_offset compensates for formation-lap renumbering:
+        # when the formation lap was dropped, our lap N corresponds
+        # to OpenF1 lap N + offset.
         if current_lap is not None and current_lap > 1:
-            target_lap = int(current_lap) - 1
+            target_lap = int(current_lap) - 1 + openf1_lap_offset
             target_rows = driver_laps[driver_laps['LapNumber'] == target_lap]
             if not target_rows.empty:
                 driver_laps = target_rows
