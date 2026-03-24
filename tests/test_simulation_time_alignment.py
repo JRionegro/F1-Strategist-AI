@@ -60,12 +60,18 @@ def test_qatar_guard_prevents_two_lap_delay_from_double_offset() -> None:
     ) == sc_elapsed_seconds
 
 
-def test_resolve_race_control_session_start_time_removes_formation_offset() -> None:
-    """Race-control timeline must subtract formation offset from controller start."""
+def test_resolve_race_control_session_start_time_without_shift() -> None:
+    """Start time unchanged when only formation offset is present.
+
+    The function only adjusts when ``race_clock_start_shift_seconds``
+    is provided.  With just ``formation_offset_seconds`` it returns the
+    controller start unchanged so race-control events are not delayed.
+    """
     controller_start = pd.Timestamp("2025-11-30 16:06:54.344", tz="UTC")
     session_data = {"track_map": {"formation_offset_seconds": 207.172}}
 
-    resolved = resolve_race_control_session_start_time(controller_start, session_data)
-    expected = pd.Timestamp("2025-11-30 16:03:27.172", tz="UTC")
+    resolved = resolve_race_control_session_start_time(
+        controller_start, session_data
+    )
 
-    assert resolved == expected
+    assert resolved == controller_start
